@@ -38,7 +38,7 @@ namespace Triton {
         public object this[object key] {
             get {
                 try {
-                    PushSelf();
+                    PushTo(State);
                     Lua.PushObject(key);
                     var type = LuaApi.GetTable(State, -2);
                     return Lua.GetObject(-1, type);
@@ -52,7 +52,7 @@ namespace Triton {
                 }
 
                 try {
-                    PushSelf();
+                    PushTo(State);
                     Lua.PushObject(key);
                     Lua.PushObject(value);
                     LuaApi.SetTable(State, -3);

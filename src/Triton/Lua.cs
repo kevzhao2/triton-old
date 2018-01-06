@@ -364,7 +364,7 @@ namespace Triton {
             if (obj is IntPtr pointer) {
                 LuaApi.PushLightUserdata(state, pointer);
             } else if (obj is LuaReference lr) {
-                lr.PushSelf();
+                lr.PushTo(state);
             } else {
                 var metatable = ObjectBinder.ObjectMetatable;
                 if (obj is TypeWrapper type) {

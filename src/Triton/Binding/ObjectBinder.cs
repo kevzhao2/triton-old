@@ -81,12 +81,11 @@ namespace Triton.Binding {
         public ObjectBinder(Lua lua, IntPtr state) {
             // The simplest thing to do would be to callback into an instance method, where we can then access the Lua instance easily.
             // However, some platforms don't support this, so the workaround is to close on a weak GCHandle to the Lua instance.
-            _luaHandle = GCHandle.Alloc(lua, GCHandleType.Weak);
+            _luaHandle = GCHandle.Alloc(lua, GCHandleType.WeakTrackResurrection);
 
             NewMetatable(ObjectMetatable, ObjectMetamethods);
             NewMetatable(TypeMetatable, TypeMetamethods);
-
-            LuaApi.Pop(state, 2);
+            LuaApi.SetTop(state, 0);
 
             void NewMetatable(string name, Dictionary<string, LuaCFunction> metamethods) {
                 LuaApi.NewMetatable(state, name);

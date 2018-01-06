@@ -40,7 +40,7 @@ namespace Triton {
                 throw new ArgumentNullException(nameof(args));
             }
 
-            PushSelf();
+            PushTo(State);
             return Lua.Call(args);
         }
     }

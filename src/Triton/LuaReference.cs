@@ -61,7 +61,7 @@ namespace Triton {
         /// </remarks>
         public void Dispose() => Dispose(true);
 
-        internal void PushSelf() => LuaApi.RawGetI(State, LuaApi.RegistryIndex, _reference);
+        internal void PushTo(IntPtr state) => LuaApi.RawGetI(state, LuaApi.RegistryIndex, _reference);
 
         private void Dispose(bool disposing) {
             if (IsDisposed) {
