@@ -20,9 +20,10 @@ Assert.Equal("test", x);
 
 If you're going to execute a certain string many times, you can also use the `LoadString` method, which will return a `LuaFunction` that you can then call multiple times:
 ```csharp
-var function = lua.LoadString("print('Hello!')");
-for (var i = 0; i < 10000; ++i) {
-    function.Call();
+using (var function = lua.LoadString("print('Hello!')")) {
+    for (var i = 0; i < 10000; ++i) {
+        function.Call();
+    }
 }
 ```
 
@@ -74,12 +75,12 @@ class Test {
 lua["obj"] = new Test();
 lua.DoString("callback = function(obj, args) print(obj) end)");
 lua.DoString("event = obj.Event");
-lua.DoString("event:Add(callback)");
+lua.DoString("delegate = event:Add(callback)");
 // ...
-lua.DoString("event:Remove(callback)");
+lua.DoString("event:Remove(delegate)");
 ```
 
-Note that `obj.Event` will return new wrapper objects each time, so to successfully remove your callback, you must save the value!
+Note that `obj.Event` will return new wrapper objects each time, so to successfully remove your callback, you must save the value! Using events is also *highly unrecommended* in the first place, since you have no control over when the event is called. It could be called on a different thread, which is a problem because Lua is not thread-safe.
 
 ### Passing .NET types
 
@@ -96,6 +97,7 @@ lua.DoString("list:Add(2018)");
 ### Advantages
 
 * Triton works with an unmodified Lua library, and targets Lua 5.3, which has native support for integer types among other things.
+* Triton supports .NET callbacks from coroutines.
 * Triton supports generic method invocation and generic type instantiation.
 * Triton supports generalized indexed properties (including those declared in VB.NET or F# with names other than `Item`) with a variable number of indices.
 * Triton will always correctly deduce overloads in the following situation, picking the method with the least number of default values applied:
@@ -116,8 +118,6 @@ lua.DoString("list:Add(2018)");
   lua["t2"] = new Test2();
   lua.DoString("x = t2 + t1");
   ```
-* Triton implements finalizers on Lua references (`LuaFunction`, `LuaTable`, `LuaThread`), meaning that if you forget to `Dispose` them (which happens a lot!), you won't be leaking unmanaged memory.
-* Triton will reuse Lua references, which saves memory. This, of course, comes with the caveat that `Dispose` must be called carefully.
 * Triton is, in general, faster for .NET to Lua context switches and vice versa. See below for the one case this isn't true.
 
 ### Disadvantages

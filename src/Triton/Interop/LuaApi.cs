@@ -160,7 +160,55 @@ namespace Triton.Interop {
             var ud = NewUserdata(state, IntPtr.Size);
             Marshal.WriteIntPtr(ud, GCHandle.ToIntPtr(handle));
         }
-        
+
+        public static void PushObject(IntPtr state, object obj) {
+            if (obj == null) {
+                PushNil(state);
+                return;
+            }
+
+            var typeCode = Convert.GetTypeCode(obj);
+            switch (typeCode) {
+            case TypeCode.Boolean:
+                PushBoolean(state, (bool)obj);
+                return;
+
+            case TypeCode.SByte:
+            case TypeCode.Byte:
+            case TypeCode.Int16:
+            case TypeCode.UInt16:
+            case TypeCode.Int32:
+            case TypeCode.UInt32:
+            case TypeCode.Int64:
+                PushInteger(state, Convert.ToInt64(obj));
+                return;
+
+            case TypeCode.UInt64:
+                // UInt64 is a special case since we want to avoid OverflowExceptions.
+                PushInteger(state, (long)((ulong)obj));
+                return;
+
+            case TypeCode.Single:
+            case TypeCode.Double:
+            case TypeCode.Decimal:
+                PushNumber(state, Convert.ToDouble(obj));
+                return;
+
+            case TypeCode.Char:
+            case TypeCode.String:
+                PushString(state, obj.ToString());
+                return;
+            }
+
+            if (obj is IntPtr pointer) {
+                PushLightUserdata(state, pointer);
+            } else if (obj is LuaReference lr) {
+                RawGetI(state, RegistryIndex, lr.Reference);
+            } else {
+                ObjectBinder.PushNetObject(state, obj);
+            }
+        }
+
         public static void PushString(IntPtr state, string s) {
             // Because PushLString accepts a length parameter, we don't actually need to null-terminate the string.
             var buffer = Encoding.UTF8.GetBytes(s);
@@ -178,6 +226,64 @@ namespace Triton.Interop {
         public static long ToInteger(IntPtr state, int index) => ToIntegerX(state, index, out _);
         public static double ToNumber(IntPtr state, int index) => ToNumberX(state, index, out _);
         
+        public static object ToObject(IntPtr state, int index, LuaType? typeHint = null) {
+            // Using a type hint allows us to save an unmanaged call. This might occur when getting a table value, or when getting a global.
+            var type = typeHint ?? Type(state, index);
+            Debug.Assert(type == Type(state, index), "Type hint did not match type.");
+
+            switch (type) {
+            case LuaType.None:
+            case LuaType.Nil:
+                return null;
+
+            case LuaType.Boolean:
+                return ToBoolean(state, index);
+
+            case LuaType.LightUserdata:
+                return ToUserdata(state, index);
+
+            case LuaType.Number:
+                var isInteger = IsInteger(state, index);
+                return isInteger ? ToInteger(state, index) : (object)ToNumber(state, index);
+
+            case LuaType.String:
+                return ToString(state, index);
+
+            case LuaType.Userdata:
+                var handle = ToHandle(state, index);
+                return handle.Target;
+
+            case LuaType.Table:
+                PushValue(state, index);
+                var tableReference = Ref(state, RegistryIndex);
+                return new LuaTable(state, tableReference);
+
+            case LuaType.Function:
+                PushValue(state, index);
+                var functionReference = Ref(state, RegistryIndex);
+                return new LuaFunction(state, functionReference);
+
+            case LuaType.Thread:
+                PushValue(state, index);
+                var threadReference = Ref(state, RegistryIndex);
+                return new LuaThread(state, threadReference);
+            }
+
+            throw new InvalidOperationException("Invalid Lua type.");
+        }
+
+        public static object[] ToObjects(IntPtr state, int startIndex, int endIndex) {
+            if (startIndex > endIndex) {
+                return new object[0];
+            }
+
+            var objs = new object[endIndex - startIndex + 1];
+            for (var i = 0; i < objs.Length; ++i) {
+                objs[i] = ToObject(state, startIndex + i);
+            }
+            return objs;
+        }
+
         public static string ToString(IntPtr state, int index) {
             var ptr = ToLString(state, index, out var len);
             var byteCount = (int)len.ToUInt32();

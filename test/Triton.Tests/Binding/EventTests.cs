@@ -73,7 +73,7 @@ namespace Triton.Tests.Binding {
 
                 lua.DoString("func = function(obj, args) x = 6 end");
                 lua.DoString("event = obj.Event");
-                lua.DoString("event:Add(func)");
+                lua.DoString("del = event:Add(func)");
 
                 obj.InvokeEvent();
 
@@ -81,7 +81,7 @@ namespace Triton.Tests.Binding {
 
                 lua["x"] = 0;
 
-                lua.DoString("event:Remove(func)");
+                lua.DoString("event:Remove(del)");
 
                 obj.InvokeEvent();
 
@@ -130,16 +130,6 @@ namespace Triton.Tests.Binding {
         }
 
         [Fact]
-        public void GetInstanceEvent_Remove_UnrelatedFunctionIgnored() {
-            using (var lua = new Lua()) {
-                var obj = new TestClass();
-                lua["obj"] = obj;
-
-                lua.DoString("obj.Event:Remove(function() end)");
-            }
-        }
-
-        [Fact]
         public void GetInstanceEvent_Remove_Throws() {
             using (var lua = new Lua()) {
                 var obj = new TestClass();
@@ -147,9 +137,9 @@ namespace Triton.Tests.Binding {
 
                 lua.DoString("func = function(obj, args) end");
                 lua.DoString("event = obj.EventThrows2");
-                lua.DoString("event:Add(func)");
+                lua.DoString("del = event:Add(func)");
 
-                Assert.Throws<LuaException>(() => lua.DoString("event:Remove(func)"));
+                Assert.Throws<LuaException>(() => lua.DoString("event:Remove(del)"));
             }
         }
 
@@ -170,7 +160,7 @@ namespace Triton.Tests.Binding {
 
                 lua.DoString("func = function(obj, args) x = 6 end");
                 lua.DoString("event = TestClass2.Event");
-                lua.DoString("event:Add(func)");
+                lua.DoString("del = event:Add(func)");
 
                 TestClass2.InvokeEvent();
 
@@ -178,7 +168,7 @@ namespace Triton.Tests.Binding {
 
                 lua["x"] = 0;
 
-                lua.DoString("event:Remove(func)");
+                lua.DoString("event:Remove(del)");
 
                 TestClass2.InvokeEvent();
 
@@ -223,24 +213,15 @@ namespace Triton.Tests.Binding {
         }
 
         [Fact]
-        public void GetStaticEvent_Remove_UnrelatedFunctionIgnored() {
-            using (var lua = new Lua()) {
-                lua.ImportType(typeof(TestClass2));
-
-                lua.DoString("TestClass2.Event:Remove(function() end)");
-            }
-        }
-
-        [Fact]
         public void GetStaticEvent_Remove_Throws() {
             using (var lua = new Lua()) {
                 lua.ImportType(typeof(TestClass2));
 
                 lua.DoString("func = function(obj, args) end");
                 lua.DoString("event = TestClass2.EventThrows2");
-                lua.DoString("event:Add(func)");
+                lua.DoString("del = event:Add(func)");
 
-                Assert.Throws<LuaException>(() => lua.DoString("event:Remove(func)"));
+                Assert.Throws<LuaException>(() => lua.DoString("event:Remove(del)"));
             }
         }
 

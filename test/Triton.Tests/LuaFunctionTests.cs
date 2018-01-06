@@ -39,32 +39,23 @@ namespace Triton.Tests {
         }
 
         [Fact]
-        public void IsDisposed_LuaDisposed_True() {
-            LuaFunction function;
-            using (var lua = new Lua()) {
-                function = lua.LoadString("");
-            }
-
-            Assert.True(function.IsDisposed);
-        }
-
-        [Fact]
         public void IsDisposed_NotDisposed_False() {
             using (var lua = new Lua()) {
-                var function = lua.LoadString("");
-                Assert.False(function.IsDisposed);
+                using (var function = lua.LoadString("")) {
+                    Assert.False(function.IsDisposed);
+                }
             }
         }
 
         [Fact]
         public void Call_NoArgs() {
             using (var lua = new Lua()) {
-                var function = lua.LoadString("return 1979");
+                using (var function = lua.LoadString("return 1979")) {
+                    var results = function.Call();
 
-                var results = function.Call();
-
-                Assert.Single(results);
-                Assert.Equal(1979L, results[0]);
+                    Assert.Single(results);
+                    Assert.Equal(1979L, results[0]);
+                }
             }
         }
 
@@ -72,14 +63,15 @@ namespace Triton.Tests {
         public void Call_OneArg() {
             using (var lua = new Lua()) {
                 var results = lua.DoString("return function(x) return x end");
-                var function = results[0] as LuaFunction;
+                using (var function = results[0] as LuaFunction) {
+                    results = function.Call("test");
 
-                results = function.Call("test");
-
-                Assert.Single(results);
-                Assert.Equal("test", results[0]);
+                    Assert.Single(results);
+                    Assert.Equal("test", results[0]);
+                }
             }
         }
+
         [Fact]
         public void Call_ManyArgs() {
             using (var lua = new Lua()) {
@@ -90,57 +82,57 @@ namespace Triton.Tests {
                                            "  end\n" +
                                            "  return result\n" +
                                            "end");
-                var function = results[0] as LuaFunction;
+                using (var function = results[0] as LuaFunction) {
+                    results = function.Call(6, 51, 29, -51, -29, 12);
 
-                results = function.Call(6, 51, 29, -51, -29, 12);
-
-                Assert.Single(results);
-                Assert.Equal(18L, results[0]);
+                    Assert.Single(results);
+                    Assert.Equal(18L, results[0]);
+                }
             }
         }
 
         [Fact]
         public void Call_NoResults() {
             using (var lua = new Lua()) {
-                var function = lua.LoadString("return");
+                using (var function = lua.LoadString("return")) {
+                    var results = function.Call();
 
-                var results = function.Call();
-
-                Assert.Empty(results);
+                    Assert.Empty(results);
+                }
             }
         }
 
         [Fact]
         public void Call_ManyResults() {
             using (var lua = new Lua()) {
-                var function = lua.LoadString("return 0, 1, 4, 9, 16");
+                using (var function = lua.LoadString("return 0, 1, 4, 9, 16")) {
+                    var results = function.Call("test");
 
-                var results = function.Call("test");
-
-                Assert.Equal(5, results.Length);
-                Assert.Equal(0L, results[0]);
-                Assert.Equal(1L, results[1]);
-                Assert.Equal(4L, results[2]);
-                Assert.Equal(9L, results[3]);
-                Assert.Equal(16L, results[4]);
+                    Assert.Equal(5, results.Length);
+                    Assert.Equal(0L, results[0]);
+                    Assert.Equal(1L, results[1]);
+                    Assert.Equal(4L, results[2]);
+                    Assert.Equal(9L, results[3]);
+                    Assert.Equal(16L, results[4]);
+                }
             }
         }
 
         [Fact]
         public void Call_NullArgs_ThrowsArgumentNullException() {
             using (var lua = new Lua()) {
-                var function = lua.LoadString("");
-
-                Assert.Throws<ArgumentNullException>(() => function.Call(null));
+                using (var function = lua.LoadString("")) {
+                    Assert.Throws<ArgumentNullException>(() => function.Call(null));
+                }
             }
         }
 
         [Fact]
         public void Call_TooManyArgs_ThrowsLuaException() {
             using (var lua = new Lua()) {
-                var function = lua.LoadString("");
-
-                Assert.Throws<LuaException>(() => function.Call(new object[10000000]));
+                using (var function = lua.LoadString("")) {
+                    Assert.Throws<LuaException>(() => function.Call(new object[10000000]));
+                }
             }
         }
 
@@ -148,9 +140,9 @@ namespace Triton.Tests {
         [MemberData(nameof(RuntimeErrors))]
         public void Call_RuntimeError_ThrowsLuaException(string s) {
             using (var lua = new Lua()) {
-                var function = lua.LoadString(s);
-
-                Assert.Throws<LuaException>(() => function.Call(s));
+                using (var function = lua.LoadString(s)) {
+                    Assert.Throws<LuaException>(() => function.Call());
+                }
             }
         }
     }

@@ -19,9 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using Triton.Binding;
 using Triton.Interop;
 
@@ -30,12 +28,7 @@ namespace Triton {
     /// Acts as a managed wrapper around a Lua instance.
     /// </summary>
     public sealed class Lua : IDisposable {
-        private readonly ObjectBinder _binder;
-        private readonly Dictionary<IntPtr, WeakReference> _references = new Dictionary<IntPtr, WeakReference>();
         private readonly IntPtr _state;
-        private readonly object _unrefLock = new object();
-
-        private List<KeyValuePair<int, IntPtr>> _unrefs = new List<KeyValuePair<int, IntPtr>>();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Lua"/> class.
@@ -44,7 +37,7 @@ namespace Triton {
             _state = LuaApi.NewState();
             LuaApi.OpenLibs(_state);
 
-            _binder = new ObjectBinder(this, _state);
+            ObjectBinder.InitializeMetatables(_state);
             this["import"] = new Action<string>(ImportType);
         }
 
@@ -77,7 +70,7 @@ namespace Triton {
 
                 try {
                     var type = LuaApi.GetGlobal(_state, name);
-                    return GetObject(-1, type);
+                    return LuaApi.ToObject(_state, -1, type);
                 } finally {
                     LuaApi.SetTop(_state, 0);
                 }
@@ -90,7 +83,7 @@ namespace Triton {
                     throw new ObjectDisposedException(GetType().FullName);
                 }
 
-                PushObject(value);
+                LuaApi.PushObject(_state, value);
                 LuaApi.SetGlobal(_state, name);
 
                 Debug.Assert(LuaApi.GetTop(_state) == 0, "Stack not level.");
@@ -109,7 +102,7 @@ namespace Triton {
 
             try {
                 LuaApi.CreateTable(_state);
-                return (LuaTable)GetObject(-1, LuaType.Table);
+                return (LuaTable)LuaApi.ToObject(_state, -1, LuaType.Table);
             } finally {
                 LuaApi.SetTop(_state, 0);
             }
@@ -118,7 +111,10 @@ namespace Triton {
         /// <summary>
         /// Disposes the <see cref="Lua"/> instance.
         /// </summary>
-        public void Dispose() => Dispose(true);
+        public void Dispose() {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
 
         /// <summary>
         /// Loads and runs the given string.
@@ -135,8 +131,9 @@ namespace Triton {
                 throw new ObjectDisposedException(GetType().FullName);
             }
 
-            LoadStringInternal(s);
-            return Call(new object[0]);
+            using (var function = LoadStringInternal(s)) {
+                return function.Call();
+            }
         }
 
         /// <summary>
@@ -192,252 +189,34 @@ namespace Triton {
                 throw new ObjectDisposedException(GetType().FullName);
             }
 
-            try {
-                LoadStringInternal(s);
-                return (LuaFunction)GetObject(-1, LuaType.Function);
-            } finally {
-                LuaApi.SetTop(_state, 0);
-            }
+            return LoadStringInternal(s);
         }
         
-        internal object[] Call(object[] args) {
-            Debug.Assert(!IsDisposed, "Lua instance is disposed.");
-            Debug.Assert(args != null, $"{nameof(args)} is null.");
-            Debug.Assert(LuaApi.GetTop(_state) == 1, "Stack not correct.");
-            Debug.Assert(LuaApi.Type(_state, -1) == LuaType.Function, "Stack doesn't have function on top.");
-
-            // Ensure that we have enough stack space for the function currently on the stack and its arguments.
-            if (args.Length + 1 >= LuaApi.MinStackSize && !LuaApi.CheckStack(_state, args.Length)) {
-                throw new LuaException("Not enough stack space for function and arguments.");
-            }
-
-            try {
-                foreach (var arg in args) {
-                    PushObject(arg);
-                }
-
-                // Since we're transitioning into Lua, let's try processing some unrefs.
-                ProcessQueuedUnrefs();
-                if (LuaApi.PCallK(_state, args.Length) != LuaStatus.Ok) {
-                    var errorMessage = LuaApi.ToString(_state, -1);
-                    throw new LuaException(errorMessage);
-                }
-
-                // Ensure that we have enough stack space for GetObjects.
-                var numResults = LuaApi.GetTop(_state);
-                if (numResults >= LuaApi.MinStackSize && !LuaApi.CheckStack(_state, 1)) {
-                    throw new LuaException("Not enough scratch stack space.");
-                }
-
-                return GetObjects(1, numResults);
-            } finally {
-                LuaApi.SetTop(_state, 0);
-            }
-        }
-        
-        internal object GetObject(int index, LuaType? typeHint = null, IntPtr? stateOverride = null) {
-            Debug.Assert(!IsDisposed, "Lua instance is disposed.");
-
-            // Using a state override enables us to support coroutines.
-            var state = stateOverride ?? _state;
-
-            // Using a type hint allows us to save P/Invoke call. This might occur when getting a table value, or when getting a global.
-            var type = typeHint ?? LuaApi.Type(state, index);
-            Debug.Assert(type == LuaApi.Type(state, index), "Type hint did not match type.");
-
-            switch (type) {
-            case LuaType.None:
-            case LuaType.Nil:
-                return null;
-
-            case LuaType.Boolean:
-                return LuaApi.ToBoolean(state, index);
-
-            case LuaType.LightUserdata:
-                return LuaApi.ToUserdata(state, index);
-
-            case LuaType.Number:
-                var isInteger = LuaApi.IsInteger(state, index);
-                return isInteger ? LuaApi.ToInteger(state, index) : (object)LuaApi.ToNumber(state, index);
-
-            case LuaType.String:
-                return LuaApi.ToString(state, index);
-
-            case LuaType.Userdata:
-                var handle = LuaApi.ToHandle(state, index);
-                return handle.Target;
-            }
-
-            // Try to get a cached LuaReference using the pointer. By returning the same LuaReferences for the same pointers, we create
-            // as few finalizable objects as possible and can also easily compare LuaReferences.
-            LuaReference luaReference = null;
-            var pointer = LuaApi.ToPointer(state, index);
-            if (_references.TryGetValue(pointer, out var weakReference)) {
-                luaReference = (LuaReference)weakReference.Target;
-                if (luaReference != null) {
-                    return luaReference;
-                }
-            }
-
-            LuaApi.PushValue(state, index);
-            var reference = LuaApi.Ref(state, LuaApi.RegistryIndex);
-
-            switch (type) {
-            case LuaType.Table:
-                luaReference = new LuaTable(this, state, reference, pointer);
-                break;
-
-            case LuaType.Function:
-                luaReference = new LuaFunction(this, state, reference, pointer);
-                break;
-
-            case LuaType.Thread:
-                luaReference = new LuaThread(this, state, reference, pointer);
-                break;
-            }
-
-            // If we have a WeakReference object, then we can just reuse it instead of creating a new one.
-            if (weakReference != null) {
-                weakReference.Target = luaReference;
-            } else {
-                _references[pointer] = new WeakReference(luaReference);
-            }
-            return luaReference;
-        }
-
-        internal object[] GetObjects(int startIndex, int endIndex, IntPtr? stateOverride = null) {
-            Debug.Assert(!IsDisposed, "Lua instance is disposed.");
-
-            if (startIndex > endIndex) {
-                return new object[0];
-            }
-
-            var objs = new object[endIndex - startIndex + 1];
-            for (var i = 0; i < objs.Length; ++i) {
-                objs[i] = GetObject(startIndex + i, null, stateOverride);
-            }
-            return objs;
-        }
-
-        internal void PushObject(object obj, IntPtr? stateOverride = null) {
-            Debug.Assert(!IsDisposed, "Lua instance is disposed.");
-
-            var state = stateOverride ?? _state;
-            if (obj == null) {
-                LuaApi.PushNil(state);
-                return;
-            }
-            
-            var typeCode = Convert.GetTypeCode(obj);
-            switch (typeCode) {
-            case TypeCode.Boolean:
-                LuaApi.PushBoolean(state, (bool)obj);
-                return;
-
-            case TypeCode.SByte:
-            case TypeCode.Byte:
-            case TypeCode.Int16:
-            case TypeCode.UInt16:
-            case TypeCode.Int32:
-            case TypeCode.UInt32:
-            case TypeCode.Int64:
-                LuaApi.PushInteger(state, Convert.ToInt64(obj));
-                return;
-
-            case TypeCode.UInt64:
-                // UInt64 is a special case since we want to avoid OverflowExceptions.
-                LuaApi.PushInteger(state, (long)((ulong)obj));
-                return;
-
-            case TypeCode.Single:
-            case TypeCode.Double:
-            case TypeCode.Decimal:
-                LuaApi.PushNumber(state, Convert.ToDouble(obj));
-                return;
-
-            case TypeCode.Char:
-            case TypeCode.String:
-                LuaApi.PushString(state, obj.ToString());
-                return;
-            }
-
-            if (obj is IntPtr pointer) {
-                LuaApi.PushLightUserdata(state, pointer);
-            } else if (obj is LuaReference lr) {
-                lr.PushTo(state);
-            } else {
-                var metatable = ObjectBinder.ObjectMetatable;
-                if (obj is TypeWrapper type) {
-                    metatable = ObjectBinder.TypeMetatable;
-                    obj = type.Type;
-                }
-
-                var handle = GCHandle.Alloc(obj, GCHandleType.Normal);
-                LuaApi.PushHandle(state, handle);
-                LuaApi.GetMetatable(state, metatable);
-                LuaApi.SetMetatable(state, -2);
-            }
-        }
-
-        internal void Unref(int reference, IntPtr pointer, bool disposing) {
-            if (IsDisposed) {
-                return;
-            }
-
-            if (disposing) {
-                LuaApi.Unref(_state, LuaApi.RegistryIndex, reference);
-                _references.Remove(pointer);
-            } else {
-                // Since this is called from the finalizer, we have to queue up an unref in a thread-safe manner since Lua is not
-                // thread-safe. We don't need to check for uniqueness; calling Unref on the same reference multiple times is completely
-                // fine.
-                var kvp = new KeyValuePair<int, IntPtr>(reference, pointer);
-                lock (_unrefLock) {
-                    _unrefs.Add(kvp);
-                }
-            }
-        }
-
-        internal void ProcessQueuedUnrefs() {
-            List<KeyValuePair<int, IntPtr>> kvps;
-            lock (_unrefLock) {
-                kvps = _unrefs;
-                _unrefs = new List<KeyValuePair<int, IntPtr>>();
-            }
-
-            foreach (var kvp in kvps) {
-                var reference = kvp.Key;
-                var pointer = kvp.Value;
-                LuaApi.Unref(_state, LuaApi.RegistryIndex, reference);
-                _references.Remove(pointer);
-            }
-        }
-
         private void Dispose(bool disposing) {
             if (IsDisposed) {
                 return;
             }
-
-            if (disposing) {
-                _binder.Dispose();
-                GC.SuppressFinalize(this);
-            }
-
+            
             LuaApi.Close(_state);
             IsDisposed = true;
         }
 
         private void ImportTypeInternal(Type type) {
-            PushObject(new TypeWrapper(type));
+            ObjectBinder.PushNetObject(_state, new TypeWrapper(type));
             var cleanName = type.Name.Split('`')[0];
             LuaApi.SetGlobal(_state, cleanName);
         }
 
-        private void LoadStringInternal(string s) {
-            if (LuaApi.LoadString(_state, s) != LuaStatus.Ok) {
-                var errorMessage = LuaApi.ToString(_state, -1);
-                LuaApi.Pop(_state, 1);
-                throw new LuaException(errorMessage);
+        private LuaFunction LoadStringInternal(string s) {
+            try {
+                if (LuaApi.LoadString(_state, s) != LuaStatus.Ok) {
+                    var errorMessage = LuaApi.ToString(_state, -1);
+                    throw new LuaException(errorMessage);
+                }
+                return (LuaFunction)LuaApi.ToObject(_state, -1, LuaType.Function);
+            }
+            finally {
+                LuaApi.SetTop(_state, 0);
             }
         }
     }

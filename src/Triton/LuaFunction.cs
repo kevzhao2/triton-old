@@ -19,13 +19,14 @@
 // IN THE SOFTWARE.
 
 using System;
+using Triton.Interop;
 
 namespace Triton {
     /// <summary>
     /// Represents a Lua function.
     /// </summary>
     public class LuaFunction : LuaReference {
-        internal LuaFunction(Lua lua, IntPtr state, int reference, IntPtr pointer) : base(lua, state, reference, pointer) {
+        internal LuaFunction(IntPtr state, int reference) : base(state, reference) {
         }
 
         /// <summary>
@@ -40,8 +41,32 @@ namespace Triton {
                 throw new ArgumentNullException(nameof(args));
             }
 
-            PushTo(State);
-            return Lua.Call(args);
+            // Ensure that we have enough stack space for the function currently on the stack and its arguments.
+            if (args.Length + 1 >= LuaApi.MinStackSize && !LuaApi.CheckStack(State, args.Length + 1)) {
+                throw new LuaException("Not enough stack space for function and arguments.");
+            }
+
+            try {
+                LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
+                foreach (var arg in args) {
+                    LuaApi.PushObject(State, arg);
+                }
+                
+                if (LuaApi.PCallK(State, args.Length) != LuaStatus.Ok) {
+                    var errorMessage = LuaApi.ToString(State, -1);
+                    throw new LuaException(errorMessage);
+                }
+
+                // Ensure that we have enough stack space for GetObjects.
+                var numResults = LuaApi.GetTop(State);
+                if (numResults >= LuaApi.MinStackSize && !LuaApi.CheckStack(State, 1)) {
+                    throw new LuaException("Not enough scratch stack space.");
+                }
+
+                return LuaApi.ToObjects(State, 1, numResults);
+            } finally {
+                LuaApi.SetTop(State, 0);
+            }
         }
     }
 }

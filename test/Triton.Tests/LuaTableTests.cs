@@ -38,20 +38,11 @@ namespace Triton.Tests {
         }
 
         [Fact]
-        public void IsDisposed_LuaDisposed_True() {
-            LuaTable table;
-            using (var lua = new Lua()) {
-                table = lua.CreateTable();
-            }
-
-            Assert.True(table.IsDisposed);
-        }
-
-        [Fact]
         public void IsDisposed_NotDisposed_False() {
             using (var lua = new Lua()) {
-                var table = lua.CreateTable();
-                Assert.False(table.IsDisposed);
+                using (var table = lua.CreateTable()) {
+                    Assert.False(table.IsDisposed);
+                }
             }
         }
 
@@ -60,31 +51,35 @@ namespace Triton.Tests {
         [InlineData(false)]
         public void GetSet_Boolean(bool b) {
             using (var lua = new Lua()) {
-                var table = lua.CreateTable();
-
-                table["test"] = b;
-                Assert.Equal(b, table["test"]);
+                using (var table = lua.CreateTable()) {
+                    table["test"] = b;
+                    Assert.Equal(b, table["test"]);
+                }
             }
         }
 
         [Fact]
         public void GetSet_Enum() {
             using (var lua = new Lua()) {
-                var table = lua.CreateTable();
-
-                table["test"] = TestEnum.C;
-                Assert.Equal((long)TestEnum.C, table["test"]);
+                using (var table = lua.CreateTable()) {
+                    table["test"] = TestEnum.C;
+                    Assert.Equal((long)TestEnum.C, table["test"]);
+                }
             }
         }
 
         [Fact]
         public void GetSet_Function() {
             using (var lua = new Lua()) {
-                var table = lua.CreateTable();
-                var function = lua.LoadString("return 0");
+                using (var table = lua.CreateTable()) {
+                    using (var function = lua.LoadString("return 0")) {
+                        table["test"] = function;
 
-                table["test"] = function;
-                Assert.Same(function, table["test"]);
+                        using (var value = table["test"] as LuaReference) {
+                            Assert.IsType<LuaFunction>(value);
+                        }
+                    }
+                }
             }
         }
 
@@ -93,20 +88,20 @@ namespace Triton.Tests {
         [InlineData(-1)]
         public void GetSet_Integer(long i) {
             using (var lua = new Lua()) {
-                var table = lua.CreateTable();
-
-                table["test"] = i;
-                Assert.Equal(i, table["test"]);
+                using (var table = lua.CreateTable()) {
+                    table["test"] = i;
+                    Assert.Equal(i, table["test"]);
+                }
             }
         }
 
         [Fact]
         public void GetSet_IntPtr() {
             using (var lua = new Lua()) {
-                var table = lua.CreateTable();
-
-                table["test"] = new IntPtr(51667);
-                Assert.Equal(new IntPtr(51667), table["test"]);
+                using (var table = lua.CreateTable()) {
+                    table["test"] = new IntPtr(51667);
+                    Assert.Equal(new IntPtr(51667), table["test"]);
+                }
             }
         }
 
@@ -115,10 +110,10 @@ namespace Triton.Tests {
         [InlineData(ulong.MaxValue)]
         public void GetSet_UInt64(ulong u) {
             using (var lua = new Lua()) {
-                var table = lua.CreateTable();
-
-                table["test"] = u;
-                Assert.Equal((long)u, table["test"]);
+                using (var table = lua.CreateTable()) {
+                    table["test"] = u;
+                    Assert.Equal((long)u, table["test"]);
+                }
             }
         }
 
@@ -127,10 +122,10 @@ namespace Triton.Tests {
         [InlineData(2)]
         public void GetSet_IntegerKey(int i) {
             using (var lua = new Lua()) {
-                var table = lua.CreateTable();
-
-                table[i] = "test";
-                Assert.Equal("test", table[i]);
+                using (var table = lua.CreateTable()) {
+                    table[i] = "test";
+                    Assert.Equal("test", table[i]);
+                }
             }
         }
 
@@ -140,21 +135,22 @@ namespace Triton.Tests {
         [InlineData(Double.PositiveInfinity)]
         public void GetSet_Number(double d) {
             using (var lua = new Lua()) {
-                var table = lua.CreateTable();
-
-                table["test"] = d;
-                Assert.Equal(d, table["test"]);
+                using (var table = lua.CreateTable()) {
+                    table["test"] = d;
+                    Assert.Equal(d, table["test"]);
+                }
             }
         }
 
         [Fact]
         public void GetSet_Object() {
             using (var lua = new Lua()) {
-                var table = lua.CreateTable();
-                var obj = new object();
+                using (var table = lua.CreateTable()) {
+                    var obj = new object();
 
-                table["test"] = obj;
-                Assert.Same(obj, table["test"]);
+                    table["test"] = obj;
+                    Assert.Same(obj, table["test"]);
+                }
             }
         }
 
@@ -163,52 +159,59 @@ namespace Triton.Tests {
         [InlineData("s\x88ff\n")]
         public void GetSet_String(string s) {
             using (var lua = new Lua()) {
-                var table = lua.CreateTable();
-
-                table["test"] = s;
-                Assert.Equal(s, table["test"]);
+                using (var table = lua.CreateTable()) {
+                    table["test"] = s;
+                    Assert.Equal(s, table["test"]);
+                }
             }
         }
 
         [Fact]
         public void GetSet_Struct() {
             using (var lua = new Lua()) {
-                var table = lua.CreateTable();
-                var dateTime = DateTime.Now;
+                using (var table = lua.CreateTable()) {
+                    var dateTime = DateTime.Now;
 
-                table["test"] = dateTime;
-                Assert.Equal(dateTime, table["test"]);
+                    table["test"] = dateTime;
+                    Assert.Equal(dateTime, table["test"]);
+                }
             }
         }
 
         [Fact]
         public void GetSet_Table() {
             using (var lua = new Lua()) {
-                var table = lua.CreateTable();
+                using (var table = lua.CreateTable()) {
+                    table["test"] = table;
 
-                table["test"] = table;
-                Assert.Same(table, table["test"]);
+                    using (var value = table["test"] as LuaReference) {
+                        Assert.IsType<LuaTable>(value);
+                    }
+                }
             }
         }
 
         [Fact]
         public void GetSet_Thread() {
             using (var lua = new Lua()) {
-                var table = lua.CreateTable();
-                var results = lua.DoString("return coroutine.create(function() end)");
-                var thread = results[0] as LuaThread;
+                using (var table = lua.CreateTable()) {
+                    using (var thread = lua.DoString("return coroutine.create(function() end)")[0] as LuaThread) {
+                        table["test"] = thread;
 
-                table["test"] = thread;
-                Assert.Same(thread, table["test"]);
+                        using (var value = table["test"] as LuaReference) {
+                            Assert.IsType<LuaThread>(value);
+                        }
+                    }
+                }
             }
         }
 
         [Fact]
         public void Set_NullKey_ThrowsArgumentNullException() {
             using (var lua = new Lua()) {
-                var table = lua.CreateTable();
-
-                Assert.Throws<ArgumentNullException>(() => table[null] = 0);
+                using (var table = lua.CreateTable()) {
+                    Assert.Throws<ArgumentNullException>(() => table[null] = 0);
+                }
             }
         }
     }

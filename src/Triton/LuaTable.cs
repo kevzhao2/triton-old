@@ -26,7 +26,7 @@ namespace Triton {
     /// Represents a Lua table.
     /// </summary>
     public sealed class LuaTable : LuaReference {
-        internal LuaTable(Lua lua, IntPtr state, int reference, IntPtr pointer) : base(lua, state, reference, pointer) {
+        internal LuaTable(IntPtr state, int reference) : base(state, reference) {
         }
 
         /// <summary>
@@ -38,10 +38,10 @@ namespace Triton {
         public object this[object key] {
             get {
                 try {
-                    PushTo(State);
-                    Lua.PushObject(key);
+                    LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
+                    LuaApi.PushObject(State, key);
                     var type = LuaApi.GetTable(State, -2);
-                    return Lua.GetObject(-1, type);
+                    return LuaApi.ToObject(State, -1, type);
                 } finally {
                     LuaApi.SetTop(State, 0);
                 }
@@ -52,9 +52,9 @@ namespace Triton {
                 }
 
                 try {
-                    PushTo(State);
-                    Lua.PushObject(key);
-                    Lua.PushObject(value);
+                    LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
+                    LuaApi.PushObject(State, key);
+                    LuaApi.PushObject(State, value);
                     LuaApi.SetTable(State, -3);
                 } finally {
                     LuaApi.SetTop(State, 0);

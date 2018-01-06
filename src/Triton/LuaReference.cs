@@ -26,54 +26,30 @@ namespace Triton {
     /// Represents a Lua reference that is tied to a specific <see cref="Triton.Lua"/> instance.
     /// </summary>
     public abstract class LuaReference : IDisposable {
-        private readonly IntPtr _pointer;
-        private readonly int _reference;
-
-        private bool _isDisposed;
-
-        internal LuaReference(Lua lua, IntPtr state, int reference, IntPtr pointer) {
-            Lua = lua;
+        internal LuaReference(IntPtr state, int reference) {
             State = state;
-            _reference = reference;
-            _pointer = pointer;
+            Reference = reference;
         }
-
-        /// <summary>
-        /// Finalizes the <see cref="LuaReference"/>, releasing its reference.
-        /// </summary>
-        ~LuaReference() => Dispose(false);
-
+        
         /// <summary>
         /// Gets a value indicating whether the <see cref="LuaReference"/> is disposed.
         /// </summary>
         /// <value>A value indicating whether the <see cref="LuaReference"/> is disposed.</value>
-        public bool IsDisposed => _isDisposed || Lua.IsDisposed;
-
-        internal Lua Lua { get; }
+        public bool IsDisposed { get; private set; }
+        
         internal IntPtr State { get; }
+        internal int Reference { get; }
 
         /// <summary>
         /// Disposes the <see cref="LuaReference"/>, releasing its reference.
         /// </summary>
-        /// <remarks>
-        /// Great care must be taken when calling this method. LuaReferences are cached, so disposing one LuaReference may have a rather
-        /// far-reaching effect!
-        /// </remarks>
-        public void Dispose() => Dispose(true);
-
-        internal void PushTo(IntPtr state) => LuaApi.RawGetI(state, LuaApi.RegistryIndex, _reference);
-
-        private void Dispose(bool disposing) {
+        public void Dispose() {
             if (IsDisposed) {
                 return;
             }
 
-            if (disposing) {
-                GC.SuppressFinalize(this);
-            }
-
-            Lua.Unref(_reference, _pointer, disposing);
-            _isDisposed = true;
+            LuaApi.Unref(State, LuaApi.RegistryIndex, Reference);
+            IsDisposed = true;
         }
     }
 }

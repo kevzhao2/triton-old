@@ -25,7 +25,7 @@ namespace Triton {
     /// Represents a Lua thread, acting as an opaque object.
     /// </summary>
     public sealed class LuaThread : LuaReference {
-        internal LuaThread(Lua lua, IntPtr state, int reference, IntPtr pointer) : base(lua, state, reference, pointer) {
+        internal LuaThread(IntPtr state, int reference) : base(state, reference) {
         }
     }
 }
