@@ -1,7 +1,4 @@
-[![Build Status](https://travis-ci.org/kevzhao2/Triton.svg?branch=master)](https://travis-ci.org/kevzhao2/Triton)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-# Triton
+# Triton [![Build Status](https://travis-ci.org/kevzhao2/Triton.svg?branch=master)](https://travis-ci.org/kevzhao2/Triton) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Triton provides an easy and efficient way to embed Lua 5.3 into your .NET application!
 
@@ -98,7 +95,7 @@ lua.DoString("list:Add(2018)");
 
 ### Advantages
 
-* Triton works with an unmodified Lua library, and targets Lua 5.3.
+* Triton works with an unmodified Lua library, and targets Lua 5.3, which has native support for integer types among other things.
 * Triton supports generic method invocation and generic type instantiation.
 * Triton supports generalized indexed properties (including those declared in VB.NET or F# with names other than `Item`) with a variable number of indices.
 * Triton will always correctly deduce overloads in the following situation, picking the method with the least number of default values applied:
@@ -114,7 +111,7 @@ lua.DoString("list:Add(2018)");
   class Test2 {
       public static int operator +(Test2 t2, int i);
   }
-  
+
   lua["t1"] = new Test1();
   lua["t2"] = new Test2();
   lua.DoString("x = t2 + t1");
@@ -128,3 +125,4 @@ lua.DoString("list:Add(2018)");
 * Triton does not support calling extension methods on objects as instance methods.
 * Triton does not have a simple namespace-level `import`, since unfortunately `AppDomain` doesn't exist in the targeted version of .NET standard. This can be worked around by getting the `Assembly` of a type and then iterating through its exported types.
 * Triton does not cache method lookups. This can result in a roughly 2x slowdown for the Lua to .NET context switch.
+* Triton does not currently have any debugging facilities.
