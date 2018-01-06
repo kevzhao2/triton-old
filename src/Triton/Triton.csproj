@@ -11,9 +11,12 @@
   <PropertyGroup>
     <Authors>Kevin Zhao</Authors>
     <Copyright>Kevin Zhao</Copyright>
-    <Description>Allows for easy and efficient interop between .NET and Lua code.</Description>
-    <RepositoryType>git</RepositoryType>
+    <Description>Provides an easy and efficient way to embed Lua into your .NET application.</Description>
     <PackageTags>lua;script;scripting;interop</PackageTags>
+    <PackageLicenseUrl>https://github.com/kevzhao2/Triton/blob/master/LICENSE</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/kevzhao2/Triton</PackageProjectUrl>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/kevzhao2/Triton</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net35'">		
@@ -49,11 +52,11 @@
   </ItemGroup>
   
   <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard1.5'">
-	  <DefineConstants>NETSTANDARD1_5;NETCORE</DefineConstants>
+    <DefineConstants>NETSTANDARD1_5;NETCORE</DefineConstants>
   </PropertyGroup>
   
   <PropertyGroup Condition="'$(TargetFramework)' == 'net35'">
-	  <DefineConstants>NET35;NETFULL</DefineConstants>
+    <DefineConstants>NET35;NETFULL</DefineConstants>
   </PropertyGroup>
   
 </Project>
