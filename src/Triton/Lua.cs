@@ -234,12 +234,15 @@ namespace Triton {
             }
         }
         
-        internal object GetObject(int index, LuaType? typeHint = null) {
+        internal object GetObject(int index, LuaType? typeHint = null, IntPtr? stateOverride = null) {
             Debug.Assert(!IsDisposed, "Lua instance is disposed.");
 
+            // Using a state override enables us to support coroutines.
+            var state = stateOverride ?? _state;
+
             // Using a type hint allows us to save P/Invoke call. This might occur when getting a table value, or when getting a global.
-            var type = typeHint ?? LuaApi.Type(_state, index);
-            Debug.Assert(type == LuaApi.Type(_state, index), "Type hint did not match type.");
+            var type = typeHint ?? LuaApi.Type(state, index);
+            Debug.Assert(type == LuaApi.Type(state, index), "Type hint did not match type.");
 
             switch (type) {
             case LuaType.None:
@@ -247,17 +250,17 @@ namespace Triton {
                 return null;
 
             case LuaType.Boolean:
-                return LuaApi.ToBoolean(_state, index);
+                return LuaApi.ToBoolean(state, index);
 
             case LuaType.LightUserdata:
-                return LuaApi.ToUserdata(_state, index);
+                return LuaApi.ToUserdata(state, index);
 
             case LuaType.Number:
-                var isInteger = LuaApi.IsInteger(_state, index);
-                return isInteger ? LuaApi.ToInteger(_state, index) : (object)LuaApi.ToNumber(_state, index);
+                var isInteger = LuaApi.IsInteger(state, index);
+                return isInteger ? LuaApi.ToInteger(state, index) : (object)LuaApi.ToNumber(state, index);
 
             case LuaType.String:
-                return LuaApi.ToString(_state, index);
+                return LuaApi.ToString(state, index);
 
             case LuaType.Userdata:
                 return _binder.GetNetObject(index);
@@ -266,7 +269,7 @@ namespace Triton {
             // Try to get a cached LuaReference using the pointer. By returning the same LuaReferences for the same pointers, we create
             // as few finalizable objects as possible and can also easily compare LuaReferences.
             LuaReference luaReference = null;
-            var pointer = LuaApi.ToPointer(_state, index);
+            var pointer = LuaApi.ToPointer(state, index);
             if (_references.TryGetValue(pointer, out var weakReference)) {
                 luaReference = (LuaReference)weakReference.Target;
                 if (luaReference != null) {
@@ -274,20 +277,20 @@ namespace Triton {
                 }
             }
 
-            LuaApi.PushValue(_state, index);
-            var reference = LuaApi.Ref(_state, LuaApi.RegistryIndex);
+            LuaApi.PushValue(state, index);
+            var reference = LuaApi.Ref(state, LuaApi.RegistryIndex);
 
             switch (type) {
             case LuaType.Table:
-                luaReference = new LuaTable(this, _state, reference, pointer);
+                luaReference = new LuaTable(this, state, reference, pointer);
                 break;
 
             case LuaType.Function:
-                luaReference = new LuaFunction(this, _state, reference, pointer);
+                luaReference = new LuaFunction(this, state, reference, pointer);
                 break;
 
             case LuaType.Thread:
-                luaReference = new LuaThread(this, _state, reference, pointer);
+                luaReference = new LuaThread(this, state, reference, pointer);
                 break;
             }
 
@@ -300,7 +303,7 @@ namespace Triton {
             return luaReference;
         }
 
-        internal object[] GetObjects(int startIndex, int endIndex) {
+        internal object[] GetObjects(int startIndex, int endIndex, IntPtr? stateOverride = null) {
             Debug.Assert(!IsDisposed, "Lua instance is disposed.");
 
             if (startIndex > endIndex) {
@@ -309,7 +312,7 @@ namespace Triton {
 
             var objs = new object[endIndex - startIndex + 1];
             for (var i = 0; i < objs.Length; ++i) {
-                objs[i] = GetObject(startIndex + i);
+                objs[i] = GetObject(startIndex + i, null, stateOverride);
             }
             return objs;
         }

@@ -250,8 +250,8 @@ namespace Triton.Binding {
             var lua = (Lua)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
 
             // We need to use lua.GetObject here since binary operators can occur with one of the operands not being .NET objects.
-            var operand1 = lua.GetObject(1);
-            var operand2 = lua.GetObject(2);
+            var operand1 = lua.GetObject(1, null, state);
+            var operand2 = lua.GetObject(2, null, state);
             var info1 = GetTypeBindingInfo(operand1.GetType());
             var info2 = GetTypeBindingInfo(operand2.GetType());
 
@@ -311,7 +311,7 @@ namespace Triton.Binding {
 
             var lua = (Lua)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
             var top = LuaApi.GetTop(state);
-            var objs = lua.GetObjects(2, top);
+            var objs = lua.GetObjects(2, top, state);
 
 #if NETSTANDARD
             var method = @delegate.GetMethodInfo();
@@ -354,7 +354,7 @@ namespace Triton.Binding {
 
             var lua = (Lua)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
             var top = LuaApi.GetTop(state);
-            var objs = lua.GetObjects(2, top);
+            var objs = lua.GetObjects(2, top, state);
 
             // If the type contains unresolved generic parameters, like List<> or Dictionary<,>, then we try to construct it using the
             // supplied type arguments. Otherwise, we just try to construct an instance of it.
@@ -534,7 +534,7 @@ namespace Triton.Binding {
             // The arguments will start at 2 only if the call is an instance call and it's not a generic call. This is because the
             // obj:Method syntax will automatically pass obj as the first argument. A generic obj:Method call will not have obj as the
             // first argument because only the first "invocation" with the types will have obj as the first argument.
-            var objs = lua.GetObjects(isStatic || numTypeArgs > 0 ? 1 : 2, top);
+            var objs = lua.GetObjects(isStatic || numTypeArgs > 0 ? 1 : 2, top, state);
             
             var methods = info.GetMethods(name, isStatic, (int)numTypeArgs);
             if (numTypeArgs > 0) {
@@ -640,7 +640,7 @@ namespace Triton.Binding {
 
         private static int NewIndexShared(IntPtr state, object obj, Type type) {
             var lua = (Lua)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
-            var value = lua.GetObject(3);
+            var value = lua.GetObject(3, null, state);
             
             var keyType = LuaApi.Type(state, 2);
             if (keyType == LuaType.String) {
