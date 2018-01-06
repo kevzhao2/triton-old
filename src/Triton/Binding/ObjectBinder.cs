@@ -483,7 +483,7 @@ namespace Triton.Binding {
                 } else if (member is EventInfo @event) {
                     // Events return a wrapper object that handles adding/removing.
                     var eventWrapper = new EventWrapper(state, obj, @event);
-                    lua.PushObject(new EventWrapper(state, obj, @event));
+                    lua.PushObject(eventWrapper);
                 } else {
 #if NETCORE
                     Debug.Assert(member is TypeInfo, $"{nameof(member)} isn't a type.");
