@@ -8,4 +8,4 @@ install:
 
 script:
   - cd test/Triton.Tests
-  - dotnet test Triton.Test.csproj
+  - dotnet test Triton.Tests.csproj

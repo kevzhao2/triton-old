@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/kevzhao2/Triton.svg?branch=master)](https://travis-ci.org/kevzhao2/Triton)
+
 # Triton
 
 Triton provides an easy and efficient way to embed Lua 5.3 into your .NET application!
