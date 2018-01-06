@@ -26,7 +26,7 @@ for (var i = 0; i < 10000; ++i) {
 }
 ```
 
-#### Passing .NET objects
+### Passing .NET objects
 
 To pass .NET objects over to the Lua environment, all you have to do is pass the object directly, e.g., using it as a function call argument or setting a global. Any Lua code will then be able to make use of the .NET object:
 ```csharp
@@ -40,7 +40,7 @@ Assert.Equal(2018, obj[0]);
 Assert.Equal(1L, lua["count"]);
 ```
 
-##### Generic Methods
+#### Generic Methods
 
 You can access a generic method by "calling" it first with its type arguments, and then calling the method:
 ```csharp
@@ -53,7 +53,7 @@ lua["obj"] = new Test();
 lua.DoString("obj:Generic(Int32)(5)");
 ```
 
-##### Indexed Properties
+#### Indexed Properties
 
 You must access indexed properties using a wrapper object, as follows:
 ```csharp
@@ -63,7 +63,7 @@ lua.DoString("obj.Item:Set(obj.Item:Get(0) + 1, 0)");
 
 The arguments to `Get` are the indices, and the first argument to `Set` is the value, with the rest of the arguments being the indices.
 
-##### Events
+#### Events
 
 You must access events using a wrapper object, as follows:
 ```csharp
@@ -81,7 +81,7 @@ lua.DoString("event:Remove(callback)");
 
 Note that `obj.Event` will return new wrapper objects each time, so to successfully remove your callback, you must save the value!
 
-#### Passing .NET types
+### Passing .NET types
 
 .NET types can be passed in using `ImportType`, and from the Lua side, .NET types can be imported using the `import` function. These types can then be used to access static members and create objects.
 ```csharp
@@ -93,7 +93,7 @@ lua.DoString("list:Add(2018)");
 
 ## Comparison with NLua
 
-#### Advantages
+### Advantages
 
 * Triton works with an unmodified Lua library, and targets Lua 5.3.
 * Triton supports generic method invocation and generic type instantiation.
@@ -118,9 +118,9 @@ lua.DoString("list:Add(2018)");
   ```
 * Triton implements finalizers on Lua references (`LuaFunction`, `LuaTable`, `LuaThread`), meaning that if you forget to `Dispose` them (which happens a lot!), you won't be leaking unmanaged memory.
 * Triton will reuse Lua references, which saves memory. This, of course, comes with the caveat that `Dispose` must be called carefully.
-* Triton is, in general, faster for .NET to Lua context switches and vice versa. See below for the one caveat.
+* Triton is, in general, faster for .NET to Lua context switches and vice versa. See below for the one case this isn't true.
 
-#### Disadvantages
+### Disadvantages
 * Triton only supports event handler types that are "compatible" with the signature `void (object, EventArgs)`. Other types would require dynamic method generation, which is not possible on AOT.
 * Triton does not support calling extension methods on objects as instance methods.
 * Triton does not have a simple namespace-level `import`, since unfortunately `AppDomain` doesn't exist in the targeted version of .NET standard. This can be worked around by getting the `Assembly` of a type and then iterating through its exported types.

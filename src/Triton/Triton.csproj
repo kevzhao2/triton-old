@@ -45,7 +45,7 @@
       <PackagePath>lua/x86/</PackagePath>
       <Pack>true</Pack>
     </Content>
-    <None Include="Triton.targets">
+    <None Update="lua\Triton.targets">
       <PackagePath>build/net35/</PackagePath>
       <Pack>true</Pack>
     </None>
