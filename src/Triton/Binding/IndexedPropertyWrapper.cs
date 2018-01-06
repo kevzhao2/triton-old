@@ -32,9 +32,9 @@ namespace Triton.Binding {
         private readonly IntPtr _state;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="IndexedPropertyWrapper"/> class for the given Lua state, object, and property.
+        /// Initializes a new instance of the <see cref="IndexedPropertyWrapper"/> class wrapping the given object's property.
         /// </summary>
-        /// <param name="state">The Lua state.</param>
+        /// <param name="state">The Lua state pointer.</param>
         /// <param name="obj">The object.</param>
         /// <param name="property">The property.</param>
         public IndexedPropertyWrapper(IntPtr state, object obj, PropertyInfo property) {

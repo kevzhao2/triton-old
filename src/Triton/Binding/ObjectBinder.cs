@@ -20,7 +20,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -113,7 +112,7 @@ namespace Triton.Binding {
         /// Disposes the <see cref="ObjectBinder"/>.
         /// </summary>
         public void Dispose() {
-            // This is potentially unsafe. But because Dispose is only called from Lua.Dispose, the handle is always allocated.
+            // This is potentially unsafe. But because Dispose is only called from Lua.Dispose, the handle will always allocated.
             _luaHandle.Free();
         }
 
@@ -142,16 +141,6 @@ namespace Triton.Binding {
             LuaApi.PushHandle(_state, handle);
             LuaApi.GetMetatable(_state, metatable);
             LuaApi.SetMetatable(_state, -2);
-        }
-
-        internal static TypeBindingInfo GetTypeBindingInfo(Type type) {
-            lock (TypeBindingLock) {
-                if (!TypeBindingInfoCache.TryGetValue(type, out var info)) {
-                    info = TypeBindingInfo.Construct(type);
-                    TypeBindingInfoCache[type] = info;
-                }
-                return info;
-            }
         }
 
         internal static T ResolveMethodCall<T>(object[] objs, IEnumerable<T> methods, out object[] args) where T : MethodBase {
@@ -231,6 +220,16 @@ namespace Triton.Binding {
 
             // Ensure that all of the objects were used.
             return objIndex == objs.Length ? score : int.MinValue;
+        }
+
+        private static TypeBindingInfo GetTypeBindingInfo(Type type) {
+            lock (TypeBindingLock) {
+                if (!TypeBindingInfoCache.TryGetValue(type, out var info)) {
+                    info = TypeBindingInfo.Construct(type);
+                    TypeBindingInfoCache[type] = info;
+                }
+                return info;
+            }
         }
 
         private static int AddObject(IntPtr state) => BinaryOpShared(state, "add", "op_Addition");
@@ -314,7 +313,7 @@ namespace Triton.Binding {
             var top = LuaApi.GetTop(state);
             var objs = lua.GetObjects(2, top);
 
-#if NETCORE
+#if NETSTANDARD
             var method = @delegate.GetMethodInfo();
 #else
             var method = @delegate.Method;
@@ -347,7 +346,7 @@ namespace Triton.Binding {
 
         private static int CallType(IntPtr state) {
             var type = (Type)LuaApi.ToHandle(state, 1).Target;
-#if NETCORE
+#if NETSTANDARD
             var typeInfo = type.GetTypeInfo();
 #else
             var typeInfo = type;
@@ -370,7 +369,7 @@ namespace Triton.Binding {
                     if (!(objs[i] is Type typeArg)) {
                         throw LuaApi.Error(state, "attempt to construct generic type with non-type arg");
                     }
-#if NETCORE
+#if NETSTANDARD
                     if (typeArg.GetTypeInfo().ContainsGenericParameters) {
 #else
                     if (typeArg.ContainsGenericParameters) {
@@ -381,6 +380,7 @@ namespace Triton.Binding {
                     typeArgs[i] = typeArg;
                 }
 
+                // Types return a wrapper object to signify that static members may be accessed.
                 try {
                     result = new TypeWrapper(type.MakeGenericType(typeArgs));
                 } catch (ArgumentException) {
@@ -426,7 +426,7 @@ namespace Triton.Binding {
         
         private static int IndexType(IntPtr state) {
             var type = (Type)LuaApi.ToHandle(state, 1).Target;
-#if NETCORE
+#if NETSTANDARD
             var typeInfo = type.GetTypeInfo();
 #else
             var typeInfo = type;
@@ -485,11 +485,10 @@ namespace Triton.Binding {
                     var eventWrapper = new EventWrapper(state, obj, @event);
                     lua.PushObject(eventWrapper);
                 } else {
-#if NETCORE
-                    Debug.Assert(member is TypeInfo, $"{nameof(member)} isn't a type.");
+                    // Nested types return a wrapper object to signify that static members may be accessed.
+#if NETSTANDARD
                     lua.PushObject(new TypeWrapper(((TypeInfo)member).AsType()));
 #else
-                    Debug.Assert(member is Type, $"{nameof(member)} isn't a type.");
                     lua.PushObject(new TypeWrapper((Type)member));
 #endif
                 }
@@ -544,7 +543,7 @@ namespace Triton.Binding {
                     if (!(lua.GetObject(LuaApi.UpvalueIndex(5 + i)) is Type typeArg)) {
                         throw LuaApi.Error(state, "attempt to construct generic method with non-type arg");
                     }
-#if NETCORE
+#if NETSTANDARD
                     if (typeArg.GetTypeInfo().ContainsGenericParameters) {
 #else
                     if (typeArg.ContainsGenericParameters) {
@@ -598,8 +597,7 @@ namespace Triton.Binding {
             try {
                 result = method.Invoke(obj, args);
             } catch (TargetInvocationException e) {
-                throw LuaApi.Error(
-                    state, $"attempt to call {(numTypeArgs > 0 ? "generic " : "")}method threw:\n{e.InnerException}");
+                throw LuaApi.Error(state, $"attempt to call {(numTypeArgs > 0 ? "generic " : "")}method threw:\n{e.InnerException}");
             }
 
             // Since method calls tend to be expensive and we're transitioning back into Lua, let's process some queued unrefs.
@@ -624,7 +622,7 @@ namespace Triton.Binding {
         
         private static int NewIndexType(IntPtr state) {
             var type = (Type)LuaApi.ToHandle(state, 1).Target;
-#if NETCORE
+#if NETSTANDARD
             var typeInfo = type.GetTypeInfo();
 #else
             var typeInfo = type;
@@ -685,12 +683,6 @@ namespace Triton.Binding {
                 } else if (member is MethodInfo method) {
                     throw LuaApi.Error(state, "attempt to set method");
                 } else {
-#if NETCORE
-                    Debug.Assert(member is TypeInfo, $"{nameof(member)} isn't a type.");
-#else
-                    Debug.Assert(member is Type, $"{nameof(member)} isn't a type.");
-#endif
-
                     throw LuaApi.Error(state, "attempt to set nested type");
                 }
                 return 0;

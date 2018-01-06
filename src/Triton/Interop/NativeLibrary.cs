@@ -15,21 +15,22 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace Triton.Interop {
     /// <summary>
-    /// Handles platform-specific native library loading.
+    /// Provides platform-specific native library loading.
     /// </summary>
     internal sealed class NativeLibrary {
-        private const int RTLD_NOW = 2;
-
         private static readonly Func<string, IntPtr> Open;
         private static readonly Func<IntPtr, string, IntPtr> GetSymbol;
 
         private readonly IntPtr _handle;
 
         static NativeLibrary() {
+            const int RTLD_NOW = 2;
+
             if (Platform.IsWindows) {
                 Open = Windows.LoadLibrary;
                 GetSymbol = Windows.GetProcAddress;
@@ -51,27 +52,27 @@ namespace Triton.Interop {
                 throw new PlatformNotSupportedException();
             }
         }
-
+        
         /// <summary>
-        /// Initializes a new instance of the <see cref="NativeLibrary"/> class, picking one of the given paths.
+        /// Initializes a new instance of the <see cref="NativeLibrary"/>, picking one of the given paths.
         /// </summary>
         /// <param name="paths">The paths.</param>
-        /// <exception cref="FileNotFoundException">None of the paths were valid.</exception>
+        /// <exception cref="BadImageFormatException">The given path is not a valid native library.</exception>
+        /// <exception cref="FileNotFoundException">None of the paths are valid.</exception>
         public NativeLibrary(params string[] paths) {
-            foreach (var path in paths) {
-                if (File.Exists(path)) {
-                    _handle = Open(path);
-                    break;
-                }
+            var path = paths.FirstOrDefault(File.Exists);
+            if (path == null) {
+                throw new FileNotFoundException($"Could not find native library at any of the paths: {string.Join(", ", paths)}");
             }
 
+            _handle = Open(path);
             if (_handle == IntPtr.Zero) {
-                throw new FileNotFoundException();
+                throw new BadImageFormatException("Invalid native library.", path);
             }
         }
-
+        
         /// <summary>
-        /// Gets a delegate for the method with the given symbol.
+        /// Gets a delegate for the function with the given symbol.
         /// </summary>
         /// <typeparam name="T">The delegate type.</typeparam>
         /// <param name="symbol">The symbol.</param>
@@ -79,7 +80,7 @@ namespace Triton.Interop {
         public T GetDelegate<T>(string symbol) where T : class {
             var pointer = GetSymbol(_handle, symbol);
 
-#if NETCORE
+#if NETSTANDARD
             return Marshal.GetDelegateForFunctionPointer<T>(pointer);
 #else
             return Marshal.GetDelegateForFunctionPointer(pointer, typeof(T)) as T;
@@ -88,45 +89,45 @@ namespace Triton.Interop {
 
         private static class Windows {
             [DllImport("kernel32.dll")]
-            internal static extern IntPtr LoadLibrary(string path);
+            public static extern IntPtr LoadLibrary(string path);
 
             [DllImport("kernel32.dll")]
-            internal static extern IntPtr GetProcAddress(IntPtr handle, string symbol);
+            public static extern IntPtr GetProcAddress(IntPtr handle, string symbol);
         }
 
         // On OSX, libSystem.dylib will contain libdl.
         private static class OSX {
             [DllImport("libSystem.dylib")]
-            internal static extern IntPtr dlopen(string path, int flags);
+            public static extern IntPtr dlopen(string path, int flags);
 
             [DllImport("libSystem.dylib")]
-            internal static extern IntPtr dlsym(IntPtr handle, string symbol);
+            public static extern IntPtr dlsym(IntPtr handle, string symbol);
         }
 
         // On Mono, load from the current process since Mono is linked against libdl.
         private static class Mono {
             [DllImport("__Internal")]
-            internal static extern IntPtr dlopen(string path, int flags);
+            public static extern IntPtr dlopen(string path, int flags);
 
             [DllImport("__Internal")]
-            internal static extern IntPtr dlsym(IntPtr handle, string symbol);
+            public static extern IntPtr dlsym(IntPtr handle, string symbol);
         }
 
         // On .NET core, use libcoreclr.so, which is linked against libdl.
         private static class CoreCLR {
             [DllImport("libcoreclr.so")]
-            internal static extern IntPtr dlopen(string path, int flags);
+            public static extern IntPtr dlopen(string path, int flags);
 
             [DllImport("libcoreclr.so")]
-            internal static extern IntPtr dlsym(IntPtr handle, string symbol);
+            public static extern IntPtr dlsym(IntPtr handle, string symbol);
         }
         
         private static class Linux {
             [DllImport("libdl.so")]
-            internal static extern IntPtr dlopen(string path, int flags);
+            public static extern IntPtr dlopen(string path, int flags);
 
             [DllImport("libdl.so")]
-            internal static extern IntPtr dlsym(IntPtr handle, string symbol);
+            public static extern IntPtr dlsym(IntPtr handle, string symbol);
         }
     }
 }

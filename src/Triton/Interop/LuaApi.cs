@@ -29,263 +29,154 @@ namespace Triton.Interop {
     /// Holds Lua API definitions.
     /// </summary>
     internal static class LuaApi {
-        internal const int MinStackSize = 20;
-        internal const int RegistryIndex = -1001000;
+        public const int MinStackSize = 20;
+        public const int RegistryIndex = -1001000;
 
-        #region Delegate Definitions
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate bool CheckStackD(IntPtr state, int n);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void CloseD(IntPtr state);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void CreateTableD(IntPtr state, int numArray = 0, int numNonArray = 0);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void ErrorD(IntPtr state, byte[] errorMessage);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void GetFieldD(IntPtr state, int index, byte[] field);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate LuaType GetGlobalD(IntPtr state, byte[] name);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate LuaType GetTableD(IntPtr state, int index);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate int GetTopD(IntPtr state);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate bool IsIntegerD(IntPtr state, int index);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate LuaStatus LoadStringD(IntPtr state, byte[] s);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate bool NewMetatableD(IntPtr state, byte[] name);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate IntPtr NewStateD();
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate IntPtr NewUserdataD(IntPtr state, UIntPtr size);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void OpenLibsD(IntPtr state);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate LuaStatus PCallKD(
-            IntPtr state, int numArgs, int numResults = -1, int messageHandler = 0, IntPtr context = default(IntPtr),
-            IntPtr k = default(IntPtr));
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void PushBooleanD(IntPtr state, bool b);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void PushCClosureD(IntPtr state, LuaCFunction function, int numUpvalues);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void PushIntegerD(IntPtr state, long i);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void PushNilD(IntPtr state);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void PushNumberD(IntPtr state, double n);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void PushLightUserdataD(IntPtr state, IntPtr p);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void PushLStringD(IntPtr state, byte[] s, UIntPtr length);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void PushValueD(IntPtr state, int index);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate LuaType RawGetID(IntPtr state, int index, long n);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate int RefD(IntPtr state, int index);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void SetFieldD(IntPtr state, int index, byte[] field);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void SetGlobalD(IntPtr state, byte[] name);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void SetMetatableD(IntPtr state, int index);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void SetTableD(IntPtr state, int index);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void SetTopD(IntPtr state, int top);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate bool ToBooleanD(IntPtr state, int index);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate long ToIntegerXD(IntPtr state, int index, out bool isSuccess);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate IntPtr ToLStringD(IntPtr state, int index, out UIntPtr length);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate double ToNumberXD(IntPtr state, int index, out bool isSuccess);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate IntPtr ToPointerD(IntPtr state, int index);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate IntPtr ToUserdataD(IntPtr state, int index);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate LuaType TypeD(IntPtr state, int index);
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void UnrefD(IntPtr state, int index, int reference);
-        #endregion
-
-        internal static readonly NativeLibrary Library;
-
-        #region Delegates
-        internal static readonly CheckStackD CheckStack;
-        internal static readonly CloseD Close;
-        internal static readonly CreateTableD CreateTable;
-        internal static readonly GetTableD GetTable;
-        internal static readonly GetTopD GetTop;
-        internal static readonly IsIntegerD IsInteger;
-        internal static readonly NewStateD NewState;
-        internal static readonly OpenLibsD OpenLibs;
-        internal static readonly PCallKD PCallK;
-        internal static readonly PushBooleanD PushBoolean;
-        internal static readonly PushCClosureD PushCClosure;
-        internal static readonly PushIntegerD PushInteger;
-        internal static readonly PushNilD PushNil;
-        internal static readonly PushNumberD PushNumber;
-        internal static readonly PushLightUserdataD PushLightUserdata;
-        internal static readonly PushValueD PushValue;
-        internal static readonly RawGetID RawGetI;
-        internal static readonly RefD Ref;
-        internal static readonly SetMetatableD SetMetatable;
-        internal static readonly SetTableD SetTable;
-        internal static readonly SetTopD SetTop;
-        internal static readonly ToBooleanD ToBoolean;
-        internal static readonly ToPointerD ToPointer;
-        internal static readonly ToUserdataD ToUserdata;
-        internal static readonly TypeD Type;
-        internal static readonly UnrefD Unref;
-
-        private static readonly ErrorD ErrorDelegate;
-        private static readonly GetFieldD GetFieldDelegate;
-        private static readonly GetGlobalD GetGlobalDelegate;
-        private static readonly LoadStringD LoadStringDelegate;
-        private static readonly NewMetatableD NewMetatableDelegate;
-        private static readonly NewUserdataD NewUserdataDelegate;
-        private static readonly PushLStringD PushLString;
-        private static readonly SetFieldD SetFieldDelegate;
-        private static readonly SetGlobalD SetGlobalDelegate;
-        private static readonly ToIntegerXD ToIntegerX;
-        private static readonly ToLStringD ToLString;
-        private static readonly ToNumberXD ToNumberX;
-        #endregion
+        public static readonly Delegates.CheckStack CheckStack;
+        public static readonly Delegates.Close Close;
+        public static readonly Delegates.CreateTable CreateTable;
+        public static readonly Delegates.GetTable GetTable;
+        public static readonly Delegates.GetTop GetTop;
+        public static readonly Delegates.IsInteger IsInteger;
+        public static readonly Delegates.NewState NewState;
+        public static readonly Delegates.OpenLibs OpenLibs;
+        public static readonly Delegates.PCallK PCallK;
+        public static readonly Delegates.PushBoolean PushBoolean;
+        public static readonly Delegates.PushCClosure PushCClosure;
+        public static readonly Delegates.PushInteger PushInteger;
+        public static readonly Delegates.PushNil PushNil;
+        public static readonly Delegates.PushNumber PushNumber;
+        public static readonly Delegates.PushLightUserdata PushLightUserdata;
+        public static readonly Delegates.PushValue PushValue;
+        public static readonly Delegates.RawGetI RawGetI;
+        public static readonly Delegates.Ref Ref;
+        public static readonly Delegates.SetMetatable SetMetatable;
+        public static readonly Delegates.SetTable SetTable;
+        public static readonly Delegates.SetTop SetTop;
+        public static readonly Delegates.ToBoolean ToBoolean;
+        public static readonly Delegates.ToPointer ToPointer;
+        public static readonly Delegates.ToUserdata ToUserdata;
+        public static readonly Delegates.Type Type;
+        public static readonly Delegates.Unref Unref;
+        
+        private static readonly Delegates.Error ErrorDelegate;
+        private static readonly Delegates.GetField GetFieldDelegate;
+        private static readonly Delegates.GetGlobal GetGlobalDelegate;
+        private static readonly Delegates.LoadString LoadStringDelegate;
+        private static readonly Delegates.NewMetatable NewMetatableDelegate;
+        private static readonly Delegates.NewUserdata NewUserdataDelegate;
+        private static readonly Delegates.PushLString PushLString;
+        private static readonly Delegates.SetField SetFieldDelegate;
+        private static readonly Delegates.SetGlobal SetGlobalDelegate;
+        private static readonly Delegates.ToIntegerX ToIntegerX;
+        private static readonly Delegates.ToLString ToLString;
+        private static readonly Delegates.ToNumberX ToNumberX;
 
         static LuaApi() {
-#if NETCORE
+#if NETSTANDARD
             var assemblyDirectory = Path.GetDirectoryName(GetAssemblyPath(typeof(LuaApi).GetTypeInfo().Assembly));
 #else
             var assemblyDirectory = Path.GetDirectoryName(GetAssemblyPath(typeof(LuaApi).Assembly));
 #endif
-
-            string libraryName;
-            if (Platform.IsWindows) {
-                libraryName = "lua53.dll";
-            } else if (Platform.IsOSX) {
+            
+            // The Platform cctor already checks for invalid platforms, so we don't need to do so here.
+            var libraryName = "lua53.dll";
+            if (Platform.IsOSX) {
                 libraryName = "liblua53.dylib";
             } else if (Platform.IsLinux) {
                 libraryName = "liblua53.so";
-            } else {
-                throw new PlatformNotSupportedException();
             }
 
             var searchPath = CombinePath("lua", Platform.Is64Bit ? "x64" : "x86", libraryName);
             var path1 = CombinePath(assemblyDirectory, searchPath);
             var path2 = CombinePath(assemblyDirectory, "..", "..", searchPath);
-            Library = new NativeLibrary(path1, path2);
 
-            CheckStack = Library.GetDelegate<CheckStackD>("lua_checkstack");
-            Close = Library.GetDelegate<CloseD>("lua_close");
-            CreateTable = Library.GetDelegate<CreateTableD>("lua_createtable");
-            GetTable = Library.GetDelegate<GetTableD>("lua_gettable");
-            GetTop = Library.GetDelegate<GetTopD>("lua_gettop");
-            IsInteger = Library.GetDelegate<IsIntegerD>("lua_isinteger");
-            NewState = Library.GetDelegate<NewStateD>("luaL_newstate");
-            OpenLibs = Library.GetDelegate<OpenLibsD>("luaL_openlibs");
-            PCallK = Library.GetDelegate<PCallKD>("lua_pcallk");
-            PushBoolean = Library.GetDelegate<PushBooleanD>("lua_pushboolean");
-            PushCClosure = Library.GetDelegate<PushCClosureD>("lua_pushcclosure");
-            PushInteger = Library.GetDelegate<PushIntegerD>("lua_pushinteger");
-            PushNil = Library.GetDelegate<PushNilD>("lua_pushnil");
-            PushNumber = Library.GetDelegate<PushNumberD>("lua_pushnumber");
-            PushLightUserdata = Library.GetDelegate<PushLightUserdataD>("lua_pushlightuserdata");
-            PushValue = Library.GetDelegate<PushValueD>("lua_pushvalue");
-            RawGetI = Library.GetDelegate<RawGetID>("lua_rawgeti");
-            Ref = Library.GetDelegate<RefD>("luaL_ref");
-            SetMetatable = Library.GetDelegate<SetMetatableD>("lua_setmetatable");
-            SetTable = Library.GetDelegate<SetTableD>("lua_settable");
-            SetTop = Library.GetDelegate<SetTopD>("lua_settop");
-            ToBoolean = Library.GetDelegate<ToBooleanD>("lua_toboolean");
-            ToPointer = Library.GetDelegate<ToPointerD>("lua_topointer");
-            ToUserdata = Library.GetDelegate<ToUserdataD>("lua_touserdata");
-            Type = Library.GetDelegate<TypeD>("lua_type");
-            Unref = Library.GetDelegate<UnrefD>("luaL_unref");
+            // Normally, we would have this be a static readonly variable, and we would define a finalizer which would close the opened
+            // library. But this isn't feasible because Lua has a finalizer which calls Close. Thus, we'll just let the operating system
+            // clean up the loaded library.
+            var library = new NativeLibrary(path1, path2);
 
-            ErrorDelegate = Library.GetDelegate<ErrorD>("luaL_error");
-            GetFieldDelegate = Library.GetDelegate<GetFieldD>("lua_getfield");
-            GetGlobalDelegate = Library.GetDelegate<GetGlobalD>("lua_getglobal");
-            LoadStringDelegate = Library.GetDelegate<LoadStringD>("luaL_loadstring");
-            NewMetatableDelegate = Library.GetDelegate<NewMetatableD>("luaL_newmetatable");
-            NewUserdataDelegate = Library.GetDelegate<NewUserdataD>("lua_newuserdata");
-            PushLString = Library.GetDelegate<PushLStringD>("lua_pushlstring");
-            SetFieldDelegate = Library.GetDelegate<SetFieldD>("lua_setfield");
-            SetGlobalDelegate = Library.GetDelegate<SetGlobalD>("lua_setglobal");
-            ToIntegerX = Library.GetDelegate<ToIntegerXD>("lua_tointegerx");
-            ToNumberX = Library.GetDelegate<ToNumberXD>("lua_tonumberx");
-            ToLString = Library.GetDelegate<ToLStringD>("lua_tolstring");
+            CheckStack = library.GetDelegate<Delegates.CheckStack>("lua_checkstack");
+            Close = library.GetDelegate<Delegates.Close>("lua_close");
+            CreateTable = library.GetDelegate<Delegates.CreateTable>("lua_createtable");
+            GetTable = library.GetDelegate<Delegates.GetTable>("lua_gettable");
+            GetTop = library.GetDelegate<Delegates.GetTop>("lua_gettop");
+            IsInteger = library.GetDelegate<Delegates.IsInteger>("lua_isinteger");
+            NewState = library.GetDelegate<Delegates.NewState>("luaL_newstate");
+            OpenLibs = library.GetDelegate<Delegates.OpenLibs>("luaL_openlibs");
+            PCallK = library.GetDelegate<Delegates.PCallK>("lua_pcallk");
+            PushBoolean = library.GetDelegate<Delegates.PushBoolean>("lua_pushboolean");
+            PushCClosure = library.GetDelegate<Delegates.PushCClosure>("lua_pushcclosure");
+            PushInteger = library.GetDelegate<Delegates.PushInteger>("lua_pushinteger");
+            PushNil = library.GetDelegate<Delegates.PushNil>("lua_pushnil");
+            PushNumber = library.GetDelegate<Delegates.PushNumber>("lua_pushnumber");
+            PushLightUserdata = library.GetDelegate<Delegates.PushLightUserdata>("lua_pushlightuserdata");
+            PushValue = library.GetDelegate<Delegates.PushValue>("lua_pushvalue");
+            RawGetI = library.GetDelegate<Delegates.RawGetI>("lua_rawgeti");
+            Ref = library.GetDelegate<Delegates.Ref>("luaL_ref");
+            SetMetatable = library.GetDelegate<Delegates.SetMetatable>("lua_setmetatable");
+            SetTable = library.GetDelegate<Delegates.SetTable>("lua_settable");
+            SetTop = library.GetDelegate<Delegates.SetTop>("lua_settop");
+            ToBoolean = library.GetDelegate<Delegates.ToBoolean>("lua_toboolean");
+            ToPointer = library.GetDelegate<Delegates.ToPointer>("lua_topointer");
+            ToUserdata = library.GetDelegate<Delegates.ToUserdata>("lua_touserdata");
+            Type = library.GetDelegate<Delegates.Type>("lua_type");
+            Unref = library.GetDelegate<Delegates.Unref>("luaL_unref");
+
+            ErrorDelegate = library.GetDelegate<Delegates.Error>("luaL_error");
+            GetFieldDelegate = library.GetDelegate<Delegates.GetField>("lua_getfield");
+            GetGlobalDelegate = library.GetDelegate<Delegates.GetGlobal>("lua_getglobal");
+            LoadStringDelegate = library.GetDelegate<Delegates.LoadString>("luaL_loadstring");
+            NewMetatableDelegate = library.GetDelegate<Delegates.NewMetatable>("luaL_newmetatable");
+            NewUserdataDelegate = library.GetDelegate<Delegates.NewUserdata>("lua_newuserdata");
+            PushLString = library.GetDelegate<Delegates.PushLString>("lua_pushlstring");
+            SetFieldDelegate = library.GetDelegate<Delegates.SetField>("lua_setfield");
+            SetGlobalDelegate = library.GetDelegate<Delegates.SetGlobal>("lua_setglobal");
+            ToIntegerX = library.GetDelegate<Delegates.ToIntegerX>("lua_tointegerx");
+            ToNumberX = library.GetDelegate<Delegates.ToNumberX>("lua_tonumberx");
+            ToLString = library.GetDelegate<Delegates.ToLString>("lua_tolstring");
         }
 
-        // This is a bit of a hack. This method never returns, and we want a way to tell the compiler this. So if it returns an Exception
-        // and we do something like throw NativeMethods.Error(...), then the compiler will correctly deduce that the code following will
-        // not be run.
-        internal static Exception Error(IntPtr state, string errorMessage) {
+        public static Exception Error(IntPtr state, string errorMessage) {
             ErrorDelegate(state, GetUtf8String(errorMessage));
+
+            // This is a bit of a hack. This method never returns, and we want a way to tell the compiler this. So if it returns an
+            // Exception and we do something like throw NativeMethods.Error(...), then the compiler will correctly deduce that the code
+            // following will not be run.
             return new InvalidOperationException("This should never have been reached!");
         }
 
-        internal static void GetField(IntPtr state, int index, string field) => GetFieldDelegate(state, index, GetUtf8String(field));
-        internal static LuaType GetGlobal(IntPtr state, string name) => GetGlobalDelegate(state, GetUtf8String(name));
-        internal static void GetMetatable(IntPtr state, string name) => GetField(state, RegistryIndex, name);
-        internal static LuaStatus LoadString(IntPtr state, string s) => LoadStringDelegate(state, GetUtf8String(s));
-        internal static bool NewMetatable(IntPtr state, string name) => NewMetatableDelegate(state, GetUtf8String(name));
-        internal static IntPtr NewUserdata(IntPtr state, int size) => NewUserdataDelegate(state, new UIntPtr((uint)size));
-        internal static void Pop(IntPtr state, int n) => SetTop(state, -n - 1);
-        internal static void SetField(IntPtr state, int index, string field) => SetFieldDelegate(state, index, GetUtf8String(field));
-        internal static void SetGlobal(IntPtr state, string name) => SetGlobalDelegate(state, GetUtf8String(name));
-        internal static long ToInteger(IntPtr state, int index) => ToIntegerX(state, index, out _);
-        internal static double ToNumber(IntPtr state, int index) => ToNumberX(state, index, out _);
-        internal static int UpvalueIndex(int i) => RegistryIndex - i;
+        public static void GetField(IntPtr state, int index, string field) => GetFieldDelegate(state, index, GetUtf8String(field));
+        public static LuaType GetGlobal(IntPtr state, string name) => GetGlobalDelegate(state, GetUtf8String(name));
+        public static void GetMetatable(IntPtr state, string name) => GetField(state, RegistryIndex, name);
+        public static LuaStatus LoadString(IntPtr state, string s) => LoadStringDelegate(state, GetUtf8String(s));
+        public static bool NewMetatable(IntPtr state, string name) => NewMetatableDelegate(state, GetUtf8String(name));
+        public static IntPtr NewUserdata(IntPtr state, int size) => NewUserdataDelegate(state, new UIntPtr((uint)size));
+        public static void Pop(IntPtr state, int n) => SetTop(state, -n - 1);
+        
+        public static void PushHandle(IntPtr state, GCHandle handle) {
+            var ud = NewUserdata(state, IntPtr.Size);
+            Marshal.WriteIntPtr(ud, GCHandle.ToIntPtr(handle));
+        }
 
-        internal static void PushString(IntPtr state, string s) {
+        public static void PushString(IntPtr state, string s) {
             // Because PushLString accepts a length parameter, we don't actually need to null-terminate the string.
             var buffer = Encoding.UTF8.GetBytes(s);
             PushLString(state, buffer, new UIntPtr((uint)buffer.Length));
         }
 
-        internal static string ToString(IntPtr state, int index) {
+        public static void SetField(IntPtr state, int index, string field) => SetFieldDelegate(state, index, GetUtf8String(field));
+        public static void SetGlobal(IntPtr state, string name) => SetGlobalDelegate(state, GetUtf8String(name));
+
+        public static GCHandle ToHandle(IntPtr state, int index) {
+            var ud = ToUserdata(state, index);
+            return GCHandle.FromIntPtr(Marshal.ReadIntPtr(ud));
+        }
+
+        public static long ToInteger(IntPtr state, int index) => ToIntegerX(state, index, out _);
+        public static double ToNumber(IntPtr state, int index) => ToNumberX(state, index, out _);
+
+        public static string ToString(IntPtr state, int index) {
             var ptr = ToLString(state, index, out var len);
             var byteCount = (int)len.ToUInt32();
             if (byteCount == 0) {
@@ -297,20 +188,12 @@ namespace Triton.Interop {
             return Encoding.UTF8.GetString(buffer);
         }
 
-        internal static void PushHandle(IntPtr state, GCHandle handle) {
-            var ud = NewUserdata(state, IntPtr.Size);
-            Marshal.WriteIntPtr(ud, GCHandle.ToIntPtr(handle));
-        }
+        public static int UpvalueIndex(int i) => RegistryIndex - i;
 
-        internal static GCHandle ToHandle(IntPtr state, int index) {
-            var ud = ToUserdata(state, index);
-            return GCHandle.FromIntPtr(Marshal.ReadIntPtr(ud));
-        }
-
-        // See https://stackoverflow.com/a/28319367 for more details.
         private static string GetAssemblyPath(Assembly assembly) {
             const string prefix = "file:///";
 
+            // See https://stackoverflow.com/a/28319367.
             var codeBase = assembly.CodeBase;
             if (codeBase != null && codeBase.StartsWith(prefix)) {
                 var path = codeBase.Substring(prefix.Length).Replace('/', '\\');
@@ -333,6 +216,127 @@ namespace Triton.Interop {
             var buffer = new byte[byteCount + 1];
             Encoding.UTF8.GetBytes(s, 0, s.Length, buffer, 0);
             return buffer;
+        }
+
+        /// <summary>
+        /// Holds delegate definitions.
+        /// </summary>
+        public static class Delegates {
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate bool CheckStack(IntPtr state, int n);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void Close(IntPtr state);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void CreateTable(IntPtr state, int numArray = 0, int numNonArray = 0);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void Error(IntPtr state, byte[] errorMessage);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void GetField(IntPtr state, int index, byte[] field);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate LuaType GetGlobal(IntPtr state, byte[] name);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate LuaType GetTable(IntPtr state, int index);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate int GetTop(IntPtr state);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate bool IsInteger(IntPtr state, int index);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate LuaStatus LoadString(IntPtr state, byte[] s);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate bool NewMetatable(IntPtr state, byte[] name);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate IntPtr NewState();
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate IntPtr NewUserdata(IntPtr state, UIntPtr size);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void OpenLibs(IntPtr state);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate LuaStatus PCallK(
+                IntPtr state, int numArgs, int numResults = -1, int messageHandler = 0, IntPtr context = default(IntPtr),
+                IntPtr k = default(IntPtr));
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void PushBoolean(IntPtr state, bool b);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void PushCClosure(IntPtr state, LuaCFunction function, int numUpvalues);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void PushInteger(IntPtr state, long i);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void PushNil(IntPtr state);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void PushNumber(IntPtr state, double n);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void PushLightUserdata(IntPtr state, IntPtr p);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void PushLString(IntPtr state, byte[] s, UIntPtr length);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void PushValue(IntPtr state, int index);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate LuaType RawGetI(IntPtr state, int index, long n);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate int Ref(IntPtr state, int index);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void SetField(IntPtr state, int index, byte[] field);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void SetGlobal(IntPtr state, byte[] name);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void SetMetatable(IntPtr state, int index);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void SetTable(IntPtr state, int index);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void SetTop(IntPtr state, int top);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate bool ToBoolean(IntPtr state, int index);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate long ToIntegerX(IntPtr state, int index, out bool isSuccess);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate IntPtr ToLString(IntPtr state, int index, out UIntPtr length);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate double ToNumberX(IntPtr state, int index, out bool isSuccess);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate IntPtr ToPointer(IntPtr state, int index);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate IntPtr ToUserdata(IntPtr state, int index);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate LuaType Type(IntPtr state, int index);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void Unref(IntPtr state, int index, int reference);
         }
     }
 }

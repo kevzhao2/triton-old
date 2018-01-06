@@ -51,7 +51,7 @@
   </ItemGroup>
   
   <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard1.5'">
-    <DefineConstants>NETCORE</DefineConstants>
+    <DefineConstants>NETSTANDARD</DefineConstants>
   </PropertyGroup>
   
   <PropertyGroup Condition="'$(TargetFramework)' == 'net35'">

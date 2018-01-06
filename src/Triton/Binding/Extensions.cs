@@ -26,7 +26,7 @@ using System.Reflection;
 
 namespace Triton.Binding {
     /// <summary>
-    /// Contains extension methods relevant to object binding.
+    /// Contains extension methods.
     /// </summary>
     internal static class Extensions {
         /// <summary>
@@ -51,7 +51,7 @@ namespace Triton.Binding {
         public static bool TryCoerce(this object obj, Type type, out object result) {
             result = obj;
             if (result == null) {
-#if NETCORE
+#if NETSTANDARD
                 return type.GetTypeInfo().IsClass || Nullable.GetUnderlyingType(type) != null;
 #else
                 return type.IsClass || Nullable.GetUnderlyingType(type) != null;
@@ -102,7 +102,7 @@ namespace Triton.Binding {
                 }
             }
 
-#if NETCORE
+#if NETSTANDARD
             return type.GetTypeInfo().IsInstanceOfType(result);
 #else
             return type.IsInstanceOfType(result);

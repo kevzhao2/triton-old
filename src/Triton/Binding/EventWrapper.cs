@@ -28,15 +28,19 @@ namespace Triton.Binding {
     /// A wrapper class that exposes events to Lua.
     /// </summary>
     internal sealed class EventWrapper {
+#if NETSTANDARD
+        private static readonly MethodInfo InvokeMethod = typeof(LuaFunctionWrapper).GetTypeInfo().GetMethod("Invoke");
+#endif
+
         private readonly Dictionary<LuaFunction, Delegate> _delegates = new Dictionary<LuaFunction, Delegate>();
         private readonly EventInfo _event;
         private readonly object _obj;
         private readonly IntPtr _state;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="EventWrapper"/> class for the given Lua state, object, and event.
+        /// Initializes a new instance of the <see cref="EventWrapper"/> class wrapping the given object's event.
         /// </summary>
-        /// <param name="state">The Lua state.</param>
+        /// <param name="state">The Lua state pointer.</param>
         /// <param name="obj">The object.</param>
         /// <param name="event">The event.</param>
         public EventWrapper(IntPtr state, object obj, EventInfo @event) {
@@ -44,7 +48,7 @@ namespace Triton.Binding {
             _obj = obj;
             _event = @event;
         }
-
+        
         /// <summary>
         /// Adds a <see cref="LuaFunction"/> to the event.
         /// </summary>
@@ -57,9 +61,8 @@ namespace Triton.Binding {
             Delegate @delegate;
 
             try {
-#if NETCORE
-                var invokeMethod = typeof(LuaFunctionWrapper).GetTypeInfo().GetDeclaredMethod("Invoke");
-                @delegate = invokeMethod.CreateDelegate(_event.EventHandlerType, new LuaFunctionWrapper(function));
+#if NETSTANDARD
+                @delegate = InvokeMethod.CreateDelegate(_event.EventHandlerType, new LuaFunctionWrapper(function));
 #else
                 @delegate = Delegate.CreateDelegate(_event.EventHandlerType, new LuaFunctionWrapper(function), "Invoke");
 #endif
@@ -74,7 +77,7 @@ namespace Triton.Binding {
         }
 
         /// <summary>
-        /// Removes a <see cref="LuaFunction"/> from the event.
+        /// Removes a <see cref="LuaFunction"/> to the event.
         /// </summary>
         /// <param name="function">The <see cref="LuaFunction"/>.</param>
         public void Remove(LuaFunction function) {
@@ -93,24 +96,15 @@ namespace Triton.Binding {
 
             _delegates.Remove(function);
         }
-
+        
         /// <summary>
-        /// A wrapper class that forms a closure around a <see cref="LuaFunction"/>.
+        /// A wrapper class that closes on a <see cref="LuaFunction"/>.
         /// </summary>
         private sealed class LuaFunctionWrapper {
             private readonly LuaFunction _function;
-
-            /// <summary>
-            /// Initializes a new instance of the <see cref="LuaFunctionWrapper"/> class around the given <see cref="LuaFunction"/>.
-            /// </summary>
-            /// <param name="function">The <see cref="LuaFunction"/>.</param>
+            
             public LuaFunctionWrapper(LuaFunction function) => _function = function;
 
-            /// <summary>
-            /// Invokes the wrapped <see cref="LuaFunction"/> with the given arguments.
-            /// </summary>
-            /// <param name="sender">The sender.</param>
-            /// <param name="args">The event arguments.</param>
             public void Invoke(object sender, EventArgs args) => _function.Call(sender, args);
         }
     }

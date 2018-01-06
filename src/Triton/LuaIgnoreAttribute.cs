@@ -22,7 +22,7 @@ using System;
 
 namespace Triton {
     /// <summary>
-    /// The attribute that should be applied to members of a type that should be invisible to Lua.
+    /// Specifies that a member of a type should be invisible to Lua.
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Constructor | AttributeTargets.Enum | AttributeTargets.Event |
                     AttributeTargets.Field | AttributeTargets.Method | AttributeTargets.Property | AttributeTargets.Struct)]

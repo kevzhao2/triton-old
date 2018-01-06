@@ -18,43 +18,43 @@ using System.Runtime.InteropServices;
 
 namespace Triton.Interop {
     /// <summary>
-    /// Detects platform and architecture.
+    /// Provides architecture, platform, and framework detection utilities.
     /// </summary>
     internal static class Platform {
         static Platform() {
-#if NETCORE
+#if NETSTANDARD
+            IsWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
             IsOSX = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
             IsLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
-            IsWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
             IsNetCore = RuntimeInformation.FrameworkDescription.StartsWith(".NET Core");
 #else
             var platform = Environment.OSVersion.Platform;
+            IsWindows = platform == PlatformID.Win32S || platform == PlatformID.Win32Windows || platform == PlatformID.Win32NT;
 
-            // PlatformID.MacOSX is normally not returned, so we need to use uname.
+            // PlatformID.MacOSX is normally not returned, so we should use uname.
             IsOSX = (platform == PlatformID.Unix && GetUname() == "Darwin") || platform == PlatformID.MacOSX;
             IsLinux = platform == PlatformID.Unix && !IsOSX;
-            IsWindows = platform == PlatformID.Win32S || platform == PlatformID.Win32Windows || platform == PlatformID.Win32NT;
             IsNetCore = false;
 #endif
             IsMono = Type.GetType("Mono.Runtime") != null;
         }
-
+        
         /// <summary>
-        /// Gets a value indicating whether the platform is 64-bit.
+        /// Gets a value indicating whether the architecture is 64-bit.
         /// </summary>
-        /// <value>A value indicating whether the platform is 64-bit.</value>
+        /// <value>A value indicating whether the architecture is 64-bit.</value>
         public static bool Is64Bit => IntPtr.Size == 8;
 
         /// <summary>
-        /// Gets a value indicating whether the platform is Windows.
+        /// Gets a value indicating whether the platform is windows.
         /// </summary>
-        /// <value>A value indicating whether the platform is Windows.</value>
+        /// <value>A value indicating whether the platform is windows.</value>
         public static bool IsWindows { get; }
 
         /// <summary>
-        /// Gets a value indicating whether the platform is Mac OSX.
+        /// Gets a value indicating whether the platform is OSX.
         /// </summary>
-        /// <value>A value indicating whether the platform is Mac OSX.</value>
+        /// <value>A value indicating whether the platform is OSX.</value>
         public static bool IsOSX { get; }
 
         /// <summary>
@@ -64,15 +64,15 @@ namespace Triton.Interop {
         public static bool IsLinux { get; }
 
         /// <summary>
-        /// Gets a value indicating whether the platform is running with Mono.
+        /// Gets a value indicating whether the framework is Mono.
         /// </summary>
-        /// <value>A value indicating whether the platform is running with Mono.</value>
+        /// <value>A value indicating whether the framework is Mono.</value>
         public static bool IsMono { get; }
 
         /// <summary>
-        /// Gets a value indicating whether the platform is running with .NET Core.
+        /// Gets a value indicating whether the framework is .NET Core.
         /// </summary>
-        /// <value>A value indicating whether the platform is running with .NET Core.</value>
+        /// <value>A value indicating whether the framework is .NET Core.</value>
         public static bool IsNetCore { get; }
 
         [DllImport("libc")]
@@ -81,14 +81,9 @@ namespace Triton.Interop {
         private static string GetUname() {
             var buffer = Marshal.AllocHGlobal(8192);
             try {
-                if (uname(buffer) == 0) {
-                    return Marshal.PtrToStringAnsi(buffer);
-                }
-                return null;
+                return uname(buffer) == 0 ? Marshal.PtrToStringAnsi(buffer) : null;
             } finally {
-                if (buffer != IntPtr.Zero) {
-                    Marshal.FreeHGlobal(buffer);
-                }
+                Marshal.FreeHGlobal(buffer);
             }
         }
     }

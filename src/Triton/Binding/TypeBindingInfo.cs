@@ -83,12 +83,11 @@ namespace Triton.Binding {
         /// <param name="type">The type.</param>
         /// <returns>The <see cref="TypeBindingInfo"/>.</returns>
         public static TypeBindingInfo Construct(Type type) {
-#if NETCORE
+#if NETSTANDARD
             var typeInfo = type.GetTypeInfo();
 #else
             var typeInfo = type;
 #endif
-            
             var constructors = typeInfo.GetConstructors().Where(IsBound);
             var methods = typeInfo.GetMethods(InstanceFlags).Where(m => !m.IsSpecialName && IsBound(m)).ToList();
             var staticMethods = typeInfo.GetMethods(StaticFlags).Where(m => !m.IsSpecialName && IsBound(m)).ToList();
@@ -101,7 +100,7 @@ namespace Triton.Binding {
                 .Concat(typeInfo.GetProperties(StaticFlags).Where(p => !p.IsSpecialName).Cast<MemberInfo>())
                 .Concat(typeInfo.GetMethods(StaticFlags).Where(m => !m.IsSpecialName).Cast<MemberInfo>())
                 .Concat(staticMethods.Cast<MemberInfo>())
-#if NETCORE
+#if NETSTANDARD
                 .Concat(typeInfo.GetNestedTypes().Select(t => t.GetTypeInfo()).Cast<MemberInfo>()).Where(IsBound);
 #else
                 .Concat(typeInfo.GetNestedTypes().Cast<MemberInfo>()).Where(IsBound);
