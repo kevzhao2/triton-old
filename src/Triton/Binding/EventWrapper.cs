@@ -77,7 +77,7 @@ namespace Triton.Binding {
         }
 
         /// <summary>
-        /// Removes a <see cref="LuaFunction"/> to the event.
+        /// Removes a <see cref="LuaFunction"/> from the event.
         /// </summary>
         /// <param name="function">The <see cref="LuaFunction"/>.</param>
         public void Remove(LuaFunction function) {

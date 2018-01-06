@@ -54,7 +54,7 @@ namespace Triton.Interop {
         }
         
         /// <summary>
-        /// Initializes a new instance of the <see cref="NativeLibrary"/>, picking one of the given paths.
+        /// Initializes a new instance of the <see cref="NativeLibrary"/> class, picking one of the given paths.
         /// </summary>
         /// <param name="paths">The paths.</param>
         /// <exception cref="BadImageFormatException">The given path is not a valid native library.</exception>
