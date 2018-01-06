@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard1.5;net35</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  
+  <PropertyGroup>
+    <Authors>Kevin Zhao</Authors>
+    <Copyright>Kevin Zhao</Copyright>
+    <Description>Allows for easy and efficient interop between .NET and Lua code.</Description>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>lua;script;scripting;interop</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net35'">		
+    <Reference Include="mscorlib" />
+    <Reference Include="System" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <Content Include="lua\x64\lua53.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <PackagePath>lua/x64/</PackagePath>
+      <Pack>true</Pack>
+    </Content>
+    <Content Include="lua\x64\liblua53.dylib">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <PackagePath>lua/x64/</PackagePath>
+      <Pack>true</Pack>
+    </Content>
+    <Content Include="lua\x64\liblua53.so">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <PackagePath>lua/x64/</PackagePath>
+      <Pack>true</Pack>
+    </Content>
+    <Content Include="lua\x86\lua53.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <PackagePath>lua/x86/</PackagePath>
+      <Pack>true</Pack>
+    </Content>
+    <None Include="Triton.targets">
+      <PackagePath>build/net35/</PackagePath>
+      <Pack>true</Pack>
+    </None>
+  </ItemGroup>
+  
+  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard1.5'">
+	  <DefineConstants>NETSTANDARD1_5;NETCORE</DefineConstants>
+  </PropertyGroup>
+  
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net35'">
+	  <DefineConstants>NET35;NETFULL</DefineConstants>
+  </PropertyGroup>
+  
+</Project>
