@@ -21,6 +21,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Triton.Binding;
 using Triton.Interop;
 
@@ -263,7 +264,8 @@ namespace Triton {
                 return LuaApi.ToString(state, index);
 
             case LuaType.Userdata:
-                return _binder.GetNetObject(index);
+                var handle = LuaApi.ToHandle(state, index);
+                return handle.Target;
             }
 
             // Try to get a cached LuaReference using the pointer. By returning the same LuaReferences for the same pointers, we create
@@ -317,18 +319,19 @@ namespace Triton {
             return objs;
         }
 
-        internal void PushObject(object obj) {
+        internal void PushObject(object obj, IntPtr? stateOverride = null) {
             Debug.Assert(!IsDisposed, "Lua instance is disposed.");
 
+            var state = stateOverride ?? _state;
             if (obj == null) {
-                LuaApi.PushNil(_state);
+                LuaApi.PushNil(state);
                 return;
             }
             
             var typeCode = Convert.GetTypeCode(obj);
             switch (typeCode) {
             case TypeCode.Boolean:
-                LuaApi.PushBoolean(_state, (bool)obj);
+                LuaApi.PushBoolean(state, (bool)obj);
                 return;
 
             case TypeCode.SByte:
@@ -338,32 +341,41 @@ namespace Triton {
             case TypeCode.Int32:
             case TypeCode.UInt32:
             case TypeCode.Int64:
-                LuaApi.PushInteger(_state, Convert.ToInt64(obj));
+                LuaApi.PushInteger(state, Convert.ToInt64(obj));
                 return;
 
             case TypeCode.UInt64:
                 // UInt64 is a special case since we want to avoid OverflowExceptions.
-                LuaApi.PushInteger(_state, (long)((ulong)obj));
+                LuaApi.PushInteger(state, (long)((ulong)obj));
                 return;
 
             case TypeCode.Single:
             case TypeCode.Double:
             case TypeCode.Decimal:
-                LuaApi.PushNumber(_state, Convert.ToDouble(obj));
+                LuaApi.PushNumber(state, Convert.ToDouble(obj));
                 return;
 
             case TypeCode.Char:
             case TypeCode.String:
-                LuaApi.PushString(_state, obj.ToString());
+                LuaApi.PushString(state, obj.ToString());
                 return;
             }
 
             if (obj is IntPtr pointer) {
-                LuaApi.PushLightUserdata(_state, pointer);
+                LuaApi.PushLightUserdata(state, pointer);
             } else if (obj is LuaReference lr) {
                 lr.PushSelf();
             } else {
-                _binder.PushNetObject(obj);
+                var metatable = ObjectBinder.ObjectMetatable;
+                if (obj is TypeWrapper type) {
+                    metatable = ObjectBinder.TypeMetatable;
+                    obj = type.Type;
+                }
+
+                var handle = GCHandle.Alloc(obj, GCHandleType.Normal);
+                LuaApi.PushHandle(state, handle);
+                LuaApi.GetMetatable(state, metatable);
+                LuaApi.SetMetatable(state, -2);
             }
         }
 
@@ -416,7 +428,7 @@ namespace Triton {
         }
 
         private void ImportTypeInternal(Type type) {
-            _binder.PushNetObject(new TypeWrapper(type));
+            PushObject(new TypeWrapper(type));
             var cleanName = type.Name.Split('`')[0];
             LuaApi.SetGlobal(_state, cleanName);
         }

@@ -30,11 +30,10 @@ namespace Triton.Binding {
     /// Handles object binding, allowing Lua to access .NET objects and types.
     /// </summary>
     internal sealed class ObjectBinder : IDisposable {
-        private const string ObjectMetatable = "$__object";
-        private const string TypeMetatable = "$__type";
+        public const string ObjectMetatable = "$__object";
+        public const string TypeMetatable = "$__type";
         
         private readonly GCHandle _luaHandle;
-        private readonly IntPtr _state;
 
         private static readonly Dictionary<Type, TypeBindingInfo> TypeBindingInfoCache = new Dictionary<Type, TypeBindingInfo>();
         private static readonly object TypeBindingLock = new object();
@@ -80,8 +79,6 @@ namespace Triton.Binding {
         /// <param name="lua">The <see cref="Lua"/> instance.</param>
         /// <param name="state">The Lua state pointer.</param>
         public ObjectBinder(Lua lua, IntPtr state) {
-            _state = state;
-
             // The simplest thing to do would be to callback into an instance method, where we can then access the Lua instance easily.
             // However, some platforms don't support this, so the workaround is to close on a weak GCHandle to the Lua instance.
             _luaHandle = GCHandle.Alloc(lua, GCHandleType.Weak);
@@ -114,33 +111,6 @@ namespace Triton.Binding {
         public void Dispose() {
             // This is potentially unsafe. But because Dispose is only called from Lua.Dispose, the handle will always allocated.
             _luaHandle.Free();
-        }
-
-        /// <summary>
-        /// Gets the .NET object at the given index.
-        /// </summary>
-        /// <param name="index">The index.</param>
-        /// <returns>The .NET object.</returns>
-        public object GetNetObject(int index) {
-            var handle = LuaApi.ToHandle(_state, index);
-            return handle.Target;
-        }
-
-        /// <summary>
-        /// Pushes a .NET object onto the stack.
-        /// </summary>
-        /// <param name="obj">The object.</param>
-        public void PushNetObject(object obj) {
-            var metatable = ObjectMetatable;
-            if (obj is TypeWrapper type) {
-                metatable = TypeMetatable;
-                obj = type.Type;
-            }
-
-            var handle = GCHandle.Alloc(obj, GCHandleType.Normal);
-            LuaApi.PushHandle(_state, handle);
-            LuaApi.GetMetatable(_state, metatable);
-            LuaApi.SetMetatable(_state, -2);
         }
 
         internal static T ResolveMethodCall<T>(object[] objs, IEnumerable<T> methods, out object[] args) where T : MethodBase {
@@ -274,7 +244,7 @@ namespace Triton.Binding {
             }
             
             // Operators must always have exactly one return value!
-            lua.PushObject(result);
+            lua.PushObject(result, state);
             return 1;
         }
         
@@ -299,7 +269,7 @@ namespace Triton.Binding {
             }
             
             // Operators must always have exactly one return value!
-            lua.PushObject(result);
+            lua.PushObject(result, state);
             return 1;
         }
         
@@ -335,11 +305,11 @@ namespace Triton.Binding {
             var numResults = 0;
             if (method.ReturnType != typeof(void)) {
                 ++numResults;
-                lua.PushObject(result);
+                lua.PushObject(result, state);
             }
             foreach (var param in method.GetParameters().Where(p => p.ParameterType.IsByRef)) {
                 ++numResults;
-                lua.PushObject(args[param.Position]);
+                lua.PushObject(args[param.Position], state);
             }
             return numResults;
         }
@@ -409,7 +379,7 @@ namespace Triton.Binding {
                 }
             }
 
-            lua.PushObject(result);
+            lua.PushObject(result, state);
             return 1;
         }
         
@@ -466,30 +436,30 @@ namespace Triton.Binding {
                 } else if (member is PropertyInfo property) {
                     // Indexed properties return a wrapper object that handles getting/setting.
                     if (property.GetIndexParameters().Length > 0) {
-                        lua.PushObject(new IndexedPropertyWrapper(state, obj, property));
+                        lua.PushObject(new IndexedPropertyWrapper(state, obj, property), state);
                     } else {
                         if (property.GetGetMethod() == null) {
                             throw LuaApi.Error(state, "attempt to get property without getter");
                         }
 
                         try {
-                            lua.PushObject(property.GetValue(obj, null));
+                            lua.PushObject(property.GetValue(obj, null), state);
                         } catch (TargetInvocationException e) {
                             throw LuaApi.Error(state, $"attempt to get property threw:\n{e.InnerException}");
                         }
                     }
                 } else if (member is FieldInfo field) {
-                    lua.PushObject(field.GetValue(obj));
+                    lua.PushObject(field.GetValue(obj), state);
                 } else if (member is EventInfo @event) {
                     // Events return a wrapper object that handles adding/removing.
                     var eventWrapper = new EventWrapper(state, obj, @event);
-                    lua.PushObject(eventWrapper);
+                    lua.PushObject(eventWrapper, state);
                 } else {
                     // Nested types return a wrapper object to signify that static members may be accessed.
 #if NETSTANDARD
-                    lua.PushObject(new TypeWrapper(((TypeInfo)member).AsType()));
+                    lua.PushObject(new TypeWrapper(((TypeInfo)member).AsType()), state);
 #else
-                    lua.PushObject(new TypeWrapper((Type)member));
+                    lua.PushObject(new TypeWrapper((Type)member), state);
 #endif
                 }
                 return 1;
@@ -505,7 +475,7 @@ namespace Triton.Binding {
                     throw LuaApi.Error(state, "attempt to index array with out-of-bounds index");
                 }
 
-                lua.PushObject(array.GetValue(index));
+                lua.PushObject(array.GetValue(index), state);
                 return 1;
             }
 
@@ -606,11 +576,11 @@ namespace Triton.Binding {
             var numResults = 0;
             if (method.ReturnType != typeof(void)) {
                 ++numResults;
-                lua.PushObject(result);
+                lua.PushObject(result, state);
             }
             foreach (var param in method.GetParameters().Where(p => p.ParameterType.IsByRef)) {
                 ++numResults;
-                lua.PushObject(args[param.Position]);
+                lua.PushObject(args[param.Position], state);
             }
             return numResults;
         }

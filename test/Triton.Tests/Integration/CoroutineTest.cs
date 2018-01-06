@@ -20,6 +20,9 @@ namespace Triton.Tests.Integration {
                 coroutine.yield()
                 list:Add('checkpoint 3')
                 coroutine.yield()
+                list = List(String)()
+                list:Add('checkpoint 4')
+                coroutine.yield()
                 list:Clear()
             end)
 
@@ -29,6 +32,8 @@ namespace Triton.Tests.Integration {
             assert(list.Count == 2 and list.Item:Get(1) == 'checkpoint 2')
             coroutine.resume(co)
             assert(list.Count == 3 and list.Item:Get(2) == 'checkpoint 3')
+            coroutine.resume(co)
+            assert(list.Count == 1 and list.Item:Get(0) == 'checkpoint 4')
             coroutine.resume(co)
             assert(list.Count == 0)
         ";

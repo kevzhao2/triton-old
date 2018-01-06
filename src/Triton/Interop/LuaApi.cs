@@ -19,10 +19,12 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using Triton.Binding;
 
 namespace Triton.Interop {
     /// <summary>
@@ -158,7 +160,7 @@ namespace Triton.Interop {
             var ud = NewUserdata(state, IntPtr.Size);
             Marshal.WriteIntPtr(ud, GCHandle.ToIntPtr(handle));
         }
-
+        
         public static void PushString(IntPtr state, string s) {
             // Because PushLString accepts a length parameter, we don't actually need to null-terminate the string.
             var buffer = Encoding.UTF8.GetBytes(s);
@@ -175,7 +177,7 @@ namespace Triton.Interop {
 
         public static long ToInteger(IntPtr state, int index) => ToIntegerX(state, index, out _);
         public static double ToNumber(IntPtr state, int index) => ToNumberX(state, index, out _);
-
+        
         public static string ToString(IntPtr state, int index) {
             var ptr = ToLString(state, index, out var len);
             var byteCount = (int)len.ToUInt32();
