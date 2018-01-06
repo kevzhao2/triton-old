@@ -464,14 +464,14 @@ namespace Triton.Binding {
                     LuaApi.PushInteger(state, 0);
                     LuaApi.PushCClosure(state, isStatic ? ProxyCallTypeDelegate : ProxyCallObjectDelegate, 4);
                 } else if (member is PropertyInfo property) {
-                    if (property.GetGetMethod() == null) {
-                        throw LuaApi.Error(state, "attempt to get property without getter");
-                    }
-
                     // Indexed properties return a wrapper object that handles getting/setting.
                     if (property.GetIndexParameters().Length > 0) {
                         lua.PushObject(new IndexedPropertyWrapper(state, obj, property));
                     } else {
+                        if (property.GetGetMethod() == null) {
+                            throw LuaApi.Error(state, "attempt to get property without getter");
+                        }
+
                         try {
                             lua.PushObject(property.GetValue(obj, null));
                         } catch (TargetInvocationException e) {
