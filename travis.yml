@@ -1,0 +1,11 @@
+language: csharp
+solution: Triton.sln
+mono: none
+dotnet: 1.1.5
+
+install:
+  - dotnet restore
+
+script:
+  - cd test/Triton.Tests
+  - dotnet test Triton.Test.csproj

@@ -77,7 +77,8 @@ namespace Triton.Interop {
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         internal delegate LuaStatus PCallKD(
-            IntPtr state, int numArgs, int numResults = -1, int messageHandler = 0, IntPtr context = default, IntPtr k = default);
+            IntPtr state, int numArgs, int numResults = -1, int messageHandler = 0, IntPtr context = default(IntPtr),
+            IntPtr k = default(IntPtr));
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         internal delegate void PushBooleanD(IntPtr state, bool b);

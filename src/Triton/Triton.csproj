@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard1.5;net35</TargetFrameworks>
-    <LangVersion>latest</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -52,11 +51,11 @@
   </ItemGroup>
   
   <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard1.5'">
-    <DefineConstants>NETSTANDARD1_5;NETCORE</DefineConstants>
+    <DefineConstants>NETCORE</DefineConstants>
   </PropertyGroup>
   
   <PropertyGroup Condition="'$(TargetFramework)' == 'net35'">
-    <DefineConstants>NET35;NETFULL</DefineConstants>
+    <DefineConstants>NETFULL</DefineConstants>
   </PropertyGroup>
   
 </Project>

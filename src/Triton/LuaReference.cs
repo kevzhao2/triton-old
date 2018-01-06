@@ -31,7 +31,7 @@ namespace Triton {
 
         private bool _isDisposed;
 
-        private protected LuaReference(Lua lua, IntPtr state, int reference, IntPtr pointer) {
+        internal LuaReference(Lua lua, IntPtr state, int reference, IntPtr pointer) {
             Lua = lua;
             State = state;
             _reference = reference;
@@ -49,8 +49,8 @@ namespace Triton {
         /// <value>A value indicating whether the <see cref="LuaReference"/> is disposed.</value>
         public bool IsDisposed => _isDisposed || Lua.IsDisposed;
 
-        private protected Lua Lua { get; }
-        private protected IntPtr State { get; }
+        internal Lua Lua { get; }
+        internal IntPtr State { get; }
 
         /// <summary>
         /// Disposes the <see cref="LuaReference"/>, releasing its reference.

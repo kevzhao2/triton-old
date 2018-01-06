@@ -58,7 +58,7 @@ namespace Triton.Tests.Binding {
             public string Generic<T>() => typeof(T).ToString();
             public string GenericConstraint<T>() where T : struct => typeof(T).ToString();
             public void GenericThrows<T>() => throw new NotImplementedException();
-            public void GenericOut<T>(out T t) => t = default;
+            public void GenericOut<T>(out T t) => t = default(T);
         }
 
         private static class TestClass2 {
@@ -91,7 +91,7 @@ namespace Triton.Tests.Binding {
             public static string Generic<T>() => typeof(T).ToString();
             public static string GenericConstraint<T>() where T : struct => typeof(T).ToString();
             public static void GenericThrows<T>() => throw new NotImplementedException();
-            public static void GenericOut<T>(out T t) => t = default;
+            public static void GenericOut<T>(out T t) => t = default(T);
         }
 
         [Fact]

@@ -38,7 +38,7 @@ namespace Triton.Binding {
         /// <param name="key">The key.</param>
         /// <returns>The value, or its default.</returns>
         public static TValue GetValueOrDefault<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key) {
-            return dictionary.TryGetValue(key, out var value) ? value : default;
+            return dictionary.TryGetValue(key, out var value) ? value : default(TValue);
         }
         
         /// <summary>
