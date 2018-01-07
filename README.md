@@ -43,7 +43,7 @@ Assert.Equal(1L, lua["count"]);
 
 #### Generic Methods
 
-You can access a generic method by "calling" it first with its type arguments, and then calling the method:
+You can access a generic method by "calling" it first with its type arguments, and then calling the method. For increased performance, consider caching the function generated using the type arguments.
 ```csharp
 class Test {
     public void Generic<T>(T t);
@@ -80,7 +80,7 @@ lua.DoString("delegate = event:Add(callback)");
 lua.DoString("event:Remove(delegate)");
 ```
 
-Note that `obj.Event` will return new wrapper objects each time, so to successfully remove your callback, you must save the value! Using events is also *highly unrecommended* in the first place, since you have no control over when the event is called. It could be called on a different thread, which is a problem because Lua is not thread-safe.
+Note that `obj.Event` will return new wrapper objects each time, so to successfully remove your callback, you must save the value! Using events is also **highly unrecommended** in the first place, since you have no control over when the event is called. It could be called on a different thread, which is a problem because Lua is not thread-safe.
 
 ### Passing .NET types
 
@@ -101,6 +101,12 @@ lua.DoString("list:Add(2018)");
 * Triton supports `LuaThread` manipulation.
 * Triton supports generic method invocation and generic type instantiation.
 * Triton supports generalized indexed properties (including those declared in VB.NET or F# with names other than `Item`) with a variable number of indices.
+* Triton implements `DynamicObject` on `Lua`, `LuaFunction`, and `LuaTable` enabling you to do the following (but at the cost of possibly generating `LuaReference`s which **must** be disposed of, as otherwise you'll leak unmanaged memory):
+  ```csharp
+  lua.table = lua.CreateTable();
+  lua.func = lua.LoadString("return table");
+  lua.func().member = "asdf";
+  ```
 * Triton will always correctly deduce overloads in the following situation, picking the method with the least number of default values applied:
   ```csharp
   void Method(int a);
@@ -119,7 +125,7 @@ lua.DoString("list:Add(2018)");
   lua["t2"] = new Test2();
   lua.DoString("x = t2 + t1");
   ```
-* Triton is, in general, faster for .NET to Lua context switches and vice versa. See below for the one case this isn't true.
+* Triton is, in general, somewhat faster for .NET to Lua context switches and vice versa. See below for at least one case where this isn't true.
 
 ### Disadvantages
 * Triton only supports event handler types that are "compatible" with the signature `void (object, EventArgs)`. Other types would require dynamic method generation, which is not possible on AOT.
@@ -127,3 +133,8 @@ lua.DoString("list:Add(2018)");
 * Triton does not have a simple namespace-level `import`, since unfortunately `AppDomain` doesn't exist in the targeted version of .NET standard. This can be worked around by getting the `Assembly` of a type and then iterating through its exported types.
 * Triton does not cache method lookups. This can result in a roughly 2x slowdown for the Lua to .NET context switch.
 * Triton does not currently have any debugging facilities.
+
+### Roadmap
+* Implement `IDictionary<object, object>` on `LuaTable`.
+* Implement dynamic operatons on `LuaTable` using its metamethods.
+* Implement simple iteration of `IEnumerable<T>`.
