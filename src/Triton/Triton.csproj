@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard1.5;net35</TargetFrameworks>
+    <TargetFrameworks>netstandard1.5;net40;net35</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -17,29 +17,14 @@
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/kevzhao2/Triton</RepositoryUrl>
   </PropertyGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'net35'">		
-    <Reference Include="mscorlib" />
-    <Reference Include="System" />
-  </ItemGroup>
   
   <ItemGroup>
-    <Content Include="lua\x64\lua53.dll">
+    <Content Include="lua\x64\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <PackagePath>lua/x64/</PackagePath>
       <Pack>true</Pack>
     </Content>
-    <Content Include="lua\x64\liblua53.dylib">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <PackagePath>lua/x64/</PackagePath>
-      <Pack>true</Pack>
-    </Content>
-    <Content Include="lua\x64\liblua53.so">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <PackagePath>lua/x64/</PackagePath>
-      <Pack>true</Pack>
-    </Content>
-    <Content Include="lua\x86\lua53.dll">
+    <Content Include="lua\x86\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <PackagePath>lua/x86/</PackagePath>
       <Pack>true</Pack>
@@ -50,8 +35,16 @@
     </None>
   </ItemGroup>
   
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard1.5'">
+    <PackageReference Include="System.Dynamic.Runtime" Version="4.3.0" />
+  </ItemGroup>
+  
   <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard1.5'">
     <DefineConstants>NETSTANDARD</DefineConstants>
+  </PropertyGroup>
+	
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net40'">
+    <DefineConstants>NETFULL</DefineConstants>
   </PropertyGroup>
   
   <PropertyGroup Condition="'$(TargetFramework)' == 'net35'">

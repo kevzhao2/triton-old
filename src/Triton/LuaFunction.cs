@@ -19,6 +19,10 @@
 // IN THE SOFTWARE.
 
 using System;
+#if NETSTANDARD || NET40
+using System.Dynamic;
+using System.Linq;
+#endif
 using Triton.Interop;
 
 namespace Triton {
@@ -45,6 +49,24 @@ namespace Triton {
                 throw new ObjectDisposedException(GetType().FullName);
             }
 
+            return CallInternal(args);
+        }
+
+#if NETSTANDARD || NET40
+        /// <inheritdoc/>
+        /// <exception cref="ObjectDisposedException">The <see cref="LuaFunction"/> is disposed.</exception>
+        public override bool TryInvoke(InvokeBinder binder, object[] args, out object result) {
+            if (IsDisposed) {
+                throw new ObjectDisposedException(GetType().FullName);
+            }
+
+            // Since we can only return one result, let's just try returning the first.
+            result = CallInternal(args).FirstOrDefault();
+            return true;
+        }
+#endif
+
+        private object[] CallInternal(object[] args) {
             // Ensure that we have enough stack space for debug.traceback, the function, and its arguments.
             var numArgs = args.Length;
             if (!LuaApi.CheckStack(State, numArgs + 3)) {
@@ -60,7 +82,7 @@ namespace Triton {
                 foreach (var arg in args) {
                     LuaApi.PushObject(State, arg);
                 }
-                
+
                 if (LuaApi.PCallK(State, numArgs, LuaApi.MultRet, oldTop + 2) != LuaStatus.Ok) {
                     var errorMessage = LuaApi.ToString(State, -1);
                     throw new LuaException(errorMessage);

@@ -19,6 +19,9 @@
 // IN THE SOFTWARE.
 
 using System;
+#if NETSTANDARD || NET40
+using System.Dynamic;
+#endif
 using Triton.Binding;
 using Triton.Interop;
 
@@ -28,7 +31,11 @@ namespace Triton {
     /// <summary>
     /// Acts as a managed wrapper around a Lua instance.
     /// </summary>
+#if NETSTANDARD || NET40
+    public sealed class Lua : DynamicObject, IDisposable {
+#else
     public sealed class Lua : IDisposable {
+#endif
         private readonly IntPtr _state;
 
         /// <summary>
@@ -69,10 +76,7 @@ namespace Triton {
                     throw new ObjectDisposedException(GetType().FullName);
                 }
 
-                var type = LuaApi.GetGlobal(_state, name);
-                var result = LuaApi.ToObject(_state, -1, type);
-                LuaApi.Pop(_state, 1);
-                return result;
+                return GetGlobalInternal(name);
             }
             set {
                 if (name == null) {
@@ -82,8 +86,7 @@ namespace Triton {
                     throw new ObjectDisposedException(GetType().FullName);
                 }
 
-                LuaApi.PushObject(_state, value);
-                LuaApi.SetGlobal(_state, name);
+                SetGlobalInternal(name, value);
             }
         }
 
@@ -210,7 +213,43 @@ namespace Triton {
 
             return LoadStringInternal(s);
         }
-        
+
+#if NETSTANDARD || NET40
+        /// <inheritdoc/>
+        /// <exception cref="ObjectDisposedException">The <see cref="Lua"/> instance is disposed.</exception>
+        public override bool TryGetMember(GetMemberBinder binder, out object result) {
+            if (IsDisposed) {
+                throw new ObjectDisposedException(GetType().FullName);
+            }
+
+            result = GetGlobalInternal(binder.Name);
+            return true;
+        }
+
+        /// <inheritdoc/>
+        /// <exception cref="ObjectDisposedException">The <see cref="Lua"/> instance is disposed.</exception>
+        public override bool TrySetMember(SetMemberBinder binder, object value) {
+            if (IsDisposed) {
+                throw new ObjectDisposedException(GetType().FullName);
+            }
+            
+            SetGlobalInternal(binder.Name, value);
+            return true;
+        }
+#endif
+
+        private object GetGlobalInternal(string name) {
+            var type = LuaApi.GetGlobal(_state, name);
+            var result = LuaApi.ToObject(_state, -1, type);
+            LuaApi.Pop(_state, 1);
+            return result;
+        }
+
+        private void SetGlobalInternal(string name, object value) {
+            LuaApi.PushObject(_state, value);
+            LuaApi.SetGlobal(_state, name);
+        }
+
         private void Dispose(bool disposing) {
             if (IsDisposed) {
                 return;

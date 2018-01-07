@@ -27,7 +27,32 @@ namespace Triton.Tests {
             new object[] { "var" },
             new object[] { "var = 3 + " }
         };
-        
+
+        [Fact]
+        public void GetSetDynamic() {
+            using (dynamic lua = new Lua()) {
+                lua.x = 567;
+
+                Assert.Equal(567L, lua.x);
+            }
+        }
+
+        [Fact]
+        public void GetDynamic_Disposed_ThrowsObjectDisposedException() {
+            dynamic lua = new Lua();
+            lua.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => lua.x);
+        }
+
+        [Fact]
+        public void SetDynamic_Disposed_ThrowsObjectDisposedException() {
+            dynamic lua = new Lua();
+            lua.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => lua.x = 5);
+        }
+
         [Fact]
         public void IsDisposed_Disposed_True() {
             var lua = new Lua();

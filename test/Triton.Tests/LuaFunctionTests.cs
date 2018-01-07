@@ -29,6 +29,25 @@ namespace Triton.Tests {
         };
 
         [Fact]
+        public void CallDynamic() {
+            using (var lua = new Lua()) {
+                using (dynamic function = lua.LoadString("return 6")) {
+                    Assert.Equal(6L, function());
+                }
+            }
+        }
+
+        [Fact]
+        public void CallDynamic_Disposed_ThrowsObjectDisposedException() {
+            using (var lua = new Lua()) {
+                dynamic function = lua.LoadString("return 6");
+                function.Dispose();
+
+                Assert.Throws<ObjectDisposedException>(() => function());
+            }
+        }
+
+        [Fact]
         public void IsDisposed_Disposed_True() {
             using (var lua = new Lua()) {
                 var function = lua.LoadString("");
@@ -59,13 +78,14 @@ namespace Triton.Tests {
 
         [Fact]
         public void Call_OneArg() {
-            using (var lua = new Lua())
+            using (var lua = new Lua()) {
                 var results = lua.DoString("return function(x) return x end");
-            using (var function = results[0] as LuaFunction) {
-                results = function.Call("test");
+                using (var function = results[0] as LuaFunction) {
+                    results = function.Call("test");
 
-                Assert.Single(results);
-                Assert.Equal("test", results[0]);
+                    Assert.Single(results);
+                    Assert.Equal("test", results[0]);
+                }
             }
         }
 

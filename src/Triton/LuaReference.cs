@@ -19,13 +19,20 @@
 // IN THE SOFTWARE.
 
 using System;
+#if NETSTANDARD || NET40
+using System.Dynamic;
+#endif
 using Triton.Interop;
 
 namespace Triton {
     /// <summary>
     /// Represents a Lua reference that is tied to a specific <see cref="Triton.Lua"/> instance.
     /// </summary>
+#if NETSTANDARD || NET40
+    public abstract class LuaReference : DynamicObject, IDisposable {
+#else
     public abstract class LuaReference : IDisposable {
+#endif
         internal LuaReference(IntPtr state, int reference) {
             State = state;
             Reference = reference;

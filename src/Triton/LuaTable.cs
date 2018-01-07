@@ -19,6 +19,9 @@
 // IN THE SOFTWARE.
 
 using System;
+#if NETSTANDARD || NET40
+using System.Dynamic;
+#endif
 using Triton.Interop;
 
 namespace Triton {
@@ -42,12 +45,7 @@ namespace Triton {
                     throw new ObjectDisposedException(GetType().FullName);
                 }
 
-                LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
-                LuaApi.PushObject(State, key);
-                var type = LuaApi.GetTable(State, -2);
-                var result = LuaApi.ToObject(State, -1, type);
-                LuaApi.Pop(State, 2);
-                return result;
+                return GetValueInternal(key);
             }
             set {
                 if (key == null) {
@@ -57,12 +55,64 @@ namespace Triton {
                     throw new ObjectDisposedException(GetType().FullName);
                 }
 
-                LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
+                SetValueInternal(key, value);
+            }
+        }
+
+#if NETSTANDARD || NET40
+        /// <inheritdoc/>
+        /// <exception cref="ObjectDisposedException">The <see cref="LuaTable"/> is disposed.</exception>
+        public override bool TryGetMember(GetMemberBinder binder, out object result) {
+            if (IsDisposed) {
+                throw new ObjectDisposedException(GetType().FullName);
+            }
+
+            result = GetValueInternal(binder.Name);
+            return true;
+        }
+
+        /// <inheritdoc/>
+        /// <exception cref="ObjectDisposedException">The <see cref="LuaTable"/> is disposed.</exception>
+        public override bool TrySetMember(SetMemberBinder binder, object value) {
+            if (IsDisposed) {
+                throw new ObjectDisposedException(GetType().FullName);
+            }
+
+            SetValueInternal(binder.Name, value);
+            return true;
+        }
+#endif
+
+        private object GetValueInternal(object key) {
+            LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
+            
+            object result;
+            if (key is string s) {
+                LuaApi.GetField(State, -1, s);
+                result = LuaApi.ToObject(State, -1);
+            } else {
+                LuaApi.PushObject(State, key);
+                var type = LuaApi.GetTable(State, -2);
+                result = LuaApi.ToObject(State, -1, type);
+            }
+            
+            LuaApi.Pop(State, 2);
+            return result;
+        }
+
+        private void SetValueInternal(object key, object value) {
+            LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
+            
+            if (key is string s) {
+                LuaApi.PushObject(State, value);
+                LuaApi.SetField(State, -2, s);
+            } else {
                 LuaApi.PushObject(State, key);
                 LuaApi.PushObject(State, value);
                 LuaApi.SetTable(State, -3);
-                LuaApi.Pop(State, 1);
             }
+            
+            LuaApi.Pop(State, 1);
         }
     }
 }
