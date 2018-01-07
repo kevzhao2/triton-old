@@ -98,6 +98,7 @@ lua.DoString("list:Add(2018)");
 
 * Triton works with an unmodified Lua library, and targets Lua 5.3, which has native support for integer types among other things.
 * Triton supports .NET callbacks from coroutines.
+* Triton supports `LuaThread` manipulation.
 * Triton supports generic method invocation and generic type instantiation.
 * Triton supports generalized indexed properties (including those declared in VB.NET or F# with names other than `Item`) with a variable number of indices.
 * Triton will always correctly deduce overloads in the following situation, picking the method with the least number of default values applied:
