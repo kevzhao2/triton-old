@@ -96,9 +96,8 @@ namespace Triton {
             }
 
             LuaApi.CreateTable(_state);
-            var result = (LuaTable)LuaApi.ToObject(_state, -1, LuaType.Table);
-            LuaApi.Pop(_state, 1);
-            return result;
+            var tableReference = LuaApi.Ref(_state, LuaApi.RegistryIndex);
+            return new LuaTable(_state, tableReference);
         }
 
         /// <summary>
@@ -122,10 +121,8 @@ namespace Triton {
 
             var thread = LuaApi.NewThread(_state);
             LuaApi.PushObject(thread, function);
-
-            var result = (LuaThread)LuaApi.ToObject(_state, -1, LuaType.Thread);
-            LuaApi.Pop(_state, 1);
-            return result;
+            var threadReference = LuaApi.Ref(_state, LuaApi.RegistryIndex);
+            return new LuaThread(_state, threadReference, thread);
         }
 
         /// <summary>
@@ -234,9 +231,8 @@ namespace Triton {
                 throw new LuaException(errorMessage);
             }
 
-            var result = (LuaFunction)LuaApi.ToObject(_state, -1, LuaType.Function);
-            LuaApi.Pop(_state, 1);
-            return result;
+            var functionReference = LuaApi.Ref(_state, LuaApi.RegistryIndex);
+            return new LuaFunction(_state, functionReference);
         }
     }
 }

@@ -36,6 +36,7 @@ namespace Triton {
         /// <returns>The results.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="args"/> is <c>null</c>.</exception>
         /// <exception cref="LuaException">A Lua error occurs.</exception>
+        /// <exception cref="ObjectDisposedException">The <see cref="LuaFunction"/> is disposed.</exception>
         public object[] Call(params object[] args) {
             if (args == null) {
                 throw new ArgumentNullException(nameof(args));
@@ -45,7 +46,8 @@ namespace Triton {
             }
 
             // Ensure that we have enough stack space for the function currently on the stack and its arguments.
-            if (!LuaApi.CheckStack(State, args.Length + 1)) {
+            var numArgs = args.Length;
+            if (!LuaApi.CheckStack(State, numArgs + 1)) {
                 throw new LuaException("Not enough stack space for function and arguments.");
             }
 
@@ -56,14 +58,13 @@ namespace Triton {
                     LuaApi.PushObject(State, arg);
                 }
                 
-                if (LuaApi.PCallK(State, args.Length) != LuaStatus.Ok) {
+                if (LuaApi.PCallK(State, numArgs) != LuaStatus.Ok) {
                     var errorMessage = LuaApi.ToString(State, -1);
                     throw new LuaException(errorMessage);
                 }
 
-                // Ensure that we have enough stack space for ToObjects.
+                // Ensure that we have enough stack space for ToObjects, which can require up to 1 slot.
                 var top = LuaApi.GetTop(State);
-                var numResults = top - oldTop;
                 if (!LuaApi.CheckStack(State, 1)) {
                     throw new LuaException("Not enough scratch stack space.");
                 }

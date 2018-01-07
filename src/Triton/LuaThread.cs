@@ -36,6 +36,7 @@ namespace Triton {
         /// Gets a value indicating whether the <see cref="LuaThread"/> can be resumed.
         /// </summary>
         /// <value>A value indicating whether the <see cref="LuaThread"/> can be resumed.</value>
+        /// <exception cref="ObjectDisposedException">The <see cref="LuaThread"/> is disposed.</exception>
         public bool CanResume {
             get {
                 if (IsDisposed) {
@@ -71,8 +72,7 @@ namespace Triton {
             if (!LuaApi.CheckStack(_thread, numArgs)) {
                 throw new LuaException("Not enough stack space on thread for arguments.");
             }
-
-            var oldThreadTop = LuaApi.GetTop(_thread);
+            
             try {
                 foreach (var arg in args) {
                     LuaApi.PushObject(_thread, arg);
@@ -83,8 +83,8 @@ namespace Triton {
                     var errorMessage = LuaApi.ToString(_thread, -1);
                     throw new LuaException(errorMessage);
                 }
-
-                // Ensure that we have enough stack space on the thread for ToObjects.
+                
+                // Ensure that we have enough stack space on the thread for ToObjects, which can require up to 1 slot.
                 var numResults = LuaApi.GetTop(_thread);
                 if (!LuaApi.CheckStack(_thread, 1)) {
                     throw new LuaException("Not enough scratch stack space on thread.");

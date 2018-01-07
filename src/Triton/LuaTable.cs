@@ -35,6 +35,7 @@ namespace Triton {
         /// <param name="key">The key.</param>
         /// <returns>The value, or <c>null</c> if there is none.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is <c>null</c> and is being set.</exception>
+        /// <exception cref="ObjectDisposedException">The <see cref="LuaTable"/> is disposed.</exception>
         public object this[object key] {
             get {
                 if (IsDisposed) {

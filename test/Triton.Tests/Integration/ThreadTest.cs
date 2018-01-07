@@ -4,6 +4,7 @@ namespace Triton.Tests.Integration {
     public class ThreadTest {
         private const string TestString = @"
             for i = 1, 10 do
+                x = i
                 coroutine.yield(i)
             end
             return -1";
@@ -21,6 +22,7 @@ namespace Triton.Tests.Integration {
 
                     Assert.Single(results);
                     Assert.Equal((long)i, results[0]);
+                    Assert.Equal((long)i, lua["x"]);
                     Assert.True(thread.CanResume);
                 }
 
