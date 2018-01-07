@@ -30,8 +30,8 @@ namespace Triton.Binding {
     /// Handles object binding, allowing Lua to access .NET objects and types.
     /// </summary>
     internal static class ObjectBinder {
-        public const string ObjectMetatable = "$__object";
-        public const string TypeMetatable = "$__type";
+        private const string ObjectMetatable = "$__object";
+        private const string TypeMetatable = "$__type";
         
         private static readonly Dictionary<Type, TypeBindingInfo> TypeBindingInfoCache = new Dictionary<Type, TypeBindingInfo>();
         private static readonly object TypeBindingLock = new object();

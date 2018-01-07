@@ -128,6 +128,16 @@ namespace Triton.Tests {
         }
 
         [Fact]
+        public void Call_IsDisposed_ThrowsObjectDisposedException() {
+            using (var lua = new Lua()) {
+                var function = lua.LoadString("");
+                function.Dispose();
+                
+                Assert.Throws<ObjectDisposedException>(() => function.Call());
+            }
+        }
+
+        [Fact]
         public void Call_TooManyArgs_ThrowsLuaException() {
             using (var lua = new Lua()) {
                 using (var function = lua.LoadString("")) {
@@ -143,6 +153,15 @@ namespace Triton.Tests {
                 using (var function = lua.LoadString(s)) {
                     Assert.Throws<LuaException>(() => function.Call());
                 }
+            }
+        }
+
+        [Fact]
+        public void Dispose_CalledTwice() {
+            using (var lua = new Lua()) {
+                var function = lua.LoadString("");
+                function.Dispose();
+                function.Dispose();
             }
         }
     }

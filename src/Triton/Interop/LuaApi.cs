@@ -37,10 +37,12 @@ namespace Triton.Interop {
         public static readonly Delegates.CheckStack CheckStack;
         public static readonly Delegates.Close Close;
         public static readonly Delegates.CreateTable CreateTable;
+        public static readonly Delegates.GetStack GetStack;
         public static readonly Delegates.GetTable GetTable;
         public static readonly Delegates.GetTop GetTop;
         public static readonly Delegates.IsInteger IsInteger;
         public static readonly Delegates.NewState NewState;
+        public static readonly Delegates.NewThread NewThread;
         public static readonly Delegates.OpenLibs OpenLibs;
         public static readonly Delegates.PCallK PCallK;
         public static readonly Delegates.PushBoolean PushBoolean;
@@ -52,15 +54,19 @@ namespace Triton.Interop {
         public static readonly Delegates.PushValue PushValue;
         public static readonly Delegates.RawGetI RawGetI;
         public static readonly Delegates.Ref Ref;
+        public static readonly Delegates.Resume Resume;
         public static readonly Delegates.SetMetatable SetMetatable;
         public static readonly Delegates.SetTable SetTable;
         public static readonly Delegates.SetTop SetTop;
+        public static readonly Delegates.Status Status;
         public static readonly Delegates.ToBoolean ToBoolean;
         public static readonly Delegates.ToPointer ToPointer;
+        public static readonly Delegates.ToThread ToThread;
         public static readonly Delegates.ToUserdata ToUserdata;
         public static readonly Delegates.Type Type;
         public static readonly Delegates.Unref Unref;
-        
+        public static readonly Delegates.XMove XMove;
+
         private static readonly Delegates.Error ErrorDelegate;
         private static readonly Delegates.GetField GetFieldDelegate;
         private static readonly Delegates.GetGlobal GetGlobalDelegate;
@@ -101,10 +107,12 @@ namespace Triton.Interop {
             CheckStack = library.GetDelegate<Delegates.CheckStack>("lua_checkstack");
             Close = library.GetDelegate<Delegates.Close>("lua_close");
             CreateTable = library.GetDelegate<Delegates.CreateTable>("lua_createtable");
+            GetStack = library.GetDelegate<Delegates.GetStack>("lua_getstack");
             GetTable = library.GetDelegate<Delegates.GetTable>("lua_gettable");
             GetTop = library.GetDelegate<Delegates.GetTop>("lua_gettop");
             IsInteger = library.GetDelegate<Delegates.IsInteger>("lua_isinteger");
             NewState = library.GetDelegate<Delegates.NewState>("luaL_newstate");
+            NewThread = library.GetDelegate<Delegates.NewThread>("lua_newthread");
             OpenLibs = library.GetDelegate<Delegates.OpenLibs>("luaL_openlibs");
             PCallK = library.GetDelegate<Delegates.PCallK>("lua_pcallk");
             PushBoolean = library.GetDelegate<Delegates.PushBoolean>("lua_pushboolean");
@@ -116,14 +124,18 @@ namespace Triton.Interop {
             PushValue = library.GetDelegate<Delegates.PushValue>("lua_pushvalue");
             RawGetI = library.GetDelegate<Delegates.RawGetI>("lua_rawgeti");
             Ref = library.GetDelegate<Delegates.Ref>("luaL_ref");
+            Resume = library.GetDelegate<Delegates.Resume>("lua_resume");
             SetMetatable = library.GetDelegate<Delegates.SetMetatable>("lua_setmetatable");
             SetTable = library.GetDelegate<Delegates.SetTable>("lua_settable");
             SetTop = library.GetDelegate<Delegates.SetTop>("lua_settop");
+            Status = library.GetDelegate<Delegates.Status>("lua_status");
             ToBoolean = library.GetDelegate<Delegates.ToBoolean>("lua_toboolean");
             ToPointer = library.GetDelegate<Delegates.ToPointer>("lua_topointer");
+            ToThread = library.GetDelegate<Delegates.ToThread>("lua_tothread");
             ToUserdata = library.GetDelegate<Delegates.ToUserdata>("lua_touserdata");
             Type = library.GetDelegate<Delegates.Type>("lua_type");
             Unref = library.GetDelegate<Delegates.Unref>("luaL_unref");
+            XMove = library.GetDelegate<Delegates.XMove>("lua_xmove");
 
             ErrorDelegate = library.GetDelegate<Delegates.Error>("luaL_error");
             GetFieldDelegate = library.GetDelegate<Delegates.GetField>("lua_getfield");
@@ -266,7 +278,8 @@ namespace Triton.Interop {
             case LuaType.Thread:
                 PushValue(state, index);
                 var threadReference = Ref(state, RegistryIndex);
-                return new LuaThread(state, threadReference);
+                var thread = ToThread(state, index);
+                return new LuaThread(state, threadReference, thread);
             }
 
             throw new InvalidOperationException("Invalid Lua type.");
@@ -349,6 +362,9 @@ namespace Triton.Interop {
             public delegate LuaType GetGlobal(IntPtr state, byte[] name);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate int GetStack(IntPtr state, int level, ref LuaDebug debug);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate LuaType GetTable(IntPtr state, int index);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -365,6 +381,9 @@ namespace Triton.Interop {
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate IntPtr NewState();
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate IntPtr NewThread(IntPtr state);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate IntPtr NewUserdata(IntPtr state, UIntPtr size);
@@ -408,6 +427,9 @@ namespace Triton.Interop {
             public delegate int Ref(IntPtr state, int index);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate LuaStatus Resume(IntPtr thread, IntPtr from, int numArgs);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void SetField(IntPtr state, int index, byte[] field);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -421,6 +443,9 @@ namespace Triton.Interop {
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void SetTop(IntPtr state, int top);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate LuaStatus Status(IntPtr state);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate bool ToBoolean(IntPtr state, int index);
@@ -441,10 +466,16 @@ namespace Triton.Interop {
             public delegate IntPtr ToUserdata(IntPtr state, int index);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate IntPtr ToThread(IntPtr state, int index);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate LuaType Type(IntPtr state, int index);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void Unref(IntPtr state, int index, int reference);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate LuaStatus XMove(IntPtr from, IntPtr to, int n);
         }
     }
 }

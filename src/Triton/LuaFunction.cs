@@ -40,12 +40,16 @@ namespace Triton {
             if (args == null) {
                 throw new ArgumentNullException(nameof(args));
             }
+            if (IsDisposed) {
+                throw new ObjectDisposedException(GetType().FullName);
+            }
 
             // Ensure that we have enough stack space for the function currently on the stack and its arguments.
-            if (args.Length + 1 >= LuaApi.MinStackSize && !LuaApi.CheckStack(State, args.Length + 1)) {
+            if (!LuaApi.CheckStack(State, args.Length + 1)) {
                 throw new LuaException("Not enough stack space for function and arguments.");
             }
 
+            var oldTop = LuaApi.GetTop(State);
             try {
                 LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
                 foreach (var arg in args) {
@@ -57,15 +61,16 @@ namespace Triton {
                     throw new LuaException(errorMessage);
                 }
 
-                // Ensure that we have enough stack space for GetObjects.
-                var numResults = LuaApi.GetTop(State);
-                if (numResults >= LuaApi.MinStackSize && !LuaApi.CheckStack(State, 1)) {
+                // Ensure that we have enough stack space for ToObjects.
+                var top = LuaApi.GetTop(State);
+                var numResults = top - oldTop;
+                if (!LuaApi.CheckStack(State, 1)) {
                     throw new LuaException("Not enough scratch stack space.");
                 }
 
-                return LuaApi.ToObjects(State, 1, numResults);
+                return LuaApi.ToObjects(State, oldTop + 1, top);
             } finally {
-                LuaApi.SetTop(State, 0);
+                LuaApi.SetTop(State, oldTop);
             }
         }
     }

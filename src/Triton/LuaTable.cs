@@ -37,28 +37,30 @@ namespace Triton {
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is <c>null</c> and is being set.</exception>
         public object this[object key] {
             get {
-                try {
-                    LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
-                    LuaApi.PushObject(State, key);
-                    var type = LuaApi.GetTable(State, -2);
-                    return LuaApi.ToObject(State, -1, type);
-                } finally {
-                    LuaApi.SetTop(State, 0);
+                if (IsDisposed) {
+                    throw new ObjectDisposedException(GetType().FullName);
                 }
+
+                LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
+                LuaApi.PushObject(State, key);
+                var type = LuaApi.GetTable(State, -2);
+                var result = LuaApi.ToObject(State, -1, type);
+                LuaApi.Pop(State, 2);
+                return result;
             }
             set {
                 if (key == null) {
                     throw new ArgumentNullException(nameof(key));
                 }
-
-                try {
-                    LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
-                    LuaApi.PushObject(State, key);
-                    LuaApi.PushObject(State, value);
-                    LuaApi.SetTable(State, -3);
-                } finally {
-                    LuaApi.SetTop(State, 0);
+                if (IsDisposed) {
+                    throw new ObjectDisposedException(GetType().FullName);
                 }
+
+                LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
+                LuaApi.PushObject(State, key);
+                LuaApi.PushObject(State, value);
+                LuaApi.SetTable(State, -3);
+                LuaApi.Pop(State, 1);
             }
         }
     }

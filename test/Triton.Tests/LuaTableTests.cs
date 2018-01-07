@@ -207,11 +207,40 @@ namespace Triton.Tests {
         }
 
         [Fact]
+        public void Get_IsDisposed_ThrowsObjectDisposedException() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+                table.Dispose();
+
+                Assert.Throws<ObjectDisposedException>(() => table["test"]);
+            }
+        }
+
+        [Fact]
+        public void Set_IsDisposed_ThrowsObjectDisposedException() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+                table.Dispose();
+
+                Assert.Throws<ObjectDisposedException>(() => table["test"] = 0);
+            }
+        }
+
+        [Fact]
         public void Set_NullKey_ThrowsArgumentNullException() {
             using (var lua = new Lua()) {
                 using (var table = lua.CreateTable()) {
                     Assert.Throws<ArgumentNullException>(() => table[null] = 0);
                 }
+            }
+        }
+
+        [Fact]
+        public void Dispose_CalledTwice() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+                table.Dispose();
+                table.Dispose();
             }
         }
     }

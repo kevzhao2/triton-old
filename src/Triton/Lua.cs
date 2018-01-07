@@ -19,7 +19,6 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Diagnostics;
 using Triton.Binding;
 using Triton.Interop;
 
@@ -68,12 +67,10 @@ namespace Triton {
                     throw new ObjectDisposedException(GetType().FullName);
                 }
 
-                try {
-                    var type = LuaApi.GetGlobal(_state, name);
-                    return LuaApi.ToObject(_state, -1, type);
-                } finally {
-                    LuaApi.SetTop(_state, 0);
-                }
+                var type = LuaApi.GetGlobal(_state, name);
+                var result = LuaApi.ToObject(_state, -1, type);
+                LuaApi.Pop(_state, 1);
+                return result;
             }
             set {
                 if (name == null) {
@@ -85,8 +82,6 @@ namespace Triton {
 
                 LuaApi.PushObject(_state, value);
                 LuaApi.SetGlobal(_state, name);
-
-                Debug.Assert(LuaApi.GetTop(_state) == 0, "Stack not level.");
             }
         }
 
@@ -100,12 +95,37 @@ namespace Triton {
                 throw new ObjectDisposedException(GetType().FullName);
             }
 
-            try {
-                LuaApi.CreateTable(_state);
-                return (LuaTable)LuaApi.ToObject(_state, -1, LuaType.Table);
-            } finally {
-                LuaApi.SetTop(_state, 0);
+            LuaApi.CreateTable(_state);
+            var result = (LuaTable)LuaApi.ToObject(_state, -1, LuaType.Table);
+            LuaApi.Pop(_state, 1);
+            return result;
+        }
+
+        /// <summary>
+        /// Creates a <see cref="LuaThread"/> that will run the given <see cref="LuaFunction"/>.
+        /// </summary>
+        /// <returns>The <see cref="LuaThread"/>.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="function"/> is <c>null</c>.</exception>
+        /// <exception cref="ObjectDisposedException">
+        /// Either the <see cref="Lua"/> instance is disposed or <paramref name="function"/> is disposed.
+        /// </exception>
+        public LuaThread CreateThread(LuaFunction function) {
+            if (function == null) {
+                throw new ArgumentNullException(nameof(function));
             }
+            if (IsDisposed) {
+                throw new ObjectDisposedException(GetType().FullName);
+            }
+            if (function.IsDisposed) {
+                throw new ObjectDisposedException(function.GetType().FullName);
+            }
+
+            var thread = LuaApi.NewThread(_state);
+            LuaApi.PushObject(thread, function);
+
+            var result = (LuaThread)LuaApi.ToObject(_state, -1, LuaType.Thread);
+            LuaApi.Pop(_state, 1);
+            return result;
         }
 
         /// <summary>
@@ -208,16 +228,15 @@ namespace Triton {
         }
 
         private LuaFunction LoadStringInternal(string s) {
-            try {
-                if (LuaApi.LoadString(_state, s) != LuaStatus.Ok) {
-                    var errorMessage = LuaApi.ToString(_state, -1);
-                    throw new LuaException(errorMessage);
-                }
-                return (LuaFunction)LuaApi.ToObject(_state, -1, LuaType.Function);
+            if (LuaApi.LoadString(_state, s) != LuaStatus.Ok) {
+                var errorMessage = LuaApi.ToString(_state, -1);
+                LuaApi.Pop(_state, 1);
+                throw new LuaException(errorMessage);
             }
-            finally {
-                LuaApi.SetTop(_state, 0);
-            }
+
+            var result = (LuaFunction)LuaApi.ToObject(_state, -1, LuaType.Function);
+            LuaApi.Pop(_state, 1);
+            return result;
         }
     }
 }

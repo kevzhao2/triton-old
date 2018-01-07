@@ -84,6 +84,32 @@ namespace Triton.Tests {
         }
 
         [Fact]
+        public void CreateThread_NullFunction_ThrowsArgumentNullException() {
+            using (var lua = new Lua()) {
+                Assert.Throws<ArgumentNullException>(() => lua.CreateThread(null));
+            }
+        }
+
+        [Fact]
+        public void CreateThread_Disposed_ThrowsObjectDisposedException() {
+            var lua = new Lua();
+            var function = lua.LoadString("return 0");
+            lua.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => lua.CreateThread(function));
+        }
+
+        [Fact]
+        public void CreateThread_FunctionDisposed_ThrowsObjectDisposedException() {
+            using (var lua = new Lua()) {
+                var function = lua.LoadString("return 0");
+                function.Dispose();
+
+                Assert.Throws<ObjectDisposedException>(() => lua.CreateThread(function));
+            }
+        }
+
+        [Fact]
         public void Dispose_CalledTwice() {
             var lua = new Lua();
             lua.Dispose();
