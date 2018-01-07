@@ -37,10 +37,13 @@ namespace Triton {
         /// </summary>
         /// <param name="key">The key.</param>
         /// <returns>The value, or <c>null</c> if there is none.</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="key"/> is <c>null</c> and is being set.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is <c>null</c>.</exception>
         /// <exception cref="ObjectDisposedException">The <see cref="LuaTable"/> is disposed.</exception>
         public object this[object key] {
             get {
+                if (key == null) {
+                    throw new ArgumentNullException(nameof(key));
+                }
                 if (IsDisposed) {
                     throw new ObjectDisposedException(GetType().FullName);
                 }
@@ -85,33 +88,18 @@ namespace Triton {
 
         private object GetValueInternal(object key) {
             LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
-            
-            object result;
-            if (key is string s) {
-                LuaApi.GetField(State, -1, s);
-                result = LuaApi.ToObject(State, -1);
-            } else {
-                LuaApi.PushObject(State, key);
-                var type = LuaApi.GetTable(State, -2);
-                result = LuaApi.ToObject(State, -1, type);
-            }
-            
+            LuaApi.PushObject(State, key);
+            var type = LuaApi.GetTable(State, -2);
+            var result = LuaApi.ToObject(State, -1, type);
             LuaApi.Pop(State, 2);
             return result;
         }
 
         private void SetValueInternal(object key, object value) {
             LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
-            
-            if (key is string s) {
-                LuaApi.PushObject(State, value);
-                LuaApi.SetField(State, -2, s);
-            } else {
-                LuaApi.PushObject(State, key);
-                LuaApi.PushObject(State, value);
-                LuaApi.SetTable(State, -3);
-            }
-            
+            LuaApi.PushObject(State, key);
+            LuaApi.PushObject(State, value);
+            LuaApi.SetTable(State, -3);
             LuaApi.Pop(State, 1);
         }
     }

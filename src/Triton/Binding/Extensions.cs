@@ -29,6 +29,23 @@ namespace Triton.Binding {
     /// Contains extension methods.
     /// </summary>
     internal static class Extensions {
+        private static readonly Dictionary<Type, TypeBindingInfo> TypeBindingInfoCache = new Dictionary<Type, TypeBindingInfo>();
+
+        /// <summary>
+        /// Gets the <see cref="TypeBindingInfo"/> for the given type.
+        /// </summary>
+        /// <param name="type">The type.</param>
+        /// <returns>The <see cref="TypeBindingInfo"/>.</returns>
+        public static TypeBindingInfo GetBindingInfo(this Type type) {
+            lock (TypeBindingInfoCache) {
+                if (!TypeBindingInfoCache.TryGetValue(type, out var info)) {
+                    info = TypeBindingInfo.Construct(type);
+                    TypeBindingInfoCache[type] = info;
+                }
+                return info;
+            }
+        }
+
         /// <summary>
         /// Gets the value associated with the given key in a dictionary or its default value if the key doesn't exist.
         /// </summary>

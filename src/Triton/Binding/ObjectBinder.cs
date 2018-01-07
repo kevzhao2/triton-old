@@ -32,9 +32,6 @@ namespace Triton.Binding {
     internal static class ObjectBinder {
         private const string ObjectMetatable = "$__object";
         private const string TypeMetatable = "$__type";
-        
-        private static readonly Dictionary<Type, TypeBindingInfo> TypeBindingInfoCache = new Dictionary<Type, TypeBindingInfo>();
-        private static readonly object TypeBindingLock = new object();
 
         private static readonly Dictionary<string, LuaCFunction> ObjectMetamethods = new Dictionary<string, LuaCFunction> {
             ["__add"] = AddObject,
@@ -193,16 +190,6 @@ namespace Triton.Binding {
             return objIndex == objs.Length ? score : int.MinValue;
         }
 
-        private static TypeBindingInfo GetTypeBindingInfo(Type type) {
-            lock (TypeBindingLock) {
-                if (!TypeBindingInfoCache.TryGetValue(type, out var info)) {
-                    info = TypeBindingInfo.Construct(type);
-                    TypeBindingInfoCache[type] = info;
-                }
-                return info;
-            }
-        }
-
         private static int AddObject(IntPtr state) => BinaryOpShared(state, "add", "op_Addition");
         private static int SubObject(IntPtr state) => BinaryOpShared(state, "subtract", "op_Subtraction");
         private static int MulObject(IntPtr state) => BinaryOpShared(state, "multiply", "op_Multiply");
@@ -221,8 +208,8 @@ namespace Triton.Binding {
             // We need to use LuaApi.GetObject here since binary operators can occur with one of the operands not being .NET objects.
             var operand1 = LuaApi.ToObject(state, 1);
             var operand2 = LuaApi.ToObject(state, 2);
-            var info1 = GetTypeBindingInfo(operand1.GetType());
-            var info2 = GetTypeBindingInfo(operand2.GetType());
+            var info1 = operand1.GetType().GetBindingInfo();
+            var info2 = operand2.GetType().GetBindingInfo();
 
             // Binary operators can be declared on either of the operands' types.
             var ops = info1.GetOperators(methodName);
@@ -252,7 +239,7 @@ namespace Triton.Binding {
 
         private static int UnaryOpShared(IntPtr state, string operation, string methodName) {
             var operand = LuaApi.ToHandle(state, 1).Target;
-            var info = GetTypeBindingInfo(operand.GetType());
+            var info = operand.GetType().GetBindingInfo();
 
             var op = info.GetOperators(methodName).SingleOrDefault();
             if (op == null) {
@@ -354,7 +341,7 @@ namespace Triton.Binding {
                     throw LuaApi.Error(state, "attempt to instantiate abstract type");
                 }
 
-                var info = GetTypeBindingInfo(type);
+                var info = type.GetBindingInfo();
                 var ctors = info.GetConstructors();
                 if (ctors.Count == 0) {
                     throw LuaApi.Error(state, "attempt to instantiate type with no constructors");
@@ -409,7 +396,7 @@ namespace Triton.Binding {
             var keyType = LuaApi.Type(state, 2);
             if (keyType == LuaType.String) {
                 var name = LuaApi.ToString(state, 2);
-                var info = GetTypeBindingInfo(type);
+                var info = type.GetBindingInfo();
                 var isStatic = obj == null;
 
                 var member = info.GetMember(name, isStatic);
@@ -483,7 +470,7 @@ namespace Triton.Binding {
 
         private static int ProxyCallShared(IntPtr state, object obj, Type type) {
             var name = LuaApi.ToString(state, LuaApi.UpvalueIndex(2));
-            var info = GetTypeBindingInfo(type);
+            var info = type.GetBindingInfo();
             var isStatic = obj == null;
 
             var numTypeArgs = LuaApi.ToInteger(state, LuaApi.UpvalueIndex(3));
@@ -597,7 +584,7 @@ namespace Triton.Binding {
             var keyType = LuaApi.Type(state, 2);
             if (keyType == LuaType.String) {
                 var name = LuaApi.ToString(state, 2);
-                var info = GetTypeBindingInfo(type);
+                var info = type.GetBindingInfo();
                 var isStatic = obj == null;
 
                 var member = info.GetMember(name, isStatic);

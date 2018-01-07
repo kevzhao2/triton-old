@@ -223,6 +223,14 @@ namespace Triton.Tests {
         }
 
         [Fact]
+        public void Get_NullKey_ThrowsArgumentNullException() {
+            using (var lua = new Lua())
+            using (var table = lua.CreateTable()) {
+                Assert.Throws<ArgumentNullException>(() => table[null]);
+            }
+        }
+
+        [Fact]
         public void Get_IsDisposed_ThrowsObjectDisposedException() {
             using (var lua = new Lua()) {
                 var table = lua.CreateTable();

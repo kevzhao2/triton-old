@@ -19,6 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
@@ -44,6 +45,7 @@ namespace Triton.Interop {
         public static readonly Delegates.IsInteger IsInteger;
         public static readonly Delegates.NewState NewState;
         public static readonly Delegates.NewThread NewThread;
+        public static readonly Delegates.Next Next;
         public static readonly Delegates.OpenLibs OpenLibs;
         public static readonly Delegates.PCallK PCallK;
         public static readonly Delegates.PushBoolean PushBoolean;
@@ -80,7 +82,7 @@ namespace Triton.Interop {
         private static readonly Delegates.ToIntegerX ToIntegerX;
         private static readonly Delegates.ToLString ToLString;
         private static readonly Delegates.ToNumberX ToNumberX;
-
+        
         static LuaApi() {
 #if NETSTANDARD
             var assemblyDirectory = Path.GetDirectoryName(GetAssemblyPath(typeof(LuaApi).GetTypeInfo().Assembly));
@@ -114,6 +116,7 @@ namespace Triton.Interop {
             IsInteger = library.GetDelegate<Delegates.IsInteger>("lua_isinteger");
             NewState = library.GetDelegate<Delegates.NewState>("luaL_newstate");
             NewThread = library.GetDelegate<Delegates.NewThread>("lua_newthread");
+            Next = library.GetDelegate<Delegates.Next>("lua_next");
             OpenLibs = library.GetDelegate<Delegates.OpenLibs>("luaL_openlibs");
             PCallK = library.GetDelegate<Delegates.PCallK>("lua_pcallk");
             PushBoolean = library.GetDelegate<Delegates.PushBoolean>("lua_pushboolean");
@@ -388,6 +391,9 @@ namespace Triton.Interop {
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate IntPtr NewUserdata(IntPtr state, UIntPtr size);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate bool Next(IntPtr state, int index);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void OpenLibs(IntPtr state);
