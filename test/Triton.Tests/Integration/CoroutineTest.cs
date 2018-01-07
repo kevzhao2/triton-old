@@ -3,12 +3,6 @@
 namespace Triton.Tests.Integration {
     public class CoroutineTest {
         private const string TestString = @"
-            function assert(val)
-                if not val then
-                    error('assertion failed')
-                end
-            end
-
             import 'System.String'
             import 'System.Collections.Generic.List`1'
 
@@ -35,8 +29,7 @@ namespace Triton.Tests.Integration {
             coroutine.resume(co)
             assert(list.Count == 1 and list.Item:Get(0) == 'checkpoint 4')
             coroutine.resume(co)
-            assert(list.Count == 0)
-        ";
+            assert(list.Count == 0)";
 
         [Fact]
         public void Test() {

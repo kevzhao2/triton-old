@@ -3,12 +3,6 @@
 namespace Triton.Tests.Integration {
     public class GenericsTest {
         private const string TestString = @"
-            function assert(val)
-                if not val then
-                    error('assertion failed')
-                end
-            end
-
             import 'System.Int32'
             import 'System.String'
             import 'System.Object'
@@ -26,8 +20,7 @@ namespace Triton.Tests.Integration {
 
             success, l = dict:TryGetValue('test')
             assert(success)
-            assert(Object.ReferenceEquals(l, list))
-        ";
+            assert(Object.ReferenceEquals(l, list))";
 
         [Fact]
         public void Test() {

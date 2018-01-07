@@ -22,6 +22,8 @@ using System;
 using Triton.Binding;
 using Triton.Interop;
 
+[assembly: CLSCompliant(true)]
+
 namespace Triton {
     /// <summary>
     /// Acts as a managed wrapper around a Lua instance.

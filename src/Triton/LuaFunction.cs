@@ -45,20 +45,23 @@ namespace Triton {
                 throw new ObjectDisposedException(GetType().FullName);
             }
 
-            // Ensure that we have enough stack space for the function currently on the stack and its arguments.
+            // Ensure that we have enough stack space for debug.traceback, the function, and its arguments.
             var numArgs = args.Length;
-            if (!LuaApi.CheckStack(State, numArgs + 1)) {
-                throw new LuaException("Not enough stack space for function and arguments.");
+            if (!LuaApi.CheckStack(State, numArgs + 3)) {
+                throw new LuaException("Not enough stack space for traceback, function, and arguments.");
             }
 
             var oldTop = LuaApi.GetTop(State);
             try {
+                LuaApi.GetGlobal(State, "debug");
+                LuaApi.GetField(State, -1, "traceback");
+
                 LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
                 foreach (var arg in args) {
                     LuaApi.PushObject(State, arg);
                 }
                 
-                if (LuaApi.PCallK(State, numArgs) != LuaStatus.Ok) {
+                if (LuaApi.PCallK(State, numArgs, LuaApi.MultRet, oldTop + 2) != LuaStatus.Ok) {
                     var errorMessage = LuaApi.ToString(State, -1);
                     throw new LuaException(errorMessage);
                 }
@@ -69,7 +72,7 @@ namespace Triton {
                     throw new LuaException("Not enough scratch stack space.");
                 }
 
-                return LuaApi.ToObjects(State, oldTop + 1, top);
+                return LuaApi.ToObjects(State, oldTop + 3, top);
             } finally {
                 LuaApi.SetTop(State, oldTop);
             }
