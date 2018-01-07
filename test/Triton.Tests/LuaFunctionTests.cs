@@ -40,35 +40,32 @@ namespace Triton.Tests {
 
         [Fact]
         public void IsDisposed_NotDisposed_False() {
-            using (var lua = new Lua()) {
-                using (var function = lua.LoadString("")) {
-                    Assert.False(function.IsDisposed);
-                }
+            using (var lua = new Lua())
+            using (var function = lua.LoadString("")) {
+                Assert.False(function.IsDisposed);
             }
         }
 
         [Fact]
         public void Call_NoArgs() {
-            using (var lua = new Lua()) {
-                using (var function = lua.LoadString("return 1979")) {
-                    var results = function.Call();
+            using (var lua = new Lua())
+            using (var function = lua.LoadString("return 1979")) {
+                var results = function.Call();
 
-                    Assert.Single(results);
-                    Assert.Equal(1979L, results[0]);
-                }
+                Assert.Single(results);
+                Assert.Equal(1979L, results[0]);
             }
         }
 
         [Fact]
         public void Call_OneArg() {
-            using (var lua = new Lua()) {
+            using (var lua = new Lua())
                 var results = lua.DoString("return function(x) return x end");
-                using (var function = results[0] as LuaFunction) {
-                    results = function.Call("test");
+            using (var function = results[0] as LuaFunction) {
+                results = function.Call("test");
 
-                    Assert.Single(results);
-                    Assert.Equal("test", results[0]);
-                }
+                Assert.Single(results);
+                Assert.Equal("test", results[0]);
             }
         }
 
@@ -93,37 +90,34 @@ namespace Triton.Tests {
 
         [Fact]
         public void Call_NoResults() {
-            using (var lua = new Lua()) {
-                using (var function = lua.LoadString("return")) {
-                    var results = function.Call();
+            using (var lua = new Lua())
+            using (var function = lua.LoadString("return")) {
+                var results = function.Call();
 
-                    Assert.Empty(results);
-                }
+                Assert.Empty(results);
             }
         }
 
         [Fact]
         public void Call_ManyResults() {
-            using (var lua = new Lua()) {
-                using (var function = lua.LoadString("return 0, 1, 4, 9, 16")) {
-                    var results = function.Call("test");
+            using (var lua = new Lua())
+            using (var function = lua.LoadString("return 0, 1, 4, 9, 16")) {
+                var results = function.Call("test");
 
-                    Assert.Equal(5, results.Length);
-                    Assert.Equal(0L, results[0]);
-                    Assert.Equal(1L, results[1]);
-                    Assert.Equal(4L, results[2]);
-                    Assert.Equal(9L, results[3]);
-                    Assert.Equal(16L, results[4]);
-                }
+                Assert.Equal(5, results.Length);
+                Assert.Equal(0L, results[0]);
+                Assert.Equal(1L, results[1]);
+                Assert.Equal(4L, results[2]);
+                Assert.Equal(9L, results[3]);
+                Assert.Equal(16L, results[4]);
             }
         }
 
         [Fact]
         public void Call_NullArgs_ThrowsArgumentNullException() {
-            using (var lua = new Lua()) {
-                using (var function = lua.LoadString("")) {
-                    Assert.Throws<ArgumentNullException>(() => function.Call(null));
-                }
+            using (var lua = new Lua())
+            using (var function = lua.LoadString("")) {
+                Assert.Throws<ArgumentNullException>(() => function.Call(null));
             }
         }
 
@@ -132,27 +126,25 @@ namespace Triton.Tests {
             using (var lua = new Lua()) {
                 var function = lua.LoadString("");
                 function.Dispose();
-                
+
                 Assert.Throws<ObjectDisposedException>(() => function.Call());
             }
         }
 
         [Fact]
         public void Call_TooManyArgs_ThrowsLuaException() {
-            using (var lua = new Lua()) {
-                using (var function = lua.LoadString("")) {
-                    Assert.Throws<LuaException>(() => function.Call(new object[10000000]));
-                }
+            using (var lua = new Lua())
+            using (var function = lua.LoadString("")) {
+                Assert.Throws<LuaException>(() => function.Call(new object[10000000]));
             }
         }
 
         [Theory]
         [MemberData(nameof(RuntimeErrors))]
         public void Call_RuntimeError_ThrowsLuaException(string s) {
-            using (var lua = new Lua()) {
-                using (var function = lua.LoadString(s)) {
-                    Assert.Throws<LuaException>(() => function.Call());
-                }
+            using (var lua = new Lua())
+            using (var function = lua.LoadString(s)) {
+                Assert.Throws<LuaException>(() => function.Call());
             }
         }
 

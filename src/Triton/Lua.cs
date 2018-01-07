@@ -122,7 +122,7 @@ namespace Triton {
             }
 
             var thread = LuaApi.NewThread(_state);
-            LuaApi.PushObject(thread, function);
+            LuaApi.RawGetI(thread, LuaApi.RegistryIndex, function.Reference);
             var threadReference = LuaApi.Ref(_state, LuaApi.RegistryIndex);
             return new LuaThread(_state, threadReference, thread);
         }
