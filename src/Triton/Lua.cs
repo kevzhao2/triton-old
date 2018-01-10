@@ -25,6 +25,7 @@ using System.Diagnostics;
 using System.Dynamic;
 #endif
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using Triton.Binding;
 using Triton.Interop;
@@ -161,9 +162,17 @@ namespace Triton {
             ThrowIfDisposed();
 
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-            var types = assemblies.SelectMany(a => a.GetTypes());
+            var types = assemblies.SelectMany(GetTypes);
             foreach (var type in types.Where(t => t.IsPublic && t.Namespace == @namespace)) {
                 ImportTypeInternal(type);
+            }
+
+            IEnumerable<Type> GetTypes(Assembly assembly) {
+                try {
+                    return assembly.GetTypes();
+                } catch (ReflectionTypeLoadException e) {
+                    return e.Types.Where(t => t != null);
+                }
             }
         }
 
@@ -408,13 +417,13 @@ namespace Triton {
                 return;
             }
 
+            LuaApi.Close(State);
+            _isDisposed = true;
+
             if (disposing) {
                 _handle.Free();
                 GC.SuppressFinalize(this);
             }
-
-            LuaApi.Close(State);
-            _isDisposed = true;
         }
 
         private void ImportTypeInternal(Type type) {
