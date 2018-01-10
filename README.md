@@ -84,10 +84,10 @@ Note that `obj.Event` will return new wrapper objects each time, so to successfu
 
 ### Passing .NET types
 
-.NET types can be passed in using `ImportType`, and from the Lua side, .NET types can be imported using the `import` function. These types can then be used to access static members and create objects.
+.NET types can be passed in using `ImportType`, and from the Lua side, .NET types can be imported using the `using` function. These types can then be used to access static members and create objects.
 ```csharp
 lua.ImportType(typeof(int));
-lua.DoString("import 'System.Collections.Generic.List`1'");
+lua.DoString("using 'System.Collections.Generic'");
 lua.DoString("list = List(Int32)()");
 lua.DoString("list:Add(2018)");
 ```
@@ -125,16 +125,16 @@ lua.DoString("list:Add(2018)");
   lua["t2"] = new Test2();
   lua.DoString("x = t2 + t1");
   ```
+* Triton reuses `LuaReference` objects and will clean up unused references, saving as much memory in a transparent way as possible.
 * Triton is, in general, somewhat faster for .NET to Lua context switches and vice versa. See below for at least one case where this isn't true.
 
 ### Disadvantages
-* Triton only supports event handler types that are "compatible" with the signature `void (object, EventArgs)`. Other types would require dynamic method generation, which is not possible on AOT.
+* Triton only supports event handler types that are "compatible" with the signature `void (object, EventArgs)`.
 * Triton does not support calling extension methods on objects as instance methods.
-* Triton does not have a simple namespace-level `import`, since unfortunately `AppDomain` doesn't exist in the targeted version of .NET standard. This can be worked around by getting the `Assembly` of a type and then iterating through its exported types.
 * Triton does not cache method lookups. This can result in a roughly 2x slowdown for the Lua to .NET context switch.
 * Triton does not currently have any debugging facilities.
 
 ### Roadmap
 * Implement `IDictionary<object, object>` on `LuaTable`.
-* Implement dynamic operatons on `LuaTable` using its metamethods.
+* Implement dynamic operations on `LuaTable` using its metamethods.
 * Implement simple iteration of `IEnumerable<T>`.

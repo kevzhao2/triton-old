@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard1.5;net40;net35</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net40;net35</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -19,36 +19,27 @@
   </PropertyGroup>
   
   <ItemGroup>
-    <Content Include="lua\x64\*">
+    <Content Include="runtimes\*\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <PackagePath>lua/x64/</PackagePath>
       <Pack>true</Pack>
+      <PackagePath>runtimes/</PackagePath>
     </Content>
-    <Content Include="lua\x86\*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <PackagePath>lua/x86/</PackagePath>
+    <None Update="runtimes\Triton.targets">
       <Pack>true</Pack>
-    </Content>
-    <None Update="lua\Triton.targets">
-      <PackagePath>build/net35/</PackagePath>
-      <Pack>true</Pack>
+      <PackagePath>build/net35/;build/net40/</PackagePath>
     </None>
   </ItemGroup>
-  
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard1.5'">
-    <PackageReference Include="System.Dynamic.Runtime" Version="4.3.0" />
-  </ItemGroup>
-  
-  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard1.5'">
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <DefineConstants>NETSTANDARD</DefineConstants>
   </PropertyGroup>
-	
+
   <PropertyGroup Condition="'$(TargetFramework)' == 'net40'">
     <DefineConstants>NETFULL</DefineConstants>
   </PropertyGroup>
-  
+
   <PropertyGroup Condition="'$(TargetFramework)' == 'net35'">
     <DefineConstants>NETFULL</DefineConstants>
   </PropertyGroup>
-  
+
 </Project>

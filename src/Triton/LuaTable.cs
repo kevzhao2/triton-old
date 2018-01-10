@@ -26,26 +26,22 @@ using Triton.Interop;
 
 namespace Triton {
     /// <summary>
-    /// Represents a Lua table.
+    /// Represents a Lua table that may be read and modified.
     /// </summary>
     public sealed class LuaTable : LuaReference {
-        internal LuaTable(IntPtr state, int reference) : base(state, reference) {
+        internal LuaTable(Lua lua, int referenceId) : base(lua, referenceId) {
         }
 
         /// <summary>
-        /// Gets or sets the value associated with the given key.
+        /// Gets or sets the value corresponding to the given key.
         /// </summary>
         /// <param name="key">The key.</param>
-        /// <returns>The value, or <c>null</c> if there is none.</returns>
+        /// <returns>The value.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is <c>null</c>.</exception>
-        /// <exception cref="ObjectDisposedException">The <see cref="LuaTable"/> is disposed.</exception>
-        public object this[object key] {
+		public object this[object key] {
             get {
                 if (key == null) {
                     throw new ArgumentNullException(nameof(key));
-                }
-                if (IsDisposed) {
-                    throw new ObjectDisposedException(GetType().FullName);
                 }
 
                 return GetValueInternal(key);
@@ -54,9 +50,6 @@ namespace Triton {
                 if (key == null) {
                     throw new ArgumentNullException(nameof(key));
                 }
-                if (IsDisposed) {
-                    throw new ObjectDisposedException(GetType().FullName);
-                }
 
                 SetValueInternal(key, value);
             }
@@ -64,43 +57,33 @@ namespace Triton {
 
 #if NETSTANDARD || NET40
         /// <inheritdoc/>
-        /// <exception cref="ObjectDisposedException">The <see cref="LuaTable"/> is disposed.</exception>
         public override bool TryGetMember(GetMemberBinder binder, out object result) {
-            if (IsDisposed) {
-                throw new ObjectDisposedException(GetType().FullName);
-            }
-
             result = GetValueInternal(binder.Name);
             return true;
         }
 
         /// <inheritdoc/>
-        /// <exception cref="ObjectDisposedException">The <see cref="LuaTable"/> is disposed.</exception>
         public override bool TrySetMember(SetMemberBinder binder, object value) {
-            if (IsDisposed) {
-                throw new ObjectDisposedException(GetType().FullName);
-            }
-
             SetValueInternal(binder.Name, value);
             return true;
         }
 #endif
 
         private object GetValueInternal(object key) {
-            LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
-            LuaApi.PushObject(State, key);
-            var type = LuaApi.GetTable(State, -2);
-            var result = LuaApi.ToObject(State, -1, type);
-            LuaApi.Pop(State, 2);
+            PushOnto(Lua.State);
+            Lua.PushObject(key);
+            var type = LuaApi.GetTable(Lua.State, -2);
+            var result = Lua.ToObject(-1, type);
+            LuaApi.Pop(Lua.State, 2);
             return result;
         }
 
         private void SetValueInternal(object key, object value) {
-            LuaApi.RawGetI(State, LuaApi.RegistryIndex, Reference);
-            LuaApi.PushObject(State, key);
-            LuaApi.PushObject(State, value);
-            LuaApi.SetTable(State, -3);
-            LuaApi.Pop(State, 1);
+            PushOnto(Lua.State);
+            Lua.PushObject(key);
+            Lua.PushObject(value);
+            LuaApi.SetTable(Lua.State, -3);
+            LuaApi.Pop(Lua.State, 1);
         }
     }
 }

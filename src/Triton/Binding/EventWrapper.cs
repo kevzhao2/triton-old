@@ -19,6 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using Triton.Interop;
 
@@ -30,7 +31,8 @@ namespace Triton.Binding {
 #if NETSTANDARD
         private static readonly MethodInfo InvokeMethod = typeof(LuaFunctionWrapper).GetTypeInfo().GetMethod("Invoke");
 #endif
-        
+
+        private readonly Dictionary<LuaFunction, Delegate> _delegates = new Dictionary<LuaFunction, Delegate>();
         private readonly EventInfo _event;
         private readonly object _obj;
         private readonly IntPtr _state;
@@ -46,13 +48,13 @@ namespace Triton.Binding {
             _obj = obj;
             _event = @event;
         }
-        
+
         /// <summary>
         /// Adds a <see cref="LuaFunction"/> to the event.
         /// </summary>
         /// <param name="function">The <see cref="LuaFunction"/>.</param>
         /// <returns>The resulting delegate.</returns>
-        public Delegate Add(LuaFunction function) {
+        public void Add(LuaFunction function) {
             if (function == null) {
                 throw LuaApi.Error(_state, "attempt to add nil to event");
             }
@@ -71,17 +73,20 @@ namespace Triton.Binding {
             } catch (TargetInvocationException e) {
                 throw LuaApi.Error(_state, $"attempt to add to event threw:\n{e.InnerException}");
             }
-            
-            return @delegate;
+
+            _delegates[function] = @delegate;
         }
 
         /// <summary>
-        /// Removes a delegate from the event.
+        /// Removes a <see cref="LuaFunction"/> from the event.
         /// </summary>
-        /// <param name="delegate">The delegate.</param>
-        public void Remove(Delegate @delegate) {
-            if (@delegate == null) {
+        /// <param name="function">The <see cref="LuaFunction"/>.</param>
+        public void Remove(LuaFunction function) {
+            if (function == null) {
                 throw LuaApi.Error(_state, "attempt to remove nil from event");
+            }
+            if (!_delegates.TryGetValue(function, out var @delegate)) {
+                return;
             }
 
             try {
@@ -89,14 +94,16 @@ namespace Triton.Binding {
             } catch (TargetInvocationException e) {
                 throw LuaApi.Error(_state, $"attempt to remove from event threw:\n{e.InnerException}");
             }
+
+            _delegates.Remove(function);
         }
-        
+
         /// <summary>
         /// A wrapper class that closes on a <see cref="LuaFunction"/>.
         /// </summary>
         private sealed class LuaFunctionWrapper {
             private readonly LuaFunction _function;
-            
+
             public LuaFunctionWrapper(LuaFunction function) => _function = function;
 
             public void Invoke(object sender, EventArgs args) => _function.Call(sender, args);

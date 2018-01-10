@@ -24,9 +24,7 @@ namespace Triton {
     /// <summary>
     /// The exception that is thrown when a Lua error occurs.
     /// </summary>
-#if NETFULL
     [Serializable]
-#endif
     public class LuaException : Exception {
         /// <summary>
         /// Initializes a new instance of the <see cref="LuaException"/> class.

@@ -19,20 +19,17 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-using Triton.Binding;
 
 namespace Triton.Interop {
     /// <summary>
-    /// Holds Lua API definitions.
+    /// Provides Lua API definitions.
     /// </summary>
     internal static class LuaApi {
-        public const int MinStackSize = 20;
         public const int MultRet = -1;
         public const int RegistryIndex = -1001000;
 
@@ -68,7 +65,6 @@ namespace Triton.Interop {
         public static readonly Delegates.ToUserdata ToUserdata;
         public static readonly Delegates.Type Type;
         public static readonly Delegates.Unref Unref;
-        public static readonly Delegates.XMove XMove;
 
         private static readonly Delegates.Error ErrorDelegate;
         private static readonly Delegates.GetField GetFieldDelegate;
@@ -77,34 +73,28 @@ namespace Triton.Interop {
         private static readonly Delegates.NewMetatable NewMetatableDelegate;
         private static readonly Delegates.NewUserdata NewUserdataDelegate;
         private static readonly Delegates.PushLString PushLString;
-        private static readonly Delegates.SetField SetFieldDelegate;
         private static readonly Delegates.SetGlobal SetGlobalDelegate;
         private static readonly Delegates.ToIntegerX ToIntegerX;
         private static readonly Delegates.ToLString ToLString;
         private static readonly Delegates.ToNumberX ToNumberX;
-        
+
         static LuaApi() {
-#if NETSTANDARD
-            var assemblyDirectory = Path.GetDirectoryName(GetAssemblyPath(typeof(LuaApi).GetTypeInfo().Assembly));
-#else
-            var assemblyDirectory = Path.GetDirectoryName(GetAssemblyPath(typeof(LuaApi).Assembly));
-#endif
-            
-            // The Platform cctor already checks for invalid platforms, so we don't need to do so here.
+            var libraryFolder = "win-{0}";
             var libraryName = "lua53.dll";
             if (Platform.IsOSX) {
+                libraryFolder = "osx-{0}";
                 libraryName = "liblua53.dylib";
             } else if (Platform.IsLinux) {
+                libraryFolder = "linux-{0}";
                 libraryName = "liblua53.so";
             }
+            var libraryPath = Path.Combine(string.Format(libraryFolder, Platform.Is64Bit ? "x64" : "x86"), libraryName);
 
-            var searchPath = CombinePath("lua", Platform.Is64Bit ? "x64" : "x86", libraryName);
-            var path1 = CombinePath(assemblyDirectory, searchPath);
-            var path2 = CombinePath(assemblyDirectory, "..", "..", searchPath);
-
-            // Normally, we would have this be a static readonly variable, and we would define a finalizer which would close the opened
-            // library. But this isn't feasible because Lua has a finalizer which calls Close. Thus, we'll just let the operating system
-            // clean up the loaded library.
+            // There are two possible base paths: the assembly directory, and for unpublished .NET core projects using a NuGet package,
+            // the assembly directory up two levels.
+            var assemblyDirectory = Path.GetDirectoryName(GetAssemblyPath(typeof(LuaApi).Assembly));
+            var path1 = new[] { assemblyDirectory, "runtimes", libraryPath }.Aggregate(Path.Combine);
+            var path2 = new[] { assemblyDirectory, "..", "..", "runtimes", libraryPath }.Aggregate(Path.Combine);
             var library = new NativeLibrary(path1, path2);
 
             CheckStack = library.GetDelegate<Delegates.CheckStack>("lua_checkstack");
@@ -139,7 +129,6 @@ namespace Triton.Interop {
             ToUserdata = library.GetDelegate<Delegates.ToUserdata>("lua_touserdata");
             Type = library.GetDelegate<Delegates.Type>("lua_type");
             Unref = library.GetDelegate<Delegates.Unref>("luaL_unref");
-            XMove = library.GetDelegate<Delegates.XMove>("lua_xmove");
 
             ErrorDelegate = library.GetDelegate<Delegates.Error>("luaL_error");
             GetFieldDelegate = library.GetDelegate<Delegates.GetField>("lua_getfield");
@@ -148,7 +137,6 @@ namespace Triton.Interop {
             NewMetatableDelegate = library.GetDelegate<Delegates.NewMetatable>("luaL_newmetatable");
             NewUserdataDelegate = library.GetDelegate<Delegates.NewUserdata>("lua_newuserdata");
             PushLString = library.GetDelegate<Delegates.PushLString>("lua_pushlstring");
-            SetFieldDelegate = library.GetDelegate<Delegates.SetField>("lua_setfield");
             SetGlobalDelegate = library.GetDelegate<Delegates.SetGlobal>("lua_setglobal");
             ToIntegerX = library.GetDelegate<Delegates.ToIntegerX>("lua_tointegerx");
             ToNumberX = library.GetDelegate<Delegates.ToNumberX>("lua_tonumberx");
@@ -158,9 +146,7 @@ namespace Triton.Interop {
         public static Exception Error(IntPtr state, string errorMessage) {
             ErrorDelegate(state, GetUtf8String(errorMessage));
 
-            // This is a bit of a hack. This method never returns, and we want a way to tell the compiler this. So if it returns an
-            // Exception and we do something like throw NativeMethods.Error(...), then the compiler will correctly deduce that the code
-            // following will not be run.
+            // This is a bit of a hack; since this method never returns, we signify this to the compiler using throw LuaApi.Error.
             return new InvalidOperationException("This should never have been reached!");
         }
 
@@ -171,58 +157,10 @@ namespace Triton.Interop {
         public static bool NewMetatable(IntPtr state, string name) => NewMetatableDelegate(state, GetUtf8String(name));
         public static IntPtr NewUserdata(IntPtr state, int size) => NewUserdataDelegate(state, new UIntPtr((uint)size));
         public static void Pop(IntPtr state, int n) => SetTop(state, -n - 1);
-        
+
         public static void PushHandle(IntPtr state, GCHandle handle) {
             var ud = NewUserdata(state, IntPtr.Size);
             Marshal.WriteIntPtr(ud, GCHandle.ToIntPtr(handle));
-        }
-
-        public static void PushObject(IntPtr state, object obj) {
-            if (obj == null) {
-                PushNil(state);
-                return;
-            }
-
-            var typeCode = Convert.GetTypeCode(obj);
-            switch (typeCode) {
-            case TypeCode.Boolean:
-                PushBoolean(state, (bool)obj);
-                return;
-
-            case TypeCode.SByte:
-            case TypeCode.Byte:
-            case TypeCode.Int16:
-            case TypeCode.UInt16:
-            case TypeCode.Int32:
-            case TypeCode.UInt32:
-            case TypeCode.Int64:
-                PushInteger(state, Convert.ToInt64(obj));
-                return;
-
-            case TypeCode.UInt64:
-                // UInt64 is a special case since we want to avoid OverflowExceptions.
-                PushInteger(state, (long)((ulong)obj));
-                return;
-
-            case TypeCode.Single:
-            case TypeCode.Double:
-            case TypeCode.Decimal:
-                PushNumber(state, Convert.ToDouble(obj));
-                return;
-
-            case TypeCode.Char:
-            case TypeCode.String:
-                PushString(state, obj.ToString());
-                return;
-            }
-
-            if (obj is IntPtr pointer) {
-                PushLightUserdata(state, pointer);
-            } else if (obj is LuaReference lr) {
-                RawGetI(state, RegistryIndex, lr.Reference);
-            } else {
-                ObjectBinder.PushNetObject(state, obj);
-            }
         }
 
         public static void PushString(IntPtr state, string s) {
@@ -231,7 +169,6 @@ namespace Triton.Interop {
             PushLString(state, buffer, new UIntPtr((uint)buffer.Length));
         }
 
-        public static void SetField(IntPtr state, int index, string field) => SetFieldDelegate(state, index, GetUtf8String(field));
         public static void SetGlobal(IntPtr state, string name) => SetGlobalDelegate(state, GetUtf8String(name));
 
         public static GCHandle ToHandle(IntPtr state, int index) {
@@ -241,65 +178,6 @@ namespace Triton.Interop {
 
         public static long ToInteger(IntPtr state, int index) => ToIntegerX(state, index, out _);
         public static double ToNumber(IntPtr state, int index) => ToNumberX(state, index, out _);
-        
-        public static object ToObject(IntPtr state, int index, LuaType? typeHint = null) {
-            // Using a type hint allows us to save an unmanaged call. This might occur when getting a table value, or when getting a global.
-            var type = typeHint ?? Type(state, index);
-            Debug.Assert(type == Type(state, index), "Type hint did not match type.");
-
-            switch (type) {
-            case LuaType.None:
-            case LuaType.Nil:
-                return null;
-
-            case LuaType.Boolean:
-                return ToBoolean(state, index);
-
-            case LuaType.LightUserdata:
-                return ToUserdata(state, index);
-
-            case LuaType.Number:
-                var isInteger = IsInteger(state, index);
-                return isInteger ? ToInteger(state, index) : (object)ToNumber(state, index);
-
-            case LuaType.String:
-                return ToString(state, index);
-
-            case LuaType.Userdata:
-                var handle = ToHandle(state, index);
-                return handle.Target;
-
-            case LuaType.Table:
-                PushValue(state, index);
-                var tableReference = Ref(state, RegistryIndex);
-                return new LuaTable(state, tableReference);
-
-            case LuaType.Function:
-                PushValue(state, index);
-                var functionReference = Ref(state, RegistryIndex);
-                return new LuaFunction(state, functionReference);
-
-            case LuaType.Thread:
-                PushValue(state, index);
-                var threadReference = Ref(state, RegistryIndex);
-                var thread = ToThread(state, index);
-                return new LuaThread(state, threadReference, thread);
-            }
-
-            throw new InvalidOperationException("Invalid Lua type.");
-        }
-
-        public static object[] ToObjects(IntPtr state, int startIndex, int endIndex) {
-            if (startIndex > endIndex) {
-                return new object[0];
-            }
-
-            var objs = new object[endIndex - startIndex + 1];
-            for (var i = 0; i < objs.Length; ++i) {
-                objs[i] = ToObject(state, startIndex + i);
-            }
-            return objs;
-        }
 
         public static string ToString(IntPtr state, int index) {
             var ptr = ToLString(state, index, out var len);
@@ -326,14 +204,6 @@ namespace Triton.Interop {
             }
 
             return Path.GetFullPath(assembly.Location);
-        }
-
-        private static string CombinePath(params string[] paths) {
-            var result = paths[0];
-            for (var i = 1; i < paths.Length; i++) {
-                result = Path.Combine(result, paths[i]);
-            }
-            return result;
         }
 
         private static byte[] GetUtf8String(string s) {
@@ -437,9 +307,6 @@ namespace Triton.Interop {
             public delegate LuaStatus Resume(IntPtr thread, IntPtr from, int numArgs);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-            public delegate void SetField(IntPtr state, int index, byte[] field);
-
-            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void SetGlobal(IntPtr state, byte[] name);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -480,9 +347,6 @@ namespace Triton.Interop {
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void Unref(IntPtr state, int index, int reference);
-
-            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-            public delegate LuaStatus XMove(IntPtr from, IntPtr to, int n);
         }
     }
 }

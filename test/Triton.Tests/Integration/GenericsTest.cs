@@ -3,11 +3,8 @@
 namespace Triton.Tests.Integration {
     public class GenericsTest {
         private const string TestString = @"
-            import 'System.Int32'
-            import 'System.String'
-            import 'System.Object'
-            import 'System.Collections.Generic.List`1'
-            import 'System.Collections.Generic.Dictionary`2'
+            using 'System'
+            using 'System.Collections.Generic'
 
             list = List(Int32)()
             list:Add(1)

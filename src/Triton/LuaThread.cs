@@ -23,30 +23,31 @@ using Triton.Interop;
 
 namespace Triton {
     /// <summary>
-    /// Represents a Lua thread.
+    /// Represents a Lua thread which may be resumed.
     /// </summary>
     public sealed class LuaThread : LuaReference {
-        private readonly IntPtr _thread;
+        private readonly IntPtr _threadState;
 
-        internal LuaThread(IntPtr state, int reference, IntPtr thread) : base(state, reference) {
-            _thread = thread;
+        internal LuaThread(Lua lua, int referenceId, IntPtr threadState) : base(lua, referenceId) {
+            _threadState = threadState;
         }
 
         /// <summary>
         /// Gets a value indicating whether the <see cref="LuaThread"/> can be resumed.
         /// </summary>
         /// <value>A value indicating whether the <see cref="LuaThread"/> can be resumed.</value>
-        /// <exception cref="ObjectDisposedException">The <see cref="LuaThread"/> is disposed.</exception>
         public bool CanResume {
             get {
-                if (IsDisposed) {
-                    throw new ObjectDisposedException(GetType().FullName);
+                var status = LuaApi.Status(_threadState);
+                if (status == LuaStatus.Yield) {
+                    return true;
                 }
 
-                return CanResumeInternal();
+                var debug = new LuaDebug();
+                return status == LuaStatus.Ok && LuaApi.GetStack(_threadState, 0, ref debug) == 0 && LuaApi.GetTop(_threadState) > 0;
             }
         }
-        
+
         /// <summary>
         /// Resumes the <see cref="LuaThread"/> with the given arguments.
         /// </summary>
@@ -55,55 +56,15 @@ namespace Triton {
         /// <exception cref="ArgumentNullException"><paramref name="args"/> is <c>null</c>.</exception>
         /// <exception cref="InvalidOperationException">The <see cref="LuaThread"/> cannot be resumed.</exception>
         /// <exception cref="LuaException">A Lua error occurs.</exception>
-        /// <exception cref="ObjectDisposedException">The <see cref="LuaThread"/> is disposed.</exception>
         public object[] Resume(params object[] args) {
             if (args == null) {
                 throw new ArgumentNullException(nameof(args));
             }
-            if (IsDisposed) {
-                throw new ObjectDisposedException(GetType().FullName);
-            }
-            if (!CanResumeInternal()) {
+            if (!CanResume) {
                 throw new InvalidOperationException("Thread cannot be resumed.");
             }
-            
-            // Ensure that we have enough stack space on the thread for the arguments.
-            var numArgs = args.Length;
-            if (!LuaApi.CheckStack(_thread, numArgs)) {
-                throw new LuaException("Not enough stack space on thread for arguments.");
-            }
-            
-            try {
-                foreach (var arg in args) {
-                    LuaApi.PushObject(_thread, arg);
-                }
 
-                var status = LuaApi.Resume(_thread, State, numArgs);
-                if (status != LuaStatus.Ok && status != LuaStatus.Yield) {
-                    var errorMessage = LuaApi.ToString(_thread, -1);
-                    throw new LuaException(errorMessage);
-                }
-                
-                // Ensure that we have enough stack space on the thread for ToObjects, which can require up to 1 slot.
-                var numResults = LuaApi.GetTop(_thread);
-                if (!LuaApi.CheckStack(_thread, 1)) {
-                    throw new LuaException("Not enough scratch stack space on thread.");
-                }
-                
-                return LuaApi.ToObjects(_thread, 1, numResults);
-            } finally {
-                LuaApi.SetTop(_thread, 0);
-            }
-        }
-
-        private bool CanResumeInternal() {
-            var status = LuaApi.Status(_thread);
-            if (status == LuaStatus.Yield) {
-                return true;
-            }
-
-            var debug = new LuaDebug();
-            return status == LuaStatus.Ok && LuaApi.GetStack(_thread, 0, ref debug) == 0 && LuaApi.GetTop(_thread) > 0;
+            return Lua.Call(args, _threadState, true);
         }
     }
 }

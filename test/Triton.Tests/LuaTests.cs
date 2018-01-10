@@ -52,22 +52,7 @@ namespace Triton.Tests {
 
             Assert.Throws<ObjectDisposedException>(() => lua.x = 5);
         }
-
-        [Fact]
-        public void IsDisposed_Disposed_True() {
-            var lua = new Lua();
-            lua.Dispose();
-
-            Assert.True(lua.IsDisposed);
-        }
-
-        [Fact]
-        public void IsDisposed_NotDisposed_False() {
-            using (var lua = new Lua()) {
-                Assert.False(lua.IsDisposed);
-            }
-        }
-
+		
         [Fact]
         public void GetGlobal_NullName_ThrowsArgumentNullException() {
             var lua = new Lua();
@@ -125,16 +110,6 @@ namespace Triton.Tests {
         }
 
         [Fact]
-        public void CreateThread_FunctionDisposed_ThrowsObjectDisposedException() {
-            using (var lua = new Lua()) {
-                var function = lua.LoadString("return 0");
-                function.Dispose();
-
-                Assert.Throws<ObjectDisposedException>(() => lua.CreateThread(function));
-            }
-        }
-
-        [Fact]
         public void Dispose_CalledTwice() {
             var lua = new Lua();
             lua.Dispose();
@@ -165,42 +140,35 @@ namespace Triton.Tests {
         }
 
         [Fact]
-        public void ImportTypeType_NullType_ThrowsArgumentNullException() {
+        public void ImportNamespace_NullNamespace_ThrowsArgumentNullException() {
             using (var lua = new Lua()) {
-                Assert.Throws<ArgumentNullException>(() => lua.ImportType((Type)null));
+                Assert.Throws<ArgumentNullException>(() => lua.ImportNamespace(null));
             }
         }
 
         [Fact]
-        public void ImportTypeType_Disposed_ThrowsObjectDisposedException() {
+        public void ImportNamespace_Disposed_ThrowsObjectDisposedException() {
+            var lua = new Lua();
+            lua.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => lua.ImportNamespace("System"));
+        }
+
+        [Fact]
+        public void ImportType_NullType_ThrowsArgumentNullException() {
+            using (var lua = new Lua()) {
+                Assert.Throws<ArgumentNullException>(() => lua.ImportType(null));
+            }
+        }
+
+        [Fact]
+        public void ImportType_Disposed_ThrowsObjectDisposedException() {
             var lua = new Lua();
             lua.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => lua.ImportType(typeof(int)));
         }
-
-        [Fact]
-        public void ImportTypeString_NullTypeName_ThrowsArgumentNullException() {
-            using (var lua = new Lua()) {
-                Assert.Throws<ArgumentNullException>(() => lua.ImportType((string)null));
-            }
-        }
-
-        [Fact]
-        public void ImportTypeString_Disposed_ThrowsObjectDisposedException() {
-            var lua = new Lua();
-            lua.Dispose();
-
-            Assert.Throws<ObjectDisposedException>(() => lua.ImportType("test"));
-        }
-
-        [Fact]
-        public void ImportTypeString_BadTypeName_ThrowsArgumentException() {
-            using (var lua = new Lua()) {
-                Assert.Throws<ArgumentException>(() => lua.ImportType("doesntexist"));
-            }
-        }
-
+        
         [Fact]
         public void LoadString_NullS_ThrowsArgumentNullException() {
             using (var lua = new Lua()) {

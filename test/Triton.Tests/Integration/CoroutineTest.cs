@@ -3,8 +3,8 @@
 namespace Triton.Tests.Integration {
     public class CoroutineTest {
         private const string TestString = @"
-            import 'System.String'
-            import 'System.Collections.Generic.List`1'
+            using 'System'
+            using 'System.Collections.Generic'
 
             list = List(String)()
             co = coroutine.create(function()

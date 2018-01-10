@@ -38,7 +38,7 @@ namespace Triton.Interop {
 #endif
             IsMono = Type.GetType("Mono.Runtime") != null;
         }
-        
+
         /// <summary>
         /// Gets a value indicating whether the architecture is 64-bit.
         /// </summary>

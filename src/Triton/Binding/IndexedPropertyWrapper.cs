@@ -72,7 +72,7 @@ namespace Triton.Binding {
             if (_property.GetSetMethod() == null) {
                 throw LuaApi.Error(_state, "attempt to set indexed property without setter");
             }
-            if (!value.TryCoerce(_property.PropertyType, out value)) {
+            if (!ObjectBinder.TryCoerce(value, _property.PropertyType, out value)) {
                 throw LuaApi.Error(_state, "attempt to set indexed property with invalid value");
             }
             if (ObjectBinder.TryCoerce(indices, _property.GetIndexParameters(), out indices) == int.MinValue) {

@@ -25,7 +25,7 @@ using System.Reflection;
 
 namespace Triton.Binding {
     /// <summary>
-    /// Holds information about a type's Lua bindings.
+    /// Holds binding information about a type.
     /// </summary>
     internal sealed class TypeBindingInfo {
         private const BindingFlags InstanceFlags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy;
@@ -57,7 +57,7 @@ namespace Triton.Binding {
             var members = isStatic ? _staticMembers : _members;
             return members.GetValueOrDefault(name);
         }
-        
+
         /// <summary>
         /// Gets the methods with the given name.
         /// </summary>
@@ -83,30 +83,21 @@ namespace Triton.Binding {
         /// <param name="type">The type.</param>
         /// <returns>The <see cref="TypeBindingInfo"/>.</returns>
         public static TypeBindingInfo Construct(Type type) {
-#if NETSTANDARD
-            var typeInfo = type.GetTypeInfo();
-#else
-            var typeInfo = type;
-#endif
-            var constructors = typeInfo.GetConstructors().Where(IsBound);
-            var methods = typeInfo.GetMethods(InstanceFlags).Where(m => !m.IsSpecialName && IsBound(m)).ToList();
-            var staticMethods = typeInfo.GetMethods(StaticFlags).Where(m => !m.IsSpecialName && IsBound(m)).ToList();
-            var members = typeInfo.GetFields(InstanceFlags).Where(f => !f.IsSpecialName).Cast<MemberInfo>()
-                .Concat(typeInfo.GetEvents(InstanceFlags).Where(e => !e.IsSpecialName).Cast<MemberInfo>())
-                .Concat(typeInfo.GetProperties(InstanceFlags).Where(p => !p.IsSpecialName).Cast<MemberInfo>())
+            var constructors = type.GetConstructors().Where(IsBound);
+            var methods = type.GetMethods(InstanceFlags).Where(m => !m.IsSpecialName && IsBound(m)).ToList();
+            var staticMethods = type.GetMethods(StaticFlags).Where(m => !m.IsSpecialName && IsBound(m)).ToList();
+            var members = type.GetFields(InstanceFlags).Where(f => !f.IsSpecialName).Cast<MemberInfo>()
+                .Concat(type.GetEvents(InstanceFlags).Where(e => !e.IsSpecialName).Cast<MemberInfo>())
+                .Concat(type.GetProperties(InstanceFlags).Where(p => !p.IsSpecialName).Cast<MemberInfo>())
                 .Concat(methods.Cast<MemberInfo>()).Where(IsBound);
-            var staticMembers = typeInfo.GetFields(StaticFlags).Where(f => !f.IsSpecialName).Cast<MemberInfo>()
-                .Concat(typeInfo.GetEvents(StaticFlags).Where(e => !e.IsSpecialName).Cast<MemberInfo>())
-                .Concat(typeInfo.GetProperties(StaticFlags).Where(p => !p.IsSpecialName).Cast<MemberInfo>())
-                .Concat(typeInfo.GetMethods(StaticFlags).Where(m => !m.IsSpecialName).Cast<MemberInfo>())
+            var staticMembers = type.GetFields(StaticFlags).Where(f => !f.IsSpecialName).Cast<MemberInfo>()
+                .Concat(type.GetEvents(StaticFlags).Where(e => !e.IsSpecialName).Cast<MemberInfo>())
+                .Concat(type.GetProperties(StaticFlags).Where(p => !p.IsSpecialName).Cast<MemberInfo>())
+                .Concat(type.GetMethods(StaticFlags).Where(m => !m.IsSpecialName).Cast<MemberInfo>())
                 .Concat(staticMethods.Cast<MemberInfo>())
-#if NETSTANDARD
-                .Concat(typeInfo.GetNestedTypes().Select(t => t.GetTypeInfo()).Cast<MemberInfo>()).Where(IsBound);
-#else
-                .Concat(typeInfo.GetNestedTypes().Cast<MemberInfo>()).Where(IsBound);
-#endif
-            var operators = typeInfo.GetMethods(StaticFlags).Where(m => IsBound(m) && m.IsSpecialName && m.Name.StartsWith("op_"));
-            
+                .Concat(type.GetNestedTypes().Cast<MemberInfo>()).Where(IsBound);
+            var operators = type.GetMethods(StaticFlags).Where(m => IsBound(m) && m.IsSpecialName && m.Name.StartsWith("op_"));
+
             return new TypeBindingInfo {
                 _constructors = constructors.ToList(),
                 _members = members.GroupBy(m => m.Name).ToDictionary(g => g.Key, g => g.First()),

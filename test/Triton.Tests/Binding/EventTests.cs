@@ -73,7 +73,7 @@ namespace Triton.Tests.Binding {
 
                 lua.DoString("func = function(obj, args) x = 6 end");
                 lua.DoString("event = obj.Event");
-                lua.DoString("del = event:Add(func)");
+                lua.DoString("event:Add(func)");
 
                 obj.InvokeEvent();
 
@@ -81,7 +81,7 @@ namespace Triton.Tests.Binding {
 
                 lua["x"] = 0;
 
-                lua.DoString("event:Remove(del)");
+                lua.DoString("event:Remove(func)");
 
                 obj.InvokeEvent();
 
@@ -137,9 +137,9 @@ namespace Triton.Tests.Binding {
 
                 lua.DoString("func = function(obj, args) end");
                 lua.DoString("event = obj.EventThrows2");
-                lua.DoString("del = event:Add(func)");
+                lua.DoString("event:Add(func)");
 
-                Assert.Throws<LuaException>(() => lua.DoString("event:Remove(del)"));
+                Assert.Throws<LuaException>(() => lua.DoString("event:Remove(func)"));
             }
         }
 
@@ -160,7 +160,7 @@ namespace Triton.Tests.Binding {
 
                 lua.DoString("func = function(obj, args) x = 6 end");
                 lua.DoString("event = TestClass2.Event");
-                lua.DoString("del = event:Add(func)");
+                lua.DoString("event:Add(func)");
 
                 TestClass2.InvokeEvent();
 
@@ -168,7 +168,7 @@ namespace Triton.Tests.Binding {
 
                 lua["x"] = 0;
 
-                lua.DoString("event:Remove(del)");
+                lua.DoString("event:Remove(func)");
 
                 TestClass2.InvokeEvent();
 
@@ -219,9 +219,9 @@ namespace Triton.Tests.Binding {
 
                 lua.DoString("func = function(obj, args) end");
                 lua.DoString("event = TestClass2.EventThrows2");
-                lua.DoString("del = event:Add(func)");
+                lua.DoString("event:Add(func)");
 
-                Assert.Throws<LuaException>(() => lua.DoString("event:Remove(del)"));
+                Assert.Throws<LuaException>(() => lua.DoString("event:Remove(func)"));
             }
         }
 

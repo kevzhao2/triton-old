@@ -52,7 +52,7 @@ namespace Triton.Interop {
                 throw new PlatformNotSupportedException();
             }
         }
-        
+
         /// <summary>
         /// Initializes a new instance of the <see cref="NativeLibrary"/> class, picking one of the given paths.
         /// </summary>
@@ -70,7 +70,7 @@ namespace Triton.Interop {
                 throw new BadImageFormatException("Invalid native library.", path);
             }
         }
-        
+
         /// <summary>
         /// Gets a delegate for the function with the given symbol.
         /// </summary>
@@ -121,7 +121,7 @@ namespace Triton.Interop {
             [DllImport("libcoreclr.so")]
             public static extern IntPtr dlsym(IntPtr handle, string symbol);
         }
-        
+
         private static class Linux {
             [DllImport("libdl.so")]
             public static extern IntPtr dlopen(string path, int flags);

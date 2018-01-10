@@ -20,9 +20,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Reflection;
 
 namespace Triton.Binding {
     /// <summary>
@@ -56,74 +53,6 @@ namespace Triton.Binding {
         /// <returns>The value, or its default.</returns>
         public static TValue GetValueOrDefault<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key) {
             return dictionary.TryGetValue(key, out var value) ? value : default(TValue);
-        }
-        
-        /// <summary>
-        /// Tries to coerce the object into the given type.
-        /// </summary>
-        /// <param name="obj">The object.</param>
-        /// <param name="type">The type.</param>
-        /// <param name="result">The result.</param>
-        /// <returns><c>true</c> if the object was successfully coerced; <c>false</c> otherwise.</returns>
-        public static bool TryCoerce(this object obj, Type type, out object result) {
-            result = obj;
-            if (result == null) {
-#if NETSTANDARD
-                return type.GetTypeInfo().IsClass || Nullable.GetUnderlyingType(type) != null;
-#else
-                return type.IsClass || Nullable.GetUnderlyingType(type) != null;
-#endif
-            }
-
-            type = Nullable.GetUnderlyingType(type) ?? type;
-            if (type.IsByRef) {
-                type = type.GetElementType();
-            }
-
-            if (result is long l) {
-                var typeCode = Type.GetTypeCode(type);
-                switch (typeCode) {
-                case TypeCode.SByte:
-                case TypeCode.Byte:
-                case TypeCode.Int16:
-                case TypeCode.UInt16:
-                case TypeCode.Int32:
-                case TypeCode.UInt32:
-                case TypeCode.Single:
-                case TypeCode.Double:
-                case TypeCode.Decimal:
-                    try {
-                        result = Convert.ChangeType(result, typeCode, CultureInfo.CurrentCulture);
-                        return true;
-                    } catch (OverflowException) {
-                        return false;
-                    }
-
-                case TypeCode.UInt64:
-                    // UInt64 is a special case since we want to avoid OverflowExceptions.
-                    result = (ulong)l;
-                    return true;
-                }
-            } else if (result is double d) {
-                if (type == typeof(float)) {
-                    result = (float)d;
-                    return true;
-                } else if (type == typeof(decimal)) {
-                    result = (decimal)d;
-                    return true;
-                }
-            } else if (result is string s) {
-                if (type == typeof(char)) {
-                    result = s.FirstOrDefault();
-                    return s.Length == 1;
-                }
-            }
-
-#if NETSTANDARD
-            return type.GetTypeInfo().IsInstanceOfType(result);
-#else
-            return type.IsInstanceOfType(result);
-#endif
         }
     }
 }

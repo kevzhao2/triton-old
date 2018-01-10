@@ -26,37 +26,26 @@ using Triton.Interop;
 
 namespace Triton {
     /// <summary>
-    /// Represents a Lua reference that is tied to a specific <see cref="Triton.Lua"/> instance.
+    /// Represents a Lua reference which is stored in the registry of some <see cref="Triton.Lua"/> environment.
     /// </summary>
 #if NETSTANDARD || NET40
-    public abstract class LuaReference : DynamicObject, IDisposable {
+    public abstract class LuaReference : DynamicObject {
 #else
-    public abstract class LuaReference : IDisposable {
+	public abstract class LuaReference {
 #endif
-        internal LuaReference(IntPtr state, int reference) {
-            State = state;
-            Reference = reference;
+        private readonly int _referenceId;
+
+        internal LuaReference(Lua lua, int referenceId) {
+            Lua = lua;
+            _referenceId = referenceId;
         }
-        
-        /// <summary>
-        /// Gets a value indicating whether the <see cref="LuaReference"/> is disposed.
-        /// </summary>
-        /// <value>A value indicating whether the <see cref="LuaReference"/> is disposed.</value>
-        public bool IsDisposed { get; private set; }
-        
-        internal IntPtr State { get; }
-        internal int Reference { get; }
 
         /// <summary>
-        /// Disposes the <see cref="LuaReference"/>, releasing its reference.
+        /// Gets the <see cref="Triton.Lua"/> environment.
         /// </summary>
-        public void Dispose() {
-            if (IsDisposed) {
-                return;
-            }
+        /// <value>The <see cref="Triton.Lua"/> environment.</value>
+        protected Lua Lua { get; }
 
-            LuaApi.Unref(State, LuaApi.RegistryIndex, Reference);
-            IsDisposed = true;
-        }
+        internal void PushOnto(IntPtr state) => LuaApi.RawGetI(state, LuaApi.RegistryIndex, _referenceId);
     }
 }
