@@ -514,7 +514,7 @@ namespace Triton.Binding {
         }
 
         private static int ProxyCallType(IntPtr state) {
-            var type = LuaApi.ToHandle(state, LuaApi.UpvalueIndex(2)).Target as Type;
+            var type = (Type)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(2)).Target;
             return ProxyCallShared(state, null, type);
         }
 

@@ -103,6 +103,7 @@ namespace Triton {
             var referenceId = LuaApi.Ref(State, LuaApi.RegistryIndex);
             var table = new LuaTable(this, referenceId);
             _cachedLuaReferences[pointer] = new WeakReference(table);
+            _pointerToReferenceId[pointer] = referenceId;
             return table;
         }
 
@@ -124,6 +125,7 @@ namespace Triton {
             var referenceId = LuaApi.Ref(State, LuaApi.RegistryIndex);
             var thread = new LuaThread(this, referenceId, threadState);
             _cachedLuaReferences[threadState] = new WeakReference(thread);
+            _pointerToReferenceId[threadState] = referenceId;
             return thread;
         }
 
@@ -209,6 +211,7 @@ namespace Triton {
             var referenceId = LuaApi.Ref(State, LuaApi.RegistryIndex);
             var function = new LuaFunction(this, referenceId);
             _cachedLuaReferences[pointer] = new WeakReference(function);
+            _pointerToReferenceId[pointer] = referenceId;
             return function;
         }
 
@@ -340,6 +343,7 @@ namespace Triton {
             } else {
                 _cachedLuaReferences[pointer] = new WeakReference(luaReference);
             }
+            _pointerToReferenceId[pointer] = referenceId;
             return luaReference;
         }
 
@@ -393,8 +397,8 @@ namespace Triton {
         internal void CleanReferences() {
             var deadPointers = _cachedLuaReferences.Where(kvp => !kvp.Value.IsAlive).Select(kvp => kvp.Key).ToList();
             foreach (var pointer in deadPointers) {
-                var referenceId = _pointerToReferenceId[pointer];
                 _cachedLuaReferences.Remove(pointer);
+                var referenceId = _pointerToReferenceId[pointer];
                 LuaApi.Unref(State, LuaApi.RegistryIndex, referenceId);
                 _pointerToReferenceId.Remove(pointer);
             }
@@ -417,13 +421,13 @@ namespace Triton {
                 return;
             }
 
-            LuaApi.Close(State);
-            _isDisposed = true;
-
             if (disposing) {
                 _handle.Free();
                 GC.SuppressFinalize(this);
             }
+
+            LuaApi.Close(State);
+            _isDisposed = true;
         }
 
         private void ImportTypeInternal(Type type) {
