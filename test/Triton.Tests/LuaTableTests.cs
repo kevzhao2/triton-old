@@ -87,17 +87,6 @@ namespace Triton.Tests {
             }
         }
 
-        [Fact]
-        public void GetSet_IntPtr() {
-			using (var lua = new Lua()) {
-				var table = lua.CreateTable();
-
-				table["test"] = new IntPtr(51667);
-
-                Assert.Equal(new IntPtr(51667), table["test"]);
-            }
-        }
-
         [Theory]
         [InlineData(0)]
         [InlineData(ulong.MaxValue)]
@@ -212,6 +201,17 @@ namespace Triton.Tests {
 				var table = lua.CreateTable();
 
 				Assert.Throws<ArgumentNullException>(() => table[null] = 0);
+            }
+        }
+
+        [Fact]
+        public void Set_ValueWrongLuaEnvironment_ThrowsArgumentException() {
+            using (var lua = new Lua())
+            using (var lua2 = new Lua()) {
+                var table = lua.CreateTable();
+                var table2 = lua2.CreateTable();
+
+                Assert.Throws<ArgumentException>(() => table["x"] = table2);
             }
         }
     }

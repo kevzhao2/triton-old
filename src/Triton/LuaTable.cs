@@ -37,6 +37,9 @@ namespace Triton {
         /// </summary>
         /// <param name="key">The key.</param>
         /// <returns>The value.</returns>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="value"/> is a <see cref="LuaReference"/> which is tied to a different <see cref="Lua"/> environment.
+        /// </exception>
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is <c>null</c>.</exception>
 		public object this[object key] {
             get {
@@ -70,20 +73,20 @@ namespace Triton {
 #endif
 
         private object GetValueInternal(object key) {
-            PushOnto(Lua.State);
+            PushOnto(Lua.MainState);
             Lua.PushObject(key);
-            var type = LuaApi.GetTable(Lua.State, -2);
+            var type = LuaApi.GetTable(Lua.MainState, -2);
             var result = Lua.ToObject(-1, type);
-            LuaApi.Pop(Lua.State, 2);
+            LuaApi.Pop(Lua.MainState, 2);
             return result;
         }
 
         private void SetValueInternal(object key, object value) {
-            PushOnto(Lua.State);
+            PushOnto(Lua.MainState);
             Lua.PushObject(key);
             Lua.PushObject(value);
-            LuaApi.SetTable(Lua.State, -3);
-            LuaApi.Pop(Lua.State, 1);
+            LuaApi.SetTable(Lua.MainState, -3);
+            LuaApi.Pop(Lua.MainState, 1);
         }
     }
 }

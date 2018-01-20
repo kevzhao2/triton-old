@@ -36,6 +36,9 @@ namespace Triton {
         /// </summary>
         /// <param name="args">The arguments.</param>
         /// <returns>The results.</returns>
+        /// <exception cref="ArgumentException">
+        /// One of the supplied arguments is a <see cref="LuaReference"/> which is tied to a different <see cref="Lua"/> environment.
+        /// </exception>
         /// <exception cref="ArgumentNullException"><paramref name="args"/> is <c>null</c>.</exception>
         /// <exception cref="LuaException">A Lua error occurs.</exception>
         public object[] Call(params object[] args) {
@@ -56,7 +59,7 @@ namespace Triton {
 #endif
 
         private object[] CallInternal(object[] args) {
-            PushOnto(Lua.State);
+            PushOnto(Lua.MainState);
             return Lua.Call(args);
         }
     }

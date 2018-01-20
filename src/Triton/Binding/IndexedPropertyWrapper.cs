@@ -18,9 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using System;
 using System.Reflection;
-using Triton.Interop;
 
 namespace Triton.Binding {
     /// <summary>
@@ -29,16 +27,13 @@ namespace Triton.Binding {
     internal sealed class IndexedPropertyWrapper {
         private readonly object _obj;
         private readonly PropertyInfo _property;
-        private readonly IntPtr _state;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="IndexedPropertyWrapper"/> class wrapping the given object's property.
         /// </summary>
-        /// <param name="state">The Lua state pointer.</param>
         /// <param name="obj">The object.</param>
         /// <param name="property">The property.</param>
-        public IndexedPropertyWrapper(IntPtr state, object obj, PropertyInfo property) {
-            _state = state;
+        public IndexedPropertyWrapper(object obj, PropertyInfo property) {
             _obj = obj;
             _property = property;
         }
@@ -50,16 +45,16 @@ namespace Triton.Binding {
         /// <returns>The value.</returns>
         public object Get(params object[] indices) {
             if (_property.GetGetMethod() == null) {
-                throw LuaApi.Error(_state, "attempt to get indexed property without getter");
+                throw new LuaException("attempt to get indexed property without getter");
             }
             if (ObjectBinder.TryCoerce(indices, _property.GetIndexParameters(), out indices) == int.MinValue) {
-                throw LuaApi.Error(_state, "attempt to get indexed property with invalid indices");
+                throw new LuaException("attempt to get indexed property with invalid indices");
             }
 
             try {
                 return _property.GetValue(_obj, indices);
             } catch (TargetInvocationException e) {
-                throw LuaApi.Error(_state, $"attempt to get indexed property threw:\n{e.InnerException}");
+                throw new LuaException($"attempt to get indexed property threw:\n{e.InnerException}");
             }
         }
 
@@ -70,19 +65,19 @@ namespace Triton.Binding {
         /// <param name="indices">The indices.</param>
         public void Set(object value, params object[] indices) {
             if (_property.GetSetMethod() == null) {
-                throw LuaApi.Error(_state, "attempt to set indexed property without setter");
+                throw new LuaException("attempt to set indexed property without setter");
             }
             if (!ObjectBinder.TryCoerce(value, _property.PropertyType, out value)) {
-                throw LuaApi.Error(_state, "attempt to set indexed property with invalid value");
+                throw new LuaException("attempt to set indexed property with invalid value");
             }
             if (ObjectBinder.TryCoerce(indices, _property.GetIndexParameters(), out indices) == int.MinValue) {
-                throw LuaApi.Error(_state, "attempt to set indexed property with invalid indices");
+                throw new LuaException("attempt to set indexed property with invalid indices");
             }
 
             try {
                 _property.SetValue(_obj, value, indices);
             } catch (TargetInvocationException e) {
-                throw LuaApi.Error(_state, $"attempt to set indexed property threw:\n{e.InnerException}");
+                throw new LuaException($"attempt to set indexed property threw:\n{e.InnerException}");
             }
         }
     }

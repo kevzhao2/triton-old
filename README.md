@@ -20,10 +20,9 @@ Assert.Equal("test", x);
 
 If you're going to execute a certain string many times, you can also use the `LoadString` method, which will return a `LuaFunction` that you can then call multiple times:
 ```csharp
-using (var function = lua.LoadString("print('Hello!')")) {
-    for (var i = 0; i < 10000; ++i) {
-        function.Call();
-    }
+var function = lua.LoadString("print('Hello!')");
+for (var i = 0; i < 10000; ++i) {
+    function.Call();
 }
 ```
 
@@ -75,9 +74,9 @@ class Test {
 lua["obj"] = new Test();
 lua.DoString("callback = function(obj, args) print(obj) end)");
 lua.DoString("event = obj.Event");
-lua.DoString("delegate = event:Add(callback)");
+lua.DoString("event:Add(callback)");
 // ...
-lua.DoString("event:Remove(delegate)");
+lua.DoString("event:Remove(callback)");
 ```
 
 Note that `obj.Event` will return new wrapper objects each time, so to successfully remove your callback, you must save the value! Using events is also **highly unrecommended** in the first place, since you have no control over when the event is called. It could be called on a different thread, which is a problem because Lua is not thread-safe.
@@ -101,7 +100,7 @@ lua.DoString("list:Add(2018)");
 * Triton supports `LuaThread` manipulation.
 * Triton supports generic method invocation and generic type instantiation.
 * Triton supports generalized indexed properties (including those declared in VB.NET or F# with names other than `Item`) with a variable number of indices.
-* Triton implements `DynamicObject` on `Lua`, `LuaFunction`, and `LuaTable` enabling you to do the following (but at the cost of possibly generating `LuaReference`s which **must** be disposed of, as otherwise you'll leak unmanaged memory):
+* Triton implements `DynamicObject` on `Lua`, `LuaFunction`, and `LuaTable` enabling you to do the following:
   ```csharp
   lua.table = lua.CreateTable();
   lua.func = lua.LoadString("return table");
@@ -126,12 +125,12 @@ lua.DoString("list:Add(2018)");
   lua.DoString("x = t2 + t1");
   ```
 * Triton reuses `LuaReference` objects and will clean up unused references, saving as much memory in a transparent way as possible.
-* Triton is, in general, somewhat faster for .NET to Lua context switches and vice versa. See below for at least one case where this isn't true.
+* Triton is faster for .NET -> Lua context switches.
 
 ### Disadvantages
 * Triton only supports event handler types that are "compatible" with the signature `void (object, EventArgs)`.
 * Triton does not support calling extension methods on objects as instance methods.
-* Triton does not cache method lookups. This can result in a roughly 2x slowdown for the Lua to .NET context switch.
+* Triton may be slower for Lua -> .NET context switches.
 * Triton does not currently have any debugging facilities.
 
 ### Roadmap

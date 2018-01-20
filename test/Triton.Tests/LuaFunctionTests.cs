@@ -138,5 +138,16 @@ namespace Triton.Tests {
 				Assert.Throws<LuaException>(() => function.Call());
             }
         }
+
+        [Fact]
+        public void Call_ArgWrongLuaEnvironment_ThrowsArgumentException() {
+            using (var lua = new Lua())
+            using (var lua2 = new Lua()) {
+                var function = lua.LoadString("");
+                var table = lua2.CreateTable();
+
+                Assert.Throws<ArgumentException>(() => function.Call(table));
+            }
+        }
     }
 }

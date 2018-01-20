@@ -46,6 +46,12 @@ namespace Triton {
         /// <value>The <see cref="Triton.Lua"/> environment.</value>
         protected Lua Lua { get; }
 
-        internal void PushOnto(IntPtr state) => LuaApi.RawGetI(state, LuaApi.RegistryIndex, _referenceId);
+        internal void PushOnto(IntPtr state) {
+            if (LuaApi.GetMainState(state) != Lua.MainState) {
+                throw new ArgumentException("Reference cannot be pushed onto the given Lua environment.", nameof(state));
+            }
+
+            LuaApi.RawGetI(state, LuaApi.RegistryIndex, _referenceId);
+        }
     }
 }

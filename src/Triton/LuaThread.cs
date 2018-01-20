@@ -38,13 +38,19 @@ namespace Triton {
         /// <value>A value indicating whether the <see cref="LuaThread"/> can be resumed.</value>
         public bool CanResume {
             get {
+                // The thread can be resumed if it yielded...
                 var status = LuaApi.Status(_threadState);
                 if (status == LuaStatus.Yield) {
                     return true;
                 }
 
+                // or if it was just created, meaning it has no stack frames and has something in its stack.
+                if (status != LuaStatus.Ok) {
+                    return false;
+                }
+
                 var debug = new LuaDebug();
-                return status == LuaStatus.Ok && LuaApi.GetStack(_threadState, 0, ref debug) == 0 && LuaApi.GetTop(_threadState) > 0;
+                return LuaApi.GetStack(_threadState, 0, ref debug) == 0 && LuaApi.GetTop(_threadState) > 0;
             }
         }
 
@@ -53,6 +59,9 @@ namespace Triton {
         /// </summary>
         /// <param name="args">The arguments.</param>
         /// <returns>The results.</returns>
+        /// <exception cref="ArgumentException">
+        /// One of the supplied arguments is a <see cref="LuaReference"/> which is tied to a different <see cref="Lua"/> environment.
+        /// </exception>
         /// <exception cref="ArgumentNullException"><paramref name="args"/> is <c>null</c>.</exception>
         /// <exception cref="InvalidOperationException">The <see cref="LuaThread"/> cannot be resumed.</exception>
         /// <exception cref="LuaException">A Lua error occurs.</exception>

@@ -21,7 +21,6 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using Triton.Interop;
 
 namespace Triton.Binding {
     /// <summary>
@@ -35,16 +34,13 @@ namespace Triton.Binding {
         private readonly Dictionary<LuaFunction, Delegate> _delegates = new Dictionary<LuaFunction, Delegate>();
         private readonly EventInfo _event;
         private readonly object _obj;
-        private readonly IntPtr _state;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="EventWrapper"/> class wrapping the given object's event.
         /// </summary>
-        /// <param name="state">The Lua state pointer.</param>
         /// <param name="obj">The object.</param>
         /// <param name="event">The event.</param>
-        public EventWrapper(IntPtr state, object obj, EventInfo @event) {
-            _state = state;
+        public EventWrapper(object obj, EventInfo @event) {
             _obj = obj;
             _event = @event;
         }
@@ -56,7 +52,7 @@ namespace Triton.Binding {
         /// <returns>The resulting delegate.</returns>
         public void Add(LuaFunction function) {
             if (function == null) {
-                throw LuaApi.Error(_state, "attempt to add nil to event");
+                throw new LuaException("attempt to add nil to event");
             }
 
             Delegate @delegate;
@@ -69,9 +65,9 @@ namespace Triton.Binding {
 #endif
                 _event.AddEventHandler(_obj, @delegate);
             } catch (ArgumentException) {
-                throw LuaApi.Error(_state, "attempt to add to non-EventHandler event");
+                throw new LuaException("attempt to add to non-EventHandler event");
             } catch (TargetInvocationException e) {
-                throw LuaApi.Error(_state, $"attempt to add to event threw:\n{e.InnerException}");
+                throw new LuaException($"attempt to add to event threw:\n{e.InnerException}");
             }
 
             _delegates[function] = @delegate;
@@ -83,7 +79,7 @@ namespace Triton.Binding {
         /// <param name="function">The <see cref="LuaFunction"/>.</param>
         public void Remove(LuaFunction function) {
             if (function == null) {
-                throw LuaApi.Error(_state, "attempt to remove nil from event");
+                throw new LuaException("attempt to remove nil from event");
             }
             if (!_delegates.TryGetValue(function, out var @delegate)) {
                 return;
@@ -92,7 +88,7 @@ namespace Triton.Binding {
             try {
                 _event.RemoveEventHandler(_obj, @delegate);
             } catch (TargetInvocationException e) {
-                throw LuaApi.Error(_state, $"attempt to remove from event threw:\n{e.InnerException}");
+                throw new LuaException($"attempt to remove from event threw:\n{e.InnerException}");
             }
 
             _delegates.Remove(function);

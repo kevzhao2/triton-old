@@ -1,4 +1,24 @@
-﻿using System;
+﻿// Copyright (c) 2018 Kevin Zhao
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to
+// deal in the Software without restriction, including without limitation the
+// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+// sell copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+// IN THE SOFTWARE.
+
+using System;
 using Xunit;
 
 namespace Triton.Tests {
@@ -140,6 +160,17 @@ namespace Triton.Tests {
 				var thread = lua.DoString("return coroutine.create(function() error('test') end)")[0] as LuaThread;
 
                 Assert.Throws<LuaException>(() => thread.Resume());
+            }
+        }
+
+        [Fact]
+        public void Resume_ArgWrongLuaEnvironment_ThrowsArgumentException() {
+            using (var lua = new Lua())
+            using (var lua2 = new Lua()) {
+                var thread = lua.DoString("return coroutine.create(function() end)")[0] as LuaThread;
+                var table = lua2.CreateTable();
+
+                Assert.Throws<ArgumentException>(() => thread.Resume(table));
             }
         }
     }

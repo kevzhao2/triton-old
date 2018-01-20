@@ -32,6 +32,7 @@ namespace Triton.Interop {
     internal static class LuaApi {
         public const int MultRet = -1;
         public const int RegistryIndex = -1001000;
+        public const int RidxMainThread = 1;
 
         public static readonly Delegates.CheckStack CheckStack;
         public static readonly Delegates.Close Close;
@@ -50,7 +51,6 @@ namespace Triton.Interop {
         public static readonly Delegates.PushInteger PushInteger;
         public static readonly Delegates.PushNil PushNil;
         public static readonly Delegates.PushNumber PushNumber;
-        public static readonly Delegates.PushLightUserdata PushLightUserdata;
         public static readonly Delegates.PushValue PushValue;
         public static readonly Delegates.RawGetI RawGetI;
         public static readonly Delegates.Ref Ref;
@@ -61,12 +61,10 @@ namespace Triton.Interop {
         public static readonly Delegates.Status Status;
         public static readonly Delegates.ToBoolean ToBoolean;
         public static readonly Delegates.ToPointer ToPointer;
-        public static readonly Delegates.ToThread ToThread;
         public static readonly Delegates.ToUserdata ToUserdata;
         public static readonly Delegates.Type Type;
         public static readonly Delegates.Unref Unref;
 
-        private static readonly Delegates.Error ErrorDelegate;
         private static readonly Delegates.GetField GetFieldDelegate;
         private static readonly Delegates.GetGlobal GetGlobalDelegate;
         private static readonly Delegates.LoadString LoadStringDelegate;
@@ -114,7 +112,6 @@ namespace Triton.Interop {
             PushInteger = library.GetDelegate<Delegates.PushInteger>("lua_pushinteger");
             PushNil = library.GetDelegate<Delegates.PushNil>("lua_pushnil");
             PushNumber = library.GetDelegate<Delegates.PushNumber>("lua_pushnumber");
-            PushLightUserdata = library.GetDelegate<Delegates.PushLightUserdata>("lua_pushlightuserdata");
             PushValue = library.GetDelegate<Delegates.PushValue>("lua_pushvalue");
             RawGetI = library.GetDelegate<Delegates.RawGetI>("lua_rawgeti");
             Ref = library.GetDelegate<Delegates.Ref>("luaL_ref");
@@ -125,12 +122,10 @@ namespace Triton.Interop {
             Status = library.GetDelegate<Delegates.Status>("lua_status");
             ToBoolean = library.GetDelegate<Delegates.ToBoolean>("lua_toboolean");
             ToPointer = library.GetDelegate<Delegates.ToPointer>("lua_topointer");
-            ToThread = library.GetDelegate<Delegates.ToThread>("lua_tothread");
             ToUserdata = library.GetDelegate<Delegates.ToUserdata>("lua_touserdata");
             Type = library.GetDelegate<Delegates.Type>("lua_type");
             Unref = library.GetDelegate<Delegates.Unref>("luaL_unref");
 
-            ErrorDelegate = library.GetDelegate<Delegates.Error>("luaL_error");
             GetFieldDelegate = library.GetDelegate<Delegates.GetField>("lua_getfield");
             GetGlobalDelegate = library.GetDelegate<Delegates.GetGlobal>("lua_getglobal");
             LoadStringDelegate = library.GetDelegate<Delegates.LoadString>("luaL_loadstring");
@@ -143,15 +138,16 @@ namespace Triton.Interop {
             ToLString = library.GetDelegate<Delegates.ToLString>("lua_tolstring");
         }
 
-        public static Exception Error(IntPtr state, string errorMessage) {
-            ErrorDelegate(state, GetUtf8String(errorMessage));
-
-            // This is a bit of a hack; since this method never returns, we signify this to the compiler using throw LuaApi.Error.
-            return new InvalidOperationException("This should never have been reached!");
-        }
-
         public static void GetField(IntPtr state, int index, string field) => GetFieldDelegate(state, index, GetUtf8String(field));
         public static LuaType GetGlobal(IntPtr state, string name) => GetGlobalDelegate(state, GetUtf8String(name));
+
+        public static IntPtr GetMainState(IntPtr state) {
+            LuaApi.RawGetI(state, LuaApi.RegistryIndex, LuaApi.RidxMainThread);
+            var result = LuaApi.ToPointer(state, -1);
+            LuaApi.Pop(state, 1);
+            return result;
+        }
+
         public static void GetMetatable(IntPtr state, string name) => GetField(state, RegistryIndex, name);
         public static LuaStatus LoadString(IntPtr state, string s) => LoadStringDelegate(state, GetUtf8String(s));
         public static bool NewMetatable(IntPtr state, string name) => NewMetatableDelegate(state, GetUtf8String(name));
@@ -227,9 +223,6 @@ namespace Triton.Interop {
             public delegate void CreateTable(IntPtr state, int numArray = 0, int numNonArray = 0);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-            public delegate void Error(IntPtr state, byte[] errorMessage);
-
-            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void GetField(IntPtr state, int index, byte[] field);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -289,9 +282,6 @@ namespace Triton.Interop {
             public delegate void PushNumber(IntPtr state, double n);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-            public delegate void PushLightUserdata(IntPtr state, IntPtr p);
-
-            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void PushLString(IntPtr state, byte[] s, UIntPtr length);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -338,9 +328,6 @@ namespace Triton.Interop {
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate IntPtr ToUserdata(IntPtr state, int index);
-
-            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-            public delegate IntPtr ToThread(IntPtr state, int index);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate LuaType Type(IntPtr state, int index);

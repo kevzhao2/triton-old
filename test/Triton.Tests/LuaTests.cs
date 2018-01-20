@@ -52,7 +52,17 @@ namespace Triton.Tests {
 
             Assert.Throws<ObjectDisposedException>(() => lua.x = 5);
         }
-		
+
+        [Fact]
+        public void SetDynamic_ValueWrongLuaEnvironment_ThrowsArgumentException() {
+            using (dynamic lua = new Lua())
+            using (var lua2 = new Lua()) {
+                var table = lua2.CreateTable();
+
+                Assert.Throws<ArgumentException>(() => lua.x = table);
+            }
+        }
+
         [Fact]
         public void GetGlobal_NullName_ThrowsArgumentNullException() {
             var lua = new Lua();
@@ -86,6 +96,16 @@ namespace Triton.Tests {
         }
 
         [Fact]
+        public void SetGlobal_ValueWrongLuaEnvironment_ThrowsArgumentException() {
+            using (var lua = new Lua())
+            using (var lua2 = new Lua()) {
+                var table = lua2.CreateTable();
+
+                Assert.Throws<ArgumentException>(() => lua["x"] = table);
+            }
+        }
+
+        [Fact]
         public void CreateTable_Disposed_ThrowsObjectDisposedException() {
             var lua = new Lua();
             lua.Dispose();
@@ -107,6 +127,16 @@ namespace Triton.Tests {
             lua.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => lua.CreateThread(function));
+        }
+
+        [Fact]
+        public void CreateThread_FunctionWrongLuaEnvironment_ThrowsArgumentNullException() {
+            using (var lua = new Lua())
+            using (var lua2 = new Lua()) {
+                var function = lua2.LoadString("");
+
+                Assert.Throws<ArgumentException>(() => lua.CreateThread(function));
+            }
         }
 
         [Fact]

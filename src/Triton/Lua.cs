@@ -26,7 +26,6 @@ using System.Dynamic;
 #endif
 using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using Triton.Binding;
 using Triton.Interop;
 
@@ -40,7 +39,6 @@ namespace Triton {
 	public sealed class Lua : IDisposable {
 #endif
         private readonly Dictionary<IntPtr, WeakReference> _cachedLuaReferences = new Dictionary<IntPtr, WeakReference>();
-        private readonly GCHandle _handle;
         private readonly Dictionary<IntPtr, int> _pointerToReferenceId = new Dictionary<IntPtr, int>();
 
         private bool _isDisposed;
@@ -49,11 +47,10 @@ namespace Triton {
         /// Initializes a new instance of the <see cref="Lua"/> class.
         /// </summary>
         public Lua() {
-            State = LuaApi.NewState();
-            LuaApi.OpenLibs(State);
+            MainState = LuaApi.NewState();
+            LuaApi.OpenLibs(MainState);
 
-            _handle = GCHandle.Alloc(this, GCHandleType.WeakTrackResurrection);
-            ObjectBinder.InitializeMetatables(this, _handle);
+            Binder = new ObjectBinder(this);
             this["using"] = new Action<string>(ImportNamespace);
         }
 
@@ -67,6 +64,9 @@ namespace Triton {
         /// </summary>
         /// <param name="name">The name.</param>
         /// <returns>The value of the global.</returns>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="value"/> is a <see cref="LuaReference"/> which is tied to a different <see cref="Lua"/> environment.
+        /// </exception>
         /// <exception cref="ArgumentNullException"><paramref name="name"/> is <c>null</c>.</exception>
         /// <exception cref="ObjectDisposedException">The <see cref="Lua"/> environment is disposed.</exception>
         public object this[string name] {
@@ -88,7 +88,8 @@ namespace Triton {
             }
         }
 
-        internal IntPtr State { get; }
+        internal ObjectBinder Binder { get; }
+        internal IntPtr MainState { get; }
 
         /// <summary>
         /// Creates a <see cref="LuaTable"/>.
@@ -98,9 +99,9 @@ namespace Triton {
         public LuaTable CreateTable() {
             ThrowIfDisposed();
 
-            LuaApi.CreateTable(State);
-            var pointer = LuaApi.ToPointer(State, -1);
-            var referenceId = LuaApi.Ref(State, LuaApi.RegistryIndex);
+            LuaApi.CreateTable(MainState);
+            var pointer = LuaApi.ToPointer(MainState, -1);
+            var referenceId = LuaApi.Ref(MainState, LuaApi.RegistryIndex);
             var table = new LuaTable(this, referenceId);
             _cachedLuaReferences[pointer] = new WeakReference(table);
             _pointerToReferenceId[pointer] = referenceId;
@@ -112,6 +113,9 @@ namespace Triton {
         /// </summary>
         /// <param name="function">The <see cref="LuaFunction"/>.</param>
         /// <returns>The resulting <see cref="LuaThread"/>.</returns>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="function"/> is tied to a different <see cref="Lua"/> environment.
+        /// </exception>
         /// <exception cref="ArgumentNullException"><paramref name="function"/> is <c>null</c>.</exception>
         /// <exception cref="ObjectDisposedException">The <see cref="Lua"/> environment is disposed.</exception>
         public LuaThread CreateThread(LuaFunction function) {
@@ -120,9 +124,9 @@ namespace Triton {
             }
             ThrowIfDisposed();
 
-            var threadState = LuaApi.NewThread(State);
+            var threadState = LuaApi.NewThread(MainState);
             function.PushOnto(threadState);
-            var referenceId = LuaApi.Ref(State, LuaApi.RegistryIndex);
+            var referenceId = LuaApi.Ref(MainState, LuaApi.RegistryIndex);
             var thread = new LuaThread(this, referenceId, threadState);
             _cachedLuaReferences[threadState] = new WeakReference(thread);
             _pointerToReferenceId[threadState] = referenceId;
@@ -207,8 +211,8 @@ namespace Triton {
             ThrowIfDisposed();
 
             LoadStringInternal(s);
-            var pointer = LuaApi.ToPointer(State, -1);
-            var referenceId = LuaApi.Ref(State, LuaApi.RegistryIndex);
+            var pointer = LuaApi.ToPointer(MainState, -1);
+            var referenceId = LuaApi.Ref(MainState, LuaApi.RegistryIndex);
             var function = new LuaFunction(this, referenceId);
             _cachedLuaReferences[pointer] = new WeakReference(function);
             _pointerToReferenceId[pointer] = referenceId;
@@ -226,6 +230,9 @@ namespace Triton {
         }
 
         /// <inheritdoc/>
+        /// <exception cref="ArgumentException">
+        /// The supplied value is a <see cref="LuaReference"/> which is tied to a different <see cref="Lua"/> environment.
+        /// </exception>
         /// <exception cref="ObjectDisposedException">The <see cref="Lua"/> instance is disposed.</exception>
         public override bool TrySetMember(SetMemberBinder binder, object value) {
             ThrowIfDisposed();
@@ -236,7 +243,9 @@ namespace Triton {
 #endif
 
         internal void PushObject(object obj, IntPtr? stateOverride = null) {
-            var state = stateOverride ?? State;
+            var state = stateOverride ?? MainState;
+            Debug.Assert(LuaApi.GetMainState(state) == MainState, "State override did not match main state.");
+
             if (obj == null) {
                 LuaApi.PushNil(state);
                 return;
@@ -258,7 +267,6 @@ namespace Triton {
                 LuaApi.PushInteger(state, Convert.ToInt64(obj));
                 return;
 
-            // UInt64 is a special case since we want to avoid OverflowExceptions.
             case TypeCode.UInt64:
                 LuaApi.PushInteger(state, (long)((ulong)obj));
                 return;
@@ -275,9 +283,7 @@ namespace Triton {
                 return;
             }
 
-            if (obj is IntPtr pointer) {
-                LuaApi.PushLightUserdata(state, pointer);
-            } else if (obj is LuaReference lr) {
+            if (obj is LuaReference lr) {
                 lr.PushOnto(state);
             } else {
                 ObjectBinder.PushNetObject(state, obj);
@@ -285,7 +291,8 @@ namespace Triton {
         }
 
         internal object ToObject(int index, LuaType? typeHint = null, IntPtr? stateOverride = null) {
-            var state = stateOverride ?? State;
+            var state = stateOverride ?? MainState;
+            Debug.Assert(LuaApi.GetMainState(state) == MainState, "State override did not match main state.");
             var type = typeHint ?? LuaApi.Type(state, index);
             Debug.Assert(type == LuaApi.Type(state, index), "Type hint did not match type.");
 
@@ -296,9 +303,6 @@ namespace Triton {
 
             case LuaType.Boolean:
                 return LuaApi.ToBoolean(state, index);
-
-            case LuaType.LightUserdata:
-                return LuaApi.ToUserdata(state, index);
 
             case LuaType.Number:
                 var isInteger = LuaApi.IsInteger(state, index);
@@ -360,10 +364,9 @@ namespace Triton {
         }
 
         internal object[] Call(object[] args, IntPtr? stateOverride = null, bool isResuming = false) {
-            var state = stateOverride ?? State;
-            if (!isResuming) {
-                Debug.Assert(LuaApi.Type(state, -1) == LuaType.Function, "Stack doesn't have function on top.");
-            }
+            var state = stateOverride ?? MainState;
+            Debug.Assert(LuaApi.GetMainState(state) == MainState, "State override did not match main state.");
+            Debug.Assert(isResuming || LuaApi.Type(state, -1) == LuaType.Function, "Stack doesn't have function on top.");
 
             var numArgs = args.Length;
             if (!LuaApi.CheckStack(state, numArgs)) {
@@ -378,7 +381,8 @@ namespace Triton {
 
                 // Because calls tend to take a long time, let's clean references now.
                 CleanReferences();
-                var status = isResuming ? LuaApi.Resume(state, State, numArgs) : LuaApi.PCallK(state, numArgs);
+
+                var status = isResuming ? LuaApi.Resume(state, MainState, numArgs) : LuaApi.PCallK(state, numArgs);
                 if (status != LuaStatus.Ok && status != LuaStatus.Yield) {
                     var errorMessage = LuaApi.ToString(state, -1);
                     throw new LuaException(errorMessage);
@@ -399,21 +403,21 @@ namespace Triton {
             foreach (var pointer in deadPointers) {
                 _cachedLuaReferences.Remove(pointer);
                 var referenceId = _pointerToReferenceId[pointer];
-                LuaApi.Unref(State, LuaApi.RegistryIndex, referenceId);
+                LuaApi.Unref(MainState, LuaApi.RegistryIndex, referenceId);
                 _pointerToReferenceId.Remove(pointer);
             }
         }
 
         private object GetGlobalInternal(string name) {
-            var type = LuaApi.GetGlobal(State, name);
+            var type = LuaApi.GetGlobal(MainState, name);
             var result = ToObject(-1, type);
-            LuaApi.Pop(State, 1);
+            LuaApi.Pop(MainState, 1);
             return result;
         }
 
         private void SetGlobalInternal(string name, object value) {
             PushObject(value);
-            LuaApi.SetGlobal(State, name);
+            LuaApi.SetGlobal(MainState, name);
         }
 
         private void Dispose(bool disposing) {
@@ -422,24 +426,24 @@ namespace Triton {
             }
 
             if (disposing) {
-                _handle.Free();
+                Binder.Dispose();
                 GC.SuppressFinalize(this);
             }
 
-            LuaApi.Close(State);
+            LuaApi.Close(MainState);
             _isDisposed = true;
         }
 
         private void ImportTypeInternal(Type type) {
-            ObjectBinder.PushNetObject(State, new TypeWrapper(type));
+            ObjectBinder.PushNetObject(MainState, new TypeWrapper(type));
             var cleanName = type.Name.Split('`')[0];
-            LuaApi.SetGlobal(State, cleanName);
+            LuaApi.SetGlobal(MainState, cleanName);
         }
 
         private void LoadStringInternal(string s) {
-            if (LuaApi.LoadString(State, s) != LuaStatus.Ok) {
-                var errorMessage = LuaApi.ToString(State, -1);
-                LuaApi.Pop(State, 1);
+            if (LuaApi.LoadString(MainState, s) != LuaStatus.Ok) {
+                var errorMessage = LuaApi.ToString(MainState, -1);
+                LuaApi.Pop(MainState, 1);
                 throw new LuaException(errorMessage);
             }
         }

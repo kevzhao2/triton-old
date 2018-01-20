@@ -19,10 +19,12 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Runtime.InteropServices;
 
 namespace Triton.Interop {
     /// <summary>
     /// Represents a Lua C function.
     /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate int LuaCFunction(IntPtr state);
 }
