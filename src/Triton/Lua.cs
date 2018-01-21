@@ -155,7 +155,12 @@ namespace Triton {
             }
             ThrowIfDisposed();
 
-            LoadStringInternal(s);
+            if (LuaApi.LoadString(MainState, s) != LuaStatus.Ok) {
+                var errorMessage = LuaApi.ToString(MainState, -1);
+                LuaApi.Pop(MainState, 1);
+                throw new LuaException(errorMessage);
+            }
+
             return Call(new object[0]);
         }
 
@@ -216,7 +221,12 @@ namespace Triton {
             }
             ThrowIfDisposed();
 
-            LoadStringInternal(s);
+            if (LuaApi.LoadString(MainState, s) != LuaStatus.Ok) {
+                var errorMessage = LuaApi.ToString(MainState, -1);
+                LuaApi.Pop(MainState, 1);
+                throw new LuaException(errorMessage);
+            }
+
             var pointer = LuaApi.ToPointer(MainState, -1);
             var referenceId = LuaApi.Ref(MainState, LuaApi.RegistryIndex);
             var function = new LuaFunction(this, referenceId);
@@ -423,15 +433,7 @@ namespace Triton {
             LuaApi.Close(MainState);
             _isDisposed = true;
         }
-
-        private void LoadStringInternal(string s) {
-            if (LuaApi.LoadString(MainState, s) != LuaStatus.Ok) {
-                var errorMessage = LuaApi.ToString(MainState, -1);
-                LuaApi.Pop(MainState, 1);
-                throw new LuaException(errorMessage);
-            }
-        }
-
+        
         private void ThrowIfDisposed() {
             if (_isDisposed) {
                 throw new ObjectDisposedException(GetType().FullName);

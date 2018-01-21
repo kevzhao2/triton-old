@@ -158,7 +158,22 @@ namespace Triton {
         /// Gets an enumerator iterating through the key-value pairs.
         /// </summary>
         /// <returns>An enumerator iterating through the key-value pairs.</returns>
-        public IEnumerator<KeyValuePair<object, object>> GetEnumerator() => new Enumerator(this);
+        public IEnumerator<KeyValuePair<object, object>> GetEnumerator() {
+            object currentKey = null;
+            while (true) {
+                PushOnto(Lua.MainState);
+                Lua.PushObject(currentKey);
+                if (!LuaApi.Next(Lua.MainState, -2)) {
+                    LuaApi.Pop(Lua.MainState, 1);
+                    yield break;
+                }
+
+                currentKey = Lua.ToObject(-2);
+                var value = Lua.ToObject(-1);
+                LuaApi.Pop(Lua.MainState, 3);
+                yield return new KeyValuePair<object, object>(currentKey, value);
+            }
+        }
 
         /// <summary>
         /// Removes the given key.
@@ -217,61 +232,16 @@ namespace Triton {
             return item.Value != null && this[item.Key]?.Equals(item.Value) == true && Remove(item.Key);
         }
 
-        private sealed class Enumerator : IEnumerator<KeyValuePair<object, object>> {
-            private LuaTable _table;
-            
-            public Enumerator(LuaTable table) => _table = table;
-            
-            public KeyValuePair<object, object> Current { get; private set; }
-
-            object IEnumerator.Current => Current;
-            
-            public void Dispose() => _table = null;
-            
-            public bool MoveNext() {
-                ThrowIfDisposed();
-
-                var lua = _table.Lua;
-                _table.PushOnto(lua.MainState);
-                lua.PushObject(Current.Key);
-                if (!LuaApi.Next(lua.MainState, -2)) {
-                    LuaApi.Pop(lua.MainState, 1);
-                    return false;
-                }
-
-                var key = lua.ToObject(-2);
-                var value = lua.ToObject(-1);
-                Current = new KeyValuePair<object, object>(key, value);
-                LuaApi.Pop(lua.MainState, 3);
-                return true;
-            }
-
-            public void Reset() {
-                ThrowIfDisposed();
-
-                Current = default(KeyValuePair<object, object>);
-            }
-
-            private void ThrowIfDisposed() {
-                if (_table == null) {
-                    throw new ObjectDisposedException(GetType().FullName);
-                }
-            }
-        }
-
         private sealed class KeyCollection : ICollection<object> {
             private readonly LuaTable _table;
 
             public KeyCollection(LuaTable table) => _table = table;
 
             public int Count => _table.Count;
-
             public bool IsReadOnly => true;
 
             public void Add(object item) => throw new NotSupportedException();
-
             public void Clear() => throw new NotSupportedException();
-
             public bool Contains(object item) => _table.ContainsKey(item);
 
             public void CopyTo(object[] array, int arrayIndex) {
@@ -281,7 +251,6 @@ namespace Triton {
             }
 
             public IEnumerator<object> GetEnumerator() => _table.Select(kvp => kvp.Key).GetEnumerator();
-
             public bool Remove(object item) => throw new NotSupportedException();
 
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
@@ -293,13 +262,10 @@ namespace Triton {
             public ValueCollection(LuaTable table) => _table = table;
 
             public int Count => _table.Count;
-
             public bool IsReadOnly => true;
 
             public void Add(object item) => throw new NotSupportedException();
-
             public void Clear() => throw new NotSupportedException();
-
             public bool Contains(object item) => _table.Any(kvp => kvp.Value.Equals(item));
 
             public void CopyTo(object[] array, int arrayIndex) {
@@ -309,7 +275,6 @@ namespace Triton {
             }
 
             public IEnumerator<object> GetEnumerator() => _table.Select(kvp => kvp.Value).GetEnumerator();
-
             public bool Remove(object item) => throw new NotSupportedException();
 
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

@@ -43,12 +43,11 @@ namespace Triton {
                 if (status == LuaStatus.Yield) {
                     return true;
                 }
-
-                // or if it was just created, meaning it has no stack frames and has something in its stack.
                 if (status != LuaStatus.Ok) {
                     return false;
                 }
 
+                // or if it was just created, meaning it has no stack frames and has something in its stack.
                 var debug = new LuaDebug();
                 return LuaApi.GetStack(_threadState, 0, ref debug) == 0 && LuaApi.GetTop(_threadState) > 0;
             }

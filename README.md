@@ -125,12 +125,10 @@ lua.DoString("list:Add(2018)");
   lua.DoString("x = t2 + t1");
   ```
 * Triton reuses `LuaReference` objects and will clean up unused references, saving as much memory in a transparent way as possible.
-* Triton is faster for .NET -> Lua context switches.
 
 ### Disadvantages
 * Triton only supports event handler types that are "compatible" with the signature `void (object, EventArgs)`.
 * Triton does not support calling extension methods on objects as instance methods.
-* Triton may be slower for Lua -> .NET context switches.
 * Triton does not currently have any debugging facilities.
 
 ### Roadmap

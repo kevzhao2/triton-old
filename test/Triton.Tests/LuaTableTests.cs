@@ -81,6 +81,33 @@ namespace Triton.Tests {
         }
 
         [Fact]
+        public void Keys_IsReadOnly() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+
+                Assert.True(table.Keys.IsReadOnly);
+            }
+        }
+
+        [Fact]
+        public void Keys_Add_ThrowsNotSupportedException() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+
+                Assert.Throws<NotSupportedException>(() => table.Keys.Add("test"));
+            }
+        }
+
+        [Fact]
+        public void Keys_Clear_ThrowsNotSupportedException() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+
+                Assert.Throws<NotSupportedException>(() => table.Keys.Clear());
+            }
+        }
+
+        [Fact]
         public void Keys_Contains_KeyExists() {
             using (var lua = new Lua()) {
                 var table = lua.CreateTable();
@@ -96,6 +123,37 @@ namespace Triton.Tests {
                 var table = lua.CreateTable();
 
                 Assert.False(table.Keys.Contains("test"));
+            }
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(1)]
+        [InlineData(2)]
+        public void Keys_CopyTo(int n) {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+                for (var i = 0; i < n; ++i) {
+                    table[i] = 0;
+                }
+
+                var array = new object[n];
+                table.Keys.CopyTo(array, 0);
+
+                var expected = new List<object>();
+                for (var i = 0; i < n; ++i) {
+                    expected.Add((long)i);
+                }
+                Assert.Equal(expected.OrderBy(k => k), array.OrderBy(k => k));
+            }
+        }
+
+        [Fact]
+        public void Keys_Remove_ThrowsNotSupportedException() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+
+                Assert.Throws<NotSupportedException>(() => table.Keys.Remove("test"));
             }
         }
 
@@ -136,6 +194,33 @@ namespace Triton.Tests {
         }
 
         [Fact]
+        public void Values_IsReadOnly() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+
+                Assert.True(table.Values.IsReadOnly);
+            }
+        }
+
+        [Fact]
+        public void Values_Add_ThrowsNotSupportedException() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+
+                Assert.Throws<NotSupportedException>(() => table.Values.Add(0));
+            }
+        }
+
+        [Fact]
+        public void Values_Clear_ThrowsNotSupportedException() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+
+                Assert.Throws<NotSupportedException>(() => table.Values.Clear());
+            }
+        }
+
+        [Fact]
         public void Values_Contains_ValueExists() {
             using (var lua = new Lua()) {
                 var table = lua.CreateTable();
@@ -151,6 +236,37 @@ namespace Triton.Tests {
                 var table = lua.CreateTable();
 
                 Assert.False(table.Values.Contains(0));
+            }
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(1)]
+        [InlineData(2)]
+        public void Values_CopyTo(int n) {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+                for (var i = 0; i < n; ++i) {
+                    table[i] = 0;
+                }
+
+                var array = new object[n];
+                table.Values.CopyTo(array, 0);
+
+                var expected = new List<object>();
+                for (var i = 0; i < n; ++i) {
+                    expected.Add(0L);
+                }
+                Assert.Equal(expected.OrderBy(k => k), array.OrderBy(k => k));
+            }
+        }
+
+        [Fact]
+        public void Values_Remove_ThrowsNotSupportedException() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+
+                Assert.Throws<NotSupportedException>(() => table.Values.Remove(0));
             }
         }
 
