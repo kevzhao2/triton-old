@@ -40,11 +40,7 @@ namespace Triton {
             _referenceId = referenceId;
         }
 
-        /// <summary>
-        /// Gets the <see cref="Triton.Lua"/> environment.
-        /// </summary>
-        /// <value>The <see cref="Triton.Lua"/> environment.</value>
-        protected Lua Lua { get; }
+        internal Lua Lua { get; }
 
         internal void PushOnto(IntPtr state) {
             if (LuaApi.GetMainState(state) != Lua.MainState) {

@@ -5,7 +5,9 @@ VisualStudioVersion = 15.0.27130.2010
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Triton", "src\Triton\Triton.csproj", "{BAA06077-152B-44AA-BB5E-7055BE055368}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Triton.Tests", "test\Triton.Tests\Triton.Tests.csproj", "{265EB0AA-24CA-4C32-8337-D887338DFBE7}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Triton.Tests", "test\Triton.Tests\Triton.Tests.csproj", "{265EB0AA-24CA-4C32-8337-D887338DFBE7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Triton.Benchmarks", "test\Triton.Benchmarks\Triton.Benchmarks.csproj", "{31CF6E19-F5F4-45B1-9088-B1F3BB63A625}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +23,10 @@ Global
 		{265EB0AA-24CA-4C32-8337-D887338DFBE7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{265EB0AA-24CA-4C32-8337-D887338DFBE7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{265EB0AA-24CA-4C32-8337-D887338DFBE7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{31CF6E19-F5F4-45B1-9088-B1F3BB63A625}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{31CF6E19-F5F4-45B1-9088-B1F3BB63A625}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{31CF6E19-F5F4-45B1-9088-B1F3BB63A625}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{31CF6E19-F5F4-45B1-9088-B1F3BB63A625}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

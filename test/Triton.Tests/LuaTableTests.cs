@@ -19,12 +19,29 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Xunit;
 
 namespace Triton.Tests {
     public class LuaTableTests {
         private enum TestEnum {
             A, B, C, D
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(1)]
+        [InlineData(2)]
+        public void Count(int n) {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+                for (var i = 0; i < n; ++i) {
+                    table[i] = 0;
+                }
+
+                Assert.Equal(n, table.Count);
+            }
         }
 
 		[Fact]
@@ -212,6 +229,88 @@ namespace Triton.Tests {
                 var table2 = lua2.CreateTable();
 
                 Assert.Throws<ArgumentException>(() => table["x"] = table2);
+            }
+        }
+
+        [Fact]
+        public void ContainsKey_KeyExists() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+                table["test"] = 0;
+
+                Assert.True(table.ContainsKey("test"));
+            }
+        }
+
+        [Fact]
+        public void ContainsKey_KeyDoesntExist() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+
+                Assert.False(table.ContainsKey("test"));
+            }
+        }
+
+        [Fact]
+        public void ContainsKey_NullKey_ThrowsArgumentNullException() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+
+                Assert.Throws<ArgumentNullException>(() => table.ContainsKey(null));
+            }
+        }
+
+        [Fact]
+        public void GetEnumerator_Nothing() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+
+                Assert.Empty(table);
+            }
+        }
+
+        [Fact]
+        public void GetEnumerator_Something() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+                table[0] = "test";
+                table[1] = "test2";
+
+                var expected = new List<KeyValuePair<object, object>> {
+                    new KeyValuePair<object, object>(0L, "test"),
+                    new KeyValuePair<object, object>(1L, "test2")
+                }.OrderBy(kvp => kvp.Key);
+                var results = table.OrderBy(kvp => kvp.Key);
+                Assert.Equal(expected, results);
+            }
+        }
+
+        [Fact]
+        public void TryGetValue_KeyExists() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+                table["test"] = 0;
+
+                Assert.True(table.TryGetValue("test", out var test));
+                Assert.Equal(0L, test);
+            }
+        }
+
+        [Fact]
+        public void TryGetValue_KeyDoesntExist() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+
+                Assert.False(table.TryGetValue("test", out _));
+            }
+        }
+
+        [Fact]
+        public void TryGetValue_NullKey_ThrowsArgumentNullException() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+
+                Assert.Throws<ArgumentNullException>(() => table.TryGetValue(null, out _));
             }
         }
     }

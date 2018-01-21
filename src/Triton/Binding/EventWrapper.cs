@@ -93,10 +93,7 @@ namespace Triton.Binding {
 
             _delegates.Remove(function);
         }
-
-        /// <summary>
-        /// A wrapper class that closes on a <see cref="LuaFunction"/>.
-        /// </summary>
+        
         private sealed class LuaFunctionWrapper {
             private readonly LuaFunction _function;
 

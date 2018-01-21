@@ -16,7 +16,7 @@ namespace Triton.Tests.Integration {
                 var thread = lua.CreateThread(function);
                 Assert.True(thread.CanResume);
 
-                for (var i = 1; i <= 10; i++) {
+                for (var i = 1; i <= 10; ++i) {
                     var results = thread.Resume();
 
                     Assert.Single(results);

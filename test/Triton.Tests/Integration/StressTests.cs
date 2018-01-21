@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using Xunit;
+﻿using Xunit;
 
-namespace Triton.Tests.Integration
-{
+namespace Triton.Tests.Integration {
     public class StressTests {
         [Theory]
         [InlineData(100000)]

@@ -400,11 +400,11 @@ namespace Triton {
 
         internal void CleanReferences() {
             var deadPointers = _cachedLuaReferences.Where(kvp => !kvp.Value.IsAlive).Select(kvp => kvp.Key).ToList();
-            foreach (var pointer in deadPointers) {
-                _cachedLuaReferences.Remove(pointer);
-                var referenceId = _pointerToReferenceId[pointer];
+            foreach (var deadPointer in deadPointers) {
+                _cachedLuaReferences.Remove(deadPointer);
+                var referenceId = _pointerToReferenceId[deadPointer];
                 LuaApi.Unref(MainState, LuaApi.RegistryIndex, referenceId);
-                _pointerToReferenceId.Remove(pointer);
+                _pointerToReferenceId.Remove(deadPointer);
             }
         }
 

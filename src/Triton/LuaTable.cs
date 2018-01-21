@@ -19,6 +19,8 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Collections;
+using System.Collections.Generic;
 #if NETSTANDARD || NET40
 using System.Dynamic;
 #endif
@@ -28,8 +30,27 @@ namespace Triton {
     /// <summary>
     /// Represents a Lua table that may be read and modified.
     /// </summary>
-    public sealed class LuaTable : LuaReference {
+    public sealed class LuaTable : LuaReference, IEnumerable<KeyValuePair<object, object>> {
         internal LuaTable(Lua lua, int referenceId) : base(lua, referenceId) {
+        }
+
+        /// <summary>
+        /// Gets the number of key-value pairs.
+        /// </summary>
+        /// <value>The number of key-value pairs.</value>
+        public int Count {
+            get {
+                PushOnto(Lua.MainState);
+                LuaApi.PushNil(Lua.MainState);
+
+                var result = 0;
+                while (LuaApi.Next(Lua.MainState, -2)) {
+                    LuaApi.Pop(Lua.MainState, 1);
+                    ++result;
+                }
+                LuaApi.Pop(Lua.MainState, 1);
+                return result;
+            }
         }
 
         /// <summary>
@@ -56,6 +77,47 @@ namespace Triton {
 
                 SetValueInternal(key, value);
             }
+        }
+
+        /// <summary>
+        /// Determines whether the <see cref="LuaTable"/> contains the given key.
+        /// </summary>
+        /// <param name="key">The key.</param>
+        /// <returns><c>true</c> if the <see cref="LuaTable"/> contains <paramref name="key"/>, <c>false</c> otherwise.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is <c>null</c>.</exception>
+        public bool ContainsKey(object key) {
+            if (key == null) {
+                throw new ArgumentNullException(nameof(key));
+            }
+            
+            PushOnto(Lua.MainState);
+            Lua.PushObject(key);
+            var type = LuaApi.GetTable(Lua.MainState, -2);
+            var result = type != LuaType.Nil;
+            LuaApi.Pop(Lua.MainState, 2);
+            return result;
+        }
+
+        /// <summary>
+        /// Gets an enumerator iterating through the key-value pairs.
+        /// </summary>
+        /// <returns>An enumerator iterating through the key-value pairs.</returns>
+        public IEnumerator<KeyValuePair<object, object>> GetEnumerator() => new Enumerator(this);
+
+        /// <summary>
+        /// Tries to get the value associated with the given key.
+        /// </summary>
+        /// <param name="key">The key.</param>
+        /// <param name="value">The value.</param>
+        /// <returns><c>true</c> if the <see cref="LuaTable"/> contains <paramref name="key"/>, <c>false</c> otherwise.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is <c>null</c>.</exception>
+        public bool TryGetValue(object key, out object value) {
+            if (key == null) {
+                throw new ArgumentNullException(nameof(key));
+            }
+
+            value = GetValueInternal(key);
+            return value != null;
         }
 
 #if NETSTANDARD || NET40
@@ -87,6 +149,50 @@ namespace Triton {
             Lua.PushObject(value);
             LuaApi.SetTable(Lua.MainState, -3);
             LuaApi.Pop(Lua.MainState, 1);
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+        
+        private sealed class Enumerator : IEnumerator<KeyValuePair<object, object>> {
+            private LuaTable _table;
+            
+            public Enumerator(LuaTable table) => _table = table;
+            
+            public KeyValuePair<object, object> Current { get; private set; }
+
+            object IEnumerator.Current => Current;
+            
+            public void Dispose() => _table = null;
+            
+            public bool MoveNext() {
+                ThrowIfDisposed();
+
+                var lua = _table.Lua;
+                _table.PushOnto(lua.MainState);
+                lua.PushObject(Current.Key);
+                if (!LuaApi.Next(lua.MainState, -2)) {
+                    LuaApi.Pop(lua.MainState, 1);
+                    return false;
+                }
+
+                var key = lua.ToObject(-2);
+                var value = lua.ToObject(-1);
+                Current = new KeyValuePair<object, object>(key, value);
+                LuaApi.Pop(lua.MainState, 3);
+                return true;
+            }
+
+            public void Reset() {
+                ThrowIfDisposed();
+
+                Current = default(KeyValuePair<object, object>);
+            }
+
+            private void ThrowIfDisposed() {
+                if (_table == null) {
+                    throw new ObjectDisposedException(GetType().FullName);
+                }
+            }
         }
     }
 }
