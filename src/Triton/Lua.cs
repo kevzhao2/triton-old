@@ -76,7 +76,10 @@ namespace Triton {
                 }
                 ThrowIfDisposed();
 
-                return GetGlobalInternal(name);
+                var type = LuaApi.GetGlobal(MainState, name);
+                var result = ToObject(-1, type);
+                LuaApi.Pop(MainState, 1);
+                return result;
             }
             set {
                 if (name == null) {
@@ -84,7 +87,8 @@ namespace Triton {
                 }
                 ThrowIfDisposed();
 
-                SetGlobalInternal(name, value);
+                PushObject(value);
+                LuaApi.SetGlobal(MainState, name);
             }
         }
 
@@ -170,7 +174,7 @@ namespace Triton {
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
             var types = assemblies.SelectMany(GetTypes);
             foreach (var type in types.Where(t => t.IsPublic && t.Namespace == @namespace)) {
-                ImportTypeInternal(type);
+                ImportType(type);
             }
 
             IEnumerable<Type> GetTypes(Assembly assembly) {
@@ -194,7 +198,9 @@ namespace Triton {
             }
             ThrowIfDisposed();
 
-            ImportTypeInternal(type);
+            ObjectBinder.PushNetObject(MainState, new TypeWrapper(type));
+            var cleanName = type.Name.Split('`')[0];
+            LuaApi.SetGlobal(MainState, cleanName);
         }
 
         /// <summary>
@@ -223,9 +229,7 @@ namespace Triton {
         /// <inheritdoc/>
         /// <exception cref="ObjectDisposedException">The <see cref="Lua"/> instance is disposed.</exception>
         public override bool TryGetMember(GetMemberBinder binder, out object result) {
-            ThrowIfDisposed();
-
-            result = GetGlobalInternal(binder.Name);
+            result = this[binder.Name];
             return true;
         }
 
@@ -235,9 +239,7 @@ namespace Triton {
         /// </exception>
         /// <exception cref="ObjectDisposedException">The <see cref="Lua"/> instance is disposed.</exception>
         public override bool TrySetMember(SetMemberBinder binder, object value) {
-            ThrowIfDisposed();
-
-            SetGlobalInternal(binder.Name, value);
+            this[binder.Name] = value;
             return true;
         }
 #endif
@@ -408,18 +410,6 @@ namespace Triton {
             }
         }
 
-        private object GetGlobalInternal(string name) {
-            var type = LuaApi.GetGlobal(MainState, name);
-            var result = ToObject(-1, type);
-            LuaApi.Pop(MainState, 1);
-            return result;
-        }
-
-        private void SetGlobalInternal(string name, object value) {
-            PushObject(value);
-            LuaApi.SetGlobal(MainState, name);
-        }
-
         private void Dispose(bool disposing) {
             if (_isDisposed) {
                 return;
@@ -432,12 +422,6 @@ namespace Triton {
 
             LuaApi.Close(MainState);
             _isDisposed = true;
-        }
-
-        private void ImportTypeInternal(Type type) {
-            ObjectBinder.PushNetObject(MainState, new TypeWrapper(type));
-            var cleanName = type.Name.Split('`')[0];
-            LuaApi.SetGlobal(MainState, cleanName);
         }
 
         private void LoadStringInternal(string s) {

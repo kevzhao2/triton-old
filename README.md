@@ -134,6 +134,5 @@ lua.DoString("list:Add(2018)");
 * Triton does not currently have any debugging facilities.
 
 ### Roadmap
-* Implement `IDictionary<object, object>` on `LuaTable`.
 * Implement dynamic operations on `LuaTable` using its metamethods.
 * Implement simple iteration of `IEnumerable<T>`.

@@ -46,21 +46,17 @@ namespace Triton {
                 throw new ArgumentNullException(nameof(args));
             }
 
-            return CallInternal(args);
+            PushOnto(Lua.MainState);
+            return Lua.Call(args);
         }
 
 #if NETSTANDARD || NET40
         /// <inheritdoc/>
         /// <exception cref="LuaException">A Lua error occurs.</exception>
         public override bool TryInvoke(InvokeBinder binder, object[] args, out object result) {
-            result = CallInternal(args);
+            result = Call(args);
             return true;
         }
 #endif
-
-        private object[] CallInternal(object[] args) {
-            PushOnto(Lua.MainState);
-            return Lua.Call(args);
-        }
     }
 }
