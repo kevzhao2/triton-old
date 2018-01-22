@@ -104,12 +104,9 @@ namespace Triton {
             ThrowIfDisposed();
 
             LuaApi.CreateTable(MainState);
-            var pointer = LuaApi.ToPointer(MainState, -1);
-            var referenceId = LuaApi.Ref(MainState, LuaApi.RegistryIndex);
-            var table = new LuaTable(this, referenceId);
-            _cachedLuaReferences[pointer] = new WeakReference(table);
-            _pointerToReferenceId[pointer] = referenceId;
-            return table;
+            var result = (LuaTable)ToObject(-1, LuaType.Table);
+            LuaApi.Pop(MainState, 1);
+            return result;
         }
 
         /// <summary>
@@ -130,11 +127,9 @@ namespace Triton {
 
             var threadState = LuaApi.NewThread(MainState);
             function.PushOnto(threadState);
-            var referenceId = LuaApi.Ref(MainState, LuaApi.RegistryIndex);
-            var thread = new LuaThread(this, referenceId, threadState);
-            _cachedLuaReferences[threadState] = new WeakReference(thread);
-            _pointerToReferenceId[threadState] = referenceId;
-            return thread;
+            var result = (LuaThread)ToObject(-1, LuaType.Thread);
+            LuaApi.Pop(MainState, 1);
+            return result;
         }
 
         /// <summary>
@@ -227,12 +222,9 @@ namespace Triton {
                 throw new LuaException(errorMessage);
             }
 
-            var pointer = LuaApi.ToPointer(MainState, -1);
-            var referenceId = LuaApi.Ref(MainState, LuaApi.RegistryIndex);
-            var function = new LuaFunction(this, referenceId);
-            _cachedLuaReferences[pointer] = new WeakReference(function);
-            _pointerToReferenceId[pointer] = referenceId;
-            return function;
+            var result = (LuaFunction)ToObject(-1, LuaType.Function);
+            LuaApi.Pop(MainState, 1);
+            return result;
         }
 
 #if NETSTANDARD || NET40
@@ -380,12 +372,12 @@ namespace Triton {
             Debug.Assert(LuaApi.GetMainState(state) == MainState, "State override did not match main state.");
             Debug.Assert(isResuming || LuaApi.Type(state, -1) == LuaType.Function, "Stack doesn't have function on top.");
 
+            var oldTop = isResuming ? 0 : LuaApi.GetTop(state) - 1;
             var numArgs = args.Length;
-            if (!LuaApi.CheckStack(state, numArgs)) {
+            if (oldTop + numArgs > LuaApi.MinStackSize && !LuaApi.CheckStack(state, numArgs)) {
                 throw new LuaException("Not enough stack space for arguments.");
             }
 
-            var oldTop = isResuming ? 0 : LuaApi.GetTop(state) - 1;
             try {
                 foreach (var arg in args) {
                     PushObject(arg, state);
@@ -399,11 +391,12 @@ namespace Triton {
                     var errorMessage = LuaApi.ToString(state, -1);
                     throw new LuaException(errorMessage);
                 }
-                if (!LuaApi.CheckStack(state, 1)) {
+
+                var top = LuaApi.GetTop(state);
+                if (top + 1 > LuaApi.MinStackSize && !LuaApi.CheckStack(state, 1)) {
                     throw new LuaException("Not enough scratch stack space.");
                 }
 
-                var top = LuaApi.GetTop(state);
                 return ToObjects(oldTop + 1, top, state);
             } finally {
                 LuaApi.SetTop(state, oldTop);

@@ -30,6 +30,7 @@ namespace Triton.Interop {
     /// Provides Lua API definitions.
     /// </summary>
     internal static class LuaApi {
+        public const int MinStackSize = 20;
         public const int MultRet = -1;
         public const int RegistryIndex = -1001000;
         public const int RidxMainThread = 1;

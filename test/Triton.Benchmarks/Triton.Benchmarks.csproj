@@ -49,6 +49,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Binding\MethodBenchmark.cs" />
+    <Compile Include="Binding\PropertyBenchmark.cs" />
     <Compile Include="Binding\FieldBenchmark.cs" />
     <Compile Include="IBenchmark.cs" />
     <Compile Include="Lua\DoStringBenchmark.cs" />

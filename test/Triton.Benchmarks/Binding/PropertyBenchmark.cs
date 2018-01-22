@@ -1,14 +1,14 @@
 ﻿using System;
 
 namespace Triton.Benchmarks.Binding {
-    public class FieldBenchmark : IBenchmark {
+    public class PropertyBenchmark : IBenchmark {
         public class TestClass {
-            public static int X;
-            public int x;
+            public static int X { get; set; }
+            public int x { get; set; }
         }
 
         public bool Enabled => true;
-        public string Name => "Fields";
+        public string Name => "Properties";
 
         public (Action tritonAction, Action nluaAction) Benchmark_ReadInstance(Triton.Lua triton, NLua.Lua nlua) {
             triton["test"] = new TestClass();
@@ -23,7 +23,7 @@ namespace Triton.Benchmarks.Binding {
 
         public (Action tritonAction, Action nluaAction) Benchmark_ReadStatic(Triton.Lua triton, NLua.Lua nlua) {
             triton.ImportType(typeof(TestClass));
-            nlua.DoString("TestClass = luanet.import_type('Triton.Benchmarks.Binding.FieldBenchmark+TestClass')");
+            nlua.DoString("TestClass = luanet.import_type('Triton.Benchmarks.Binding.PropertyBenchmark+TestClass')");
             var tritonFunction = triton.LoadString("x = TestClass.X");
             var nluaFunction = nlua.LoadString("x = TestClass.X", "test");
 
@@ -45,7 +45,7 @@ namespace Triton.Benchmarks.Binding {
 
         public (Action tritonAction, Action nluaAction) Benchmark_WriteStatic(Triton.Lua triton, NLua.Lua nlua) {
             triton.ImportType(typeof(TestClass));
-            nlua.DoString("TestClass = luanet.import_type('Triton.Benchmarks.Binding.FieldBenchmark+TestClass')");
+            nlua.DoString("TestClass = luanet.import_type('Triton.Benchmarks.Binding.PropertyBenchmark+TestClass')");
             var tritonFunction = triton.LoadString("TestClass.X = 0");
             var nluaFunction = nlua.LoadString("TestClass.X = 0", "test");
 
