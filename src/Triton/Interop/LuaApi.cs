@@ -39,6 +39,7 @@ namespace Triton.Interop {
         public static readonly Delegates.Close Close;
         public static readonly Delegates.CreateTable CreateTable;
         public static readonly Delegates.GetStack GetStack;
+        public static readonly Delegates.GetMetatable GetMetatable;
         public static readonly Delegates.GetTable GetTable;
         public static readonly Delegates.GetTop GetTop;
         public static readonly Delegates.IsInteger IsInteger;
@@ -100,6 +101,7 @@ namespace Triton.Interop {
             CheckStack = library.GetDelegate<Delegates.CheckStack>("lua_checkstack");
             Close = library.GetDelegate<Delegates.Close>("lua_close");
             CreateTable = library.GetDelegate<Delegates.CreateTable>("lua_createtable");
+            GetMetatable = library.GetDelegate<Delegates.GetMetatable>("lua_getmetatable");
             GetStack = library.GetDelegate<Delegates.GetStack>("lua_getstack");
             GetTable = library.GetDelegate<Delegates.GetTable>("lua_gettable");
             GetTop = library.GetDelegate<Delegates.GetTop>("lua_gettop");
@@ -145,13 +147,12 @@ namespace Triton.Interop {
         public static LuaType GetGlobal(IntPtr state, string name) => GetGlobalDelegate(state, GetUtf8String(name));
 
         public static IntPtr GetMainState(IntPtr state) {
-            LuaApi.RawGetI(state, LuaApi.RegistryIndex, LuaApi.RidxMainThread);
-            var result = LuaApi.ToPointer(state, -1);
-            LuaApi.Pop(state, 1);
+            RawGetI(state, RegistryIndex, RidxMainThread);
+            var result = ToPointer(state, -1);
+            Pop(state, 1);
             return result;
         }
-
-        public static void GetMetatable(IntPtr state, string name) => GetField(state, RegistryIndex, name);
+        
         public static LuaStatus LoadString(IntPtr state, string s) => LoadStringDelegate(state, GetUtf8String(s));
         public static bool NewMetatable(IntPtr state, string name) => NewMetatableDelegate(state, GetUtf8String(name));
         public static IntPtr NewUserdata(IntPtr state, int size) => NewUserdataDelegate(state, new UIntPtr((uint)size));
@@ -231,6 +232,9 @@ namespace Triton.Interop {
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate LuaType GetGlobal(IntPtr state, byte[] name);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate bool GetMetatable(IntPtr state, int index);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate int GetStack(IntPtr state, int level, ref LuaDebug debug);

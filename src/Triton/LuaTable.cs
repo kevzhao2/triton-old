@@ -55,6 +55,34 @@ namespace Triton {
         }
 
         /// <summary>
+        /// Gets or sets the metatable.
+        /// </summary>
+        /// <value>The metatable, or <c>null</c> if there is none.</value>
+        public LuaTable Metatable {
+            get {
+                PushOnto(Lua.MainState);
+                if (!LuaApi.GetMetatable(Lua.MainState, -1)) {
+                    LuaApi.Pop(Lua.MainState, 1);
+                    return null;
+                }
+
+                var result = (LuaTable)Lua.ToObject(-1, LuaType.Table);
+                LuaApi.Pop(Lua.MainState, 2);
+                return result;
+            }
+            set {
+                PushOnto(Lua.MainState);
+                if (value == null) {
+                    LuaApi.PushNil(Lua.MainState);
+                } else {
+                    value.PushOnto(Lua.MainState);
+                }
+                LuaApi.SetMetatable(Lua.MainState, -2);
+                LuaApi.Pop(Lua.MainState, 1);
+            }
+        }
+
+        /// <summary>
         /// Gets the collection of keys.
         /// </summary>
         /// <value>The collection of keys.</value>

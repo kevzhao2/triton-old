@@ -45,6 +45,59 @@ namespace Triton.Tests {
         }
 
         [Fact]
+        public void GetMetatable() {
+            using (var lua = new Lua()) {
+                lua.DoString(@"
+                    local mt = {}
+                    table = {}
+                    setmetatable(table, mt)");
+                var table = (LuaTable)lua["table"];
+
+                var metatable = table.Metatable;
+
+                Assert.Empty(metatable);
+            }
+        }
+
+        [Fact]
+        public void GetMetatable_None() {
+            using (var lua = new Lua()) {
+                var table = lua.CreateTable();
+
+                Assert.Null(table.Metatable);
+            }
+        }
+
+        [Fact]
+        public void SetMetatable() {
+            using (var lua = new Lua()) {
+                lua.DoString("table = {}");
+                var table = (LuaTable)lua["table"];
+                var metatable = lua.CreateTable();
+                metatable["test"] = 0;
+
+                table.Metatable = metatable;
+
+                Assert.Equal(0L, lua.DoString("return getmetatable(table)['test']")[0]);
+            }
+        }
+
+        [Fact]
+        public void SetMetatable_NullValue() {
+            using (var lua = new Lua()) {
+                lua.DoString(@"
+                    local mt = {}
+                    table = {}
+                    setmetatable(table, mt)");
+                var table = (LuaTable)lua["table"];
+
+                table.Metatable = null;
+                
+                Assert.Null(lua.DoString("return getmetatable(table)")[0]);
+            }
+        }
+
+        [Fact]
         public void Keys_Nothing() {
             using (var lua = new Lua()) {
                 var table = lua.CreateTable();

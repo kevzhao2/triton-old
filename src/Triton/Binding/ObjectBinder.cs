@@ -140,7 +140,7 @@ namespace Triton.Binding {
 
             var handle = GCHandle.Alloc(obj, GCHandleType.Normal);
             LuaApi.PushHandle(state, handle);
-            LuaApi.GetMetatable(state, metatable);
+            LuaApi.GetField(state, LuaApi.RegistryIndex, metatable);
             LuaApi.SetMetatable(state, -2);
         }
 
