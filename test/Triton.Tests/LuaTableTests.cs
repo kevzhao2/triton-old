@@ -18,6 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
+using Microsoft.CSharp.RuntimeBinder;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,6 +28,117 @@ namespace Triton.Tests {
     public class LuaTableTests {
         private enum TestEnum {
             A, B, C, D
+        }
+        
+        [Fact]
+        public void GetSetDynamic() {
+            using (var lua = new Lua()) {
+                dynamic table = lua.CreateTable();
+
+                table.x = 567;
+
+                Assert.Equal(567L, table.x);
+            }
+        }
+
+        [Fact]
+        public void BinaryOpDynamic() {
+            using (var lua = new Lua()) {
+                var metatable = lua.CreateTable();
+                metatable["__add"] = lua.DoString("return function(o1, o2) return o1.n + o2.n end")[0];
+                dynamic table1 = lua.CreateTable();
+                dynamic table2 = lua.CreateTable();
+                table1.Metatable = metatable;
+                table2.Metatable = metatable;
+                table1.n = 1;
+                table2.n = 100;
+
+                Assert.Equal(101L, table1 + table2);
+            }
+        }
+
+        [Fact]
+        public void BinaryOpDynamic_NoMetatable_ThrowsBindingException() {
+            using (var lua = new Lua()) {
+                dynamic table1 = lua.CreateTable();
+                dynamic table2 = lua.CreateTable();
+                table1.n = 1;
+                table2.n = 100;
+
+                Assert.Throws<RuntimeBinderException>(() => table1 + table2);
+            }
+        }
+
+        [Fact]
+        public void BinaryOpDynamic_NoMetamethod_ThrowsBindingException() {
+            using (var lua = new Lua()) {
+                var metatable = lua.CreateTable();
+                dynamic table1 = lua.CreateTable();
+                dynamic table2 = lua.CreateTable();
+                table1.Metatable = metatable;
+                table2.Metatable = metatable;
+                table1.n = 1;
+                table2.n = 100;
+
+                Assert.Throws<RuntimeBinderException>(() => table1 + table2);
+            }
+        }
+
+        [Fact]
+        public void UnaryOpDynamic() {
+            using (var lua = new Lua()) {
+                var metatable = lua.CreateTable();
+                metatable["__unm"] = lua.DoString("return function(o1) return -o1.n end")[0];
+                dynamic table = lua.CreateTable();
+                table.Metatable = metatable;
+                table.n = 1;
+
+                Assert.Equal(-1L, -table);
+            }
+        }
+
+        [Fact]
+        public void UnaryOpDynamic_NoMetatable_ThrowsBindingException() {
+            using (var lua = new Lua()) {
+                dynamic table = lua.CreateTable();
+                table.n = 1;
+
+                Assert.Throws<RuntimeBinderException>(() => -table);
+            }
+        }
+
+        [Fact]
+        public void UnaryOpDynamic_NoMetamethod_ThrowsBindingException() {
+            using (var lua = new Lua()) {
+                var metatable = lua.CreateTable();
+                dynamic table = lua.CreateTable();
+                table.Metatable = metatable;
+                table.n = 1;
+
+                Assert.Throws<RuntimeBinderException>(() => -table);
+            }
+        }
+
+        [Fact]
+        public void ComparisonDynamic() {
+            using (var lua = new Lua()) {
+                var metatable = lua.CreateTable();
+                metatable["__eq"] = lua.DoString("return function(o1, o2) return o1.n == o2.n end")[0];
+                metatable["__lt"] = lua.DoString("return function(o1, o2) return o1.n < o2.n end")[0];
+                metatable["__le"] = lua.DoString("return function(o1, o2) return o1.n <= o2.n end")[0];
+                dynamic table1 = lua.CreateTable();
+                dynamic table2 = lua.CreateTable();
+                table1.Metatable = metatable;
+                table2.Metatable = metatable;
+                table1.n = 1;
+                table2.n = 100;
+
+                Assert.Equal(true, table1 < table2);
+                Assert.Equal(true, table1 <= table2);
+                Assert.Equal(true, table1 != table2);
+                Assert.Equal(true, table2 > table1);
+                Assert.Equal(true, table2 >= table1);
+            }
         }
 
         [Theory]
@@ -320,17 +432,6 @@ namespace Triton.Tests {
                 var table = lua.CreateTable();
 
                 Assert.Throws<NotSupportedException>(() => table.Values.Remove(0));
-            }
-        }
-
-        [Fact]
-        public void GetSetDynamic() {
-            using (var lua = new Lua()) {
-                dynamic table = lua.CreateTable();
-
-                table.x = 567;
-
-                Assert.Equal(567L, table.x);
             }
         }
 

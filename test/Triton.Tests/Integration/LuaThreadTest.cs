@@ -1,7 +1,7 @@
 ﻿using Xunit;
 
 namespace Triton.Tests.Integration {
-    public class ThreadTest {
+    public class LuaThreadTest {
         private const string TestString = @"
             for i = 1, 10 do
                 x = i

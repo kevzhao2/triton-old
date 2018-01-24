@@ -99,38 +99,16 @@ lua.DoString("list:Add(2018)");
 * Triton supports `LuaThread` manipulation.
 * Triton supports generic method invocation and generic type instantiation.
 * Triton supports generalized indexed properties (including those declared in VB.NET or F# with names other than `Item`) with a variable number of indices.
-* Triton implements `DynamicObject` on `Lua`, `LuaFunction`, and `LuaTable` enabling you to do the following:
-  ```csharp
-  lua.table = lua.CreateTable();
-  lua.func = lua.LoadString("return table");
-  lua.func().member = "asdf";
-  ```
-* Triton will always correctly deduce overloads in the following situation, picking the method with the least number of default values applied:
-  ```csharp
-  void Method(int a);
-  void Method(int a, int b = 0);
-  ```
-* Triton will always correctly call overloaded operators in the following scenario:
-  ```csharp
-  class Test1 {
-      public static int operator +(Test2 t2, Test1 t1);
-  }
-  class Test2 {
-      public static int operator +(Test2 t2, int i);
-  }
-
-  lua["t1"] = new Test1();
-  lua["t2"] = new Test2();
-  lua.DoString("x = t2 + t1");
-  ```
+* Triton implements `DynamicObject` on `Lua`, `LuaFunction`, and `LuaTable`.
+* Triton will always correctly call the 'correct' overloads for methods.
 * Triton reuses `LuaReference` objects and will clean up unused references, saving as much memory in a transparent way as possible.
+* Triton is safer in its Lua -> .NET context switches, since it doesn't use `luaL_error` which uses `longjmp`, which can lead to issues when P/Invoked.
 
 ### Disadvantages
 * Triton only supports event handler types that are "compatible" with the signature `void (object, EventArgs)`.
 * Triton does not support calling extension methods on objects as instance methods.
 * Triton does not currently have any debugging facilities.
-* Triton is somewhat slower for Lua -> .NET context switches. This is likely not a problem, because it's *highly* unlikely that this would be a bottleneck in your application.
+* Triton is somewhat slower for Lua -> .NET context switches. This is not a problem because it's *highly* unlikely that this would be a bottleneck in your application, and if it somehow is, then you shouldn't even be using an embedded scripting language for your purposes.
 
 ### Roadmap
-* Implement dynamic operations on `LuaTable` using its metamethods.
-* Implement simple iteration of `IEnumerable<T>`.
+* Improve general performance.

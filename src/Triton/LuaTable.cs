@@ -23,6 +23,7 @@ using System.Collections;
 using System.Collections.Generic;
 #if NETSTANDARD || NET40
 using System.Dynamic;
+using System.Linq.Expressions;
 #endif
 using System.Linq;
 using Triton.Interop;
@@ -32,6 +33,44 @@ namespace Triton {
     /// Represents a Lua table that may be read and modified.
     /// </summary>
     public sealed class LuaTable : LuaReference, IDictionary<object, object> {
+#if NETSTANDARD || NET40
+        private static readonly Dictionary<ExpressionType, string> BinaryOperations = new Dictionary<ExpressionType, string> {
+            [ExpressionType.Add] = "__add",
+            [ExpressionType.AddChecked] = "__add",
+            [ExpressionType.Subtract] = "__sub",
+            [ExpressionType.SubtractChecked] = "__sub",
+            [ExpressionType.Multiply] = "__mul",
+            [ExpressionType.MultiplyChecked] = "__mul",
+            [ExpressionType.Divide] = "__div",
+            [ExpressionType.Modulo] = "__mod",
+            [ExpressionType.Power] = "__pow",
+            [ExpressionType.And] = "__band",
+            [ExpressionType.Or] = "__bor",
+            [ExpressionType.ExclusiveOr] = "__bxor",
+            [ExpressionType.ExclusiveOrAssign] = "__bxor",
+            [ExpressionType.RightShift] = "__shr",
+            [ExpressionType.RightShiftAssign] = "__shr",
+            [ExpressionType.LeftShift] = "__shl",
+            [ExpressionType.LeftShiftAssign] = "__shl",
+            [ExpressionType.Equal] = "__eq",
+            [ExpressionType.NotEqual] = "__eq",
+            [ExpressionType.LessThan] = "__lt",
+            [ExpressionType.GreaterThanOrEqual] = "__le",
+            [ExpressionType.LessThanOrEqual] = "__le",
+            [ExpressionType.GreaterThan] = "__le",
+        };
+
+        private static readonly HashSet<ExpressionType> NegatedBinaryOperations = new HashSet<ExpressionType> {
+            ExpressionType.NotEqual, ExpressionType.GreaterThanOrEqual, ExpressionType.GreaterThan
+        };
+
+        private static readonly Dictionary<ExpressionType, string> UnaryOperations = new Dictionary<ExpressionType, string> {
+            [ExpressionType.Negate] = "__unm",
+            [ExpressionType.NegateChecked] = "__unm",
+            [ExpressionType.Not] = "__bnot"
+        };
+#endif
+
         internal LuaTable(Lua lua, int referenceId) : base(lua, referenceId) {
         }
 
@@ -230,6 +269,27 @@ namespace Triton {
 
 #if NETSTANDARD || NET40
         /// <inheritdoc/>
+        public override bool TryBinaryOperation(BinaryOperationBinder binder, object arg, out object result) {
+            var operation = binder.Operation;
+            if (!BinaryOperations.TryGetValue(operation, out var metamethod)) {
+                result = null;
+                return false;
+            }
+
+            var metatable = Metatable;
+            if (metatable == null || !(metatable[metamethod] is LuaFunction metafunction)) {
+                result = null;
+                return false;
+            }
+
+            result = metafunction.Call(this, arg)[0];
+            if (NegatedBinaryOperations.Contains(operation) && result is bool b) {
+                result = !b;
+            }
+            return true;
+        }
+
+        /// <inheritdoc/>
         public override bool TryGetMember(GetMemberBinder binder, out object result) {
             result = this[binder.Name];
             return true;
@@ -238,6 +298,24 @@ namespace Triton {
         /// <inheritdoc/>
         public override bool TrySetMember(SetMemberBinder binder, object value) {
             this[binder.Name] = value;
+            return true;
+        }
+
+        /// <inheritdoc/>
+        public override bool TryUnaryOperation(UnaryOperationBinder binder, out object result) {
+            result = null;
+            if (!UnaryOperations.TryGetValue(binder.Operation, out var metamethod)) {
+                result = null;
+                return false;
+            }
+
+            var metatable = Metatable;
+            if (metatable == null || !(metatable[metamethod] is LuaFunction metafunction)) {
+                result = null;
+                return false;
+            }
+
+            result = metafunction.Call(this)[0];
             return true;
         }
 #endif

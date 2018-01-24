@@ -114,7 +114,6 @@ namespace Triton.Binding {
                     end
                     return ...
                 end
-
                 return function(fn)
                     return function(...)
                         return helper(fn(...))
