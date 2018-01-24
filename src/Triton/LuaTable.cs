@@ -47,21 +47,20 @@ namespace Triton {
             [ExpressionType.And] = "__band",
             [ExpressionType.Or] = "__bor",
             [ExpressionType.ExclusiveOr] = "__bxor",
-            [ExpressionType.ExclusiveOrAssign] = "__bxor",
             [ExpressionType.RightShift] = "__shr",
-            [ExpressionType.RightShiftAssign] = "__shr",
             [ExpressionType.LeftShift] = "__shl",
-            [ExpressionType.LeftShiftAssign] = "__shl",
             [ExpressionType.Equal] = "__eq",
             [ExpressionType.NotEqual] = "__eq",
             [ExpressionType.LessThan] = "__lt",
-            [ExpressionType.GreaterThanOrEqual] = "__le",
+            [ExpressionType.GreaterThanOrEqual] = "__lt",
             [ExpressionType.LessThanOrEqual] = "__le",
             [ExpressionType.GreaterThan] = "__le",
         };
 
+        // There are only the __eq, __lt, and __le metamethods. Here, we are relying on the assumption that metamethods lead to a total
+        // ordering, which is almost always justified.
         private static readonly HashSet<ExpressionType> NegatedBinaryOperations = new HashSet<ExpressionType> {
-            ExpressionType.NotEqual, ExpressionType.GreaterThanOrEqual, ExpressionType.GreaterThan
+            ExpressionType.NotEqual, ExpressionType.GreaterThan, ExpressionType.GreaterThanOrEqual
         };
 
         private static readonly Dictionary<ExpressionType, string> UnaryOperations = new Dictionary<ExpressionType, string> {

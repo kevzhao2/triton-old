@@ -43,7 +43,7 @@ namespace Triton {
         internal Lua Lua { get; }
 
         internal void PushOnto(IntPtr state) {
-            if (LuaApi.GetMainState(state) != Lua.MainState) {
+            if (state != Lua.MainState && LuaApi.GetMainState(state) != Lua.MainState) {
                 throw new ArgumentException("Reference cannot be pushed onto the given Lua environment.", nameof(state));
             }
 

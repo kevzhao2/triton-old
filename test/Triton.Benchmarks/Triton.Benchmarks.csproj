@@ -49,6 +49,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Binding\ArrayBenchmark.cs" />
     <Compile Include="Binding\MethodBenchmark.cs" />
     <Compile Include="Binding\PropertyBenchmark.cs" />
     <Compile Include="Binding\FieldBenchmark.cs" />

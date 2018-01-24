@@ -79,6 +79,8 @@ namespace Triton.Binding {
             // To callback into static methods, we need to provide a handle to the Lua environment.
             _luaHandle = GCHandle.Alloc(lua, GCHandleType.WeakTrackResurrection);
             
+            // The __index metamethod can be cached in certain situations, such as methods and events. This can significantly improve
+            // performance.
             var wrapIndexFunction = (LuaFunction)lua.DoString(@"
                 local error = error
                 local cache = setmetatable({}, { __mode = 'k' })
@@ -534,7 +536,7 @@ namespace Triton.Binding {
         private static int ProxyCallShared(IntPtr state, object obj, Type type) {
             var lua = (Lua)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
             var name = LuaApi.ToString(state, LuaApi.UpvalueIndex(3));
-            var numTypeArgs = LuaApi.ToInteger(state, LuaApi.UpvalueIndex(4));
+            var numTypeArgs = (int)LuaApi.ToInteger(state, LuaApi.UpvalueIndex(4));
             var top = LuaApi.GetTop(state) - 1;
             var info = type.GetBindingInfo();
             var isStatic = obj == null;
@@ -544,7 +546,7 @@ namespace Triton.Binding {
             // argument because only the first "invocation" with the types will have obj as the first argument.
             var objs = lua.ToObjects(isStatic || numTypeArgs > 0 ? 1 : 2, top, state);
 
-            var methods = info.GetMethods(name, isStatic, (int)numTypeArgs);
+            var methods = info.GetMethods(name, isStatic, numTypeArgs);
             if (numTypeArgs > 0) {
                 var typeArgs = new Type[numTypeArgs];
                 for (var i = 0; i < typeArgs.Length; ++i) {
@@ -693,7 +695,7 @@ namespace Triton.Binding {
                 return 0;
             }
 
-            if (obj is Array array && LuaApi.IsInteger(state, 2)) {
+            if (obj is Array array && keyType == LuaType.Number && LuaApi.IsInteger(state, 2)) {
                 if (array.Rank != 1) {
                     throw new LuaException("attempt to index multi-dimensional array");
                 }

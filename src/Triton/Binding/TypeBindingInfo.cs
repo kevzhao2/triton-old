@@ -35,7 +35,9 @@ namespace Triton.Binding {
         private Dictionary<string, MemberInfo> _members;
         private Dictionary<string, MemberInfo> _staticMembers;
         private ILookup<string, MethodInfo> _methods;
+        private ILookup<string, MethodInfo> _nonGenericMethods;
         private ILookup<string, MethodInfo> _staticMethods;
+        private ILookup<string, MethodInfo> _nonGenericStaticMethods;
         private ILookup<string, MethodInfo> _operators;
 
         private TypeBindingInfo() {
@@ -63,11 +65,17 @@ namespace Triton.Binding {
         /// </summary>
         /// <param name="name">The name.</param>
         /// <param name="isStatic"><c>true</c> to check static methods; <c>false</c> otherwise.</param>
-        /// <param name="numTypeArgs">The number of type arguments, or <c>null</c> for any.</param>
+        /// <param name="numTypeArgs">The number of type arguments.</param>
         /// <returns>The methods.</returns>
-        public IEnumerable<MethodInfo> GetMethods(string name, bool isStatic, int? numTypeArgs = null) {
-            var methods = isStatic ? _staticMethods : _methods;
-            return numTypeArgs == null ? methods[name] : methods[name].Where(m => m.GetGenericArguments().Length == numTypeArgs);
+        public IEnumerable<MethodInfo> GetMethods(string name, bool isStatic, int numTypeArgs) {
+            // This is a fast path for getting non-generic methods.
+            if (numTypeArgs == 0) {
+                var methods = isStatic ? _nonGenericStaticMethods : _nonGenericMethods;
+                return methods[name];
+            }
+
+            var allMethods = isStatic ? _staticMethods : _methods;
+            return allMethods[name].Where(m => m.GetGenericArguments().Length == numTypeArgs);
         }
 
         /// <summary>
@@ -103,7 +111,9 @@ namespace Triton.Binding {
                 _members = members.GroupBy(m => m.Name).ToDictionary(g => g.Key, g => g.First()),
                 _staticMembers = staticMembers.GroupBy(m => m.Name).ToDictionary(g => g.Key, g => g.First()),
                 _methods = methods.ToLookup(m => m.Name),
+                _nonGenericMethods = methods.Where(m => !m.ContainsGenericParameters).ToLookup(m => m.Name),
                 _staticMethods = staticMethods.ToLookup(m => m.Name),
+                _nonGenericStaticMethods = staticMethods.Where(m => !m.ContainsGenericParameters).ToLookup(m => m.Name),
                 _operators = operators.ToLookup(m => m.Name),
             };
 

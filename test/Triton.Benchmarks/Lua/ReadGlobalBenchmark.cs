@@ -2,7 +2,7 @@
 
 namespace Triton.Benchmarks.Lua {
     public class ReadGlobalBenchmark : IBenchmark {
-        public bool Enabled => true;
+        public bool Enabled => false;
         public string Name => "Read globals";
 
         public (Action tritonAction, Action nluaAction) Benchmark_ReadNil(Triton.Lua triton, NLua.Lua nlua) {

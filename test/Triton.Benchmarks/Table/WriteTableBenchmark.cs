@@ -2,7 +2,7 @@
 
 namespace Triton.Benchmarks.Table {
     public class WriteTableBenchmark : IBenchmark {
-        public bool Enabled => true;
+        public bool Enabled => false;
         public string Name => "Write table";
 
         public (Action tritonAction, Action nluaAction) Benchmark_WriteNil(Triton.Lua triton, NLua.Lua nlua) {

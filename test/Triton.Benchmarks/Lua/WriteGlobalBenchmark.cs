@@ -2,7 +2,7 @@
 
 namespace Triton.Benchmarks.Lua {
     public class WriteGlobalBenchmark : IBenchmark {
-        public bool Enabled => true;
+        public bool Enabled => false;
         public string Name => "Write globals";
 
         public (Action tritonAction, Action nluaAction) Benchmark_WriteNil(Triton.Lua triton, NLua.Lua nlua) {

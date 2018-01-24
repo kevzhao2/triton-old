@@ -38,6 +38,8 @@ namespace Triton {
 #else
 	public sealed class Lua : IDisposable {
 #endif
+        private static readonly object[] EmptyObjectArray = new object[0];
+
         private readonly Dictionary<IntPtr, WeakReference> _cachedLuaReferences = new Dictionary<IntPtr, WeakReference>();
         private readonly Dictionary<IntPtr, int> _pointerToReferenceId = new Dictionary<IntPtr, int>();
 
@@ -156,7 +158,7 @@ namespace Triton {
                 throw new LuaException(errorMessage);
             }
 
-            return Call(new object[0]);
+            return Call(EmptyObjectArray);
         }
 
         /// <summary>
@@ -356,10 +358,6 @@ namespace Triton {
         }
 
         internal object[] ToObjects(int startIndex, int endIndex, IntPtr? stateOverride = null) {
-            if (startIndex > endIndex) {
-                return new object[0];
-            }
-
             var objs = new object[endIndex - startIndex + 1];
             for (var i = 0; i < objs.Length; ++i) {
                 objs[i] = ToObject(startIndex + i, null, stateOverride);
@@ -378,33 +376,43 @@ namespace Triton {
                 throw new LuaException("Not enough stack space for arguments.");
             }
 
-            try {
-                foreach (var arg in args) {
-                    PushObject(arg, state);
-                }
-
-                // Because calls tend to take a long time, let's clean references now.
-                CleanReferences();
-
-                var status = isResuming ? LuaApi.Resume(state, MainState, numArgs) : LuaApi.PCallK(state, numArgs);
-                if (status != LuaStatus.Ok && status != LuaStatus.Yield) {
-                    var errorMessage = LuaApi.ToString(state, -1);
-                    throw new LuaException(errorMessage);
-                }
-
-                var top = LuaApi.GetTop(state);
-                if (top + 1 > LuaApi.MinStackSize && !LuaApi.CheckStack(state, 1)) {
-                    throw new LuaException("Not enough scratch stack space.");
-                }
-
-                return ToObjects(oldTop + 1, top, state);
-            } finally {
-                LuaApi.SetTop(state, oldTop);
+            foreach (var arg in args) {
+                PushObject(arg, state);
             }
+
+            // Because calls tend to take a long time, let's clean references now.
+            CleanReferences();
+
+            var status = isResuming ? LuaApi.Resume(state, MainState, numArgs) : LuaApi.PCallK(state, numArgs);
+            if (status != LuaStatus.Ok && status != LuaStatus.Yield) {
+                var errorMessage = LuaApi.ToString(state, -1);
+                LuaApi.Pop(state, 1);
+                throw new LuaException(errorMessage);
+            }
+
+            // This is a fast path for functions returning nothing since we avoid a SetTop call.
+            var top = LuaApi.GetTop(state);
+            if (top == oldTop) {
+                return EmptyObjectArray;
+            }
+
+            if (top + 1 > LuaApi.MinStackSize && !LuaApi.CheckStack(state, 1)) {
+                throw new LuaException("Not enough scratch stack space.");
+            }
+
+            var results = ToObjects(oldTop + 1, top, state);
+            LuaApi.SetTop(state, oldTop);
+            return results;
         }
 
         internal void CleanReferences() {
-            var deadPointers = _cachedLuaReferences.Where(kvp => !kvp.Value.IsAlive).Select(kvp => kvp.Key).ToList();
+            var deadPointers = new List<IntPtr>();
+            foreach (var kvp in _cachedLuaReferences) {
+                if (!kvp.Value.IsAlive) {
+                    deadPointers.Add(kvp.Key);
+                }
+            }
+            
             foreach (var deadPointer in deadPointers) {
                 _cachedLuaReferences.Remove(deadPointer);
                 var referenceId = _pointerToReferenceId[deadPointer];

@@ -99,7 +99,7 @@ lua.DoString("list:Add(2018)");
 * Triton supports `LuaThread` manipulation.
 * Triton supports generic method invocation and generic type instantiation.
 * Triton supports generalized indexed properties (including those declared in VB.NET or F# with names other than `Item`) with a variable number of indices.
-* Triton implements `DynamicObject` on `Lua`, `LuaFunction`, and `LuaTable`.
+* Triton supports `dynamic` usage of `Lua`, `LuaFunction`, and `LuaTable`.
 * Triton will always correctly call the 'correct' overloads for methods.
 * Triton reuses `LuaReference` objects and will clean up unused references, saving as much memory in a transparent way as possible.
 * Triton is safer in its Lua -> .NET context switches, since it doesn't use `luaL_error` which uses `longjmp`, which can lead to issues when P/Invoked.
@@ -108,7 +108,7 @@ lua.DoString("list:Add(2018)");
 * Triton only supports event handler types that are "compatible" with the signature `void (object, EventArgs)`.
 * Triton does not support calling extension methods on objects as instance methods.
 * Triton does not currently have any debugging facilities.
-* Triton is somewhat slower for Lua -> .NET context switches. This is not a problem because it's *highly* unlikely that this would be a bottleneck in your application, and if it somehow is, then you shouldn't even be using an embedded scripting language for your purposes.
+* Triton is marginally slower for Lua -> .NET context switches. This is not a problem because it's *highly* unlikely that this would be a bottleneck in your application, and if it somehow is, then you shouldn't even be using an embedded scripting language for your purposes.
 
 ### Roadmap
 * Improve general performance.
