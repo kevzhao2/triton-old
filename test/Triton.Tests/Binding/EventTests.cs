@@ -72,8 +72,7 @@ namespace Triton.Tests.Binding {
                 lua["obj"] = obj;
 
                 lua.DoString("func = function(obj, args) x = 6 end");
-                lua.DoString("event = obj.Event");
-                lua.DoString("event:Add(func)");
+                lua.DoString("obj.Event:Add(func)");
 
                 obj.InvokeEvent();
 
@@ -81,7 +80,7 @@ namespace Triton.Tests.Binding {
 
                 lua["x"] = 0;
 
-                lua.DoString("event:Remove(func)");
+                lua.DoString("obj.Event:Remove(func)");
 
                 obj.InvokeEvent();
 
@@ -136,10 +135,9 @@ namespace Triton.Tests.Binding {
                 lua["obj"] = obj;
 
                 lua.DoString("func = function(obj, args) end");
-                lua.DoString("event = obj.EventThrows2");
-                lua.DoString("event:Add(func)");
+                lua.DoString("obj.EventThrows2:Add(func)");
 
-                Assert.Throws<LuaException>(() => lua.DoString("event:Remove(func)"));
+                Assert.Throws<LuaException>(() => lua.DoString("obj.EventThrows2:Remove(func)"));
             }
         }
 
@@ -159,8 +157,7 @@ namespace Triton.Tests.Binding {
                 lua.ImportType(typeof(TestClass2));
 
                 lua.DoString("func = function(obj, args) x = 6 end");
-                lua.DoString("event = TestClass2.Event");
-                lua.DoString("event:Add(func)");
+                lua.DoString("TestClass2.Event:Add(func)");
 
                 TestClass2.InvokeEvent();
 
@@ -168,7 +165,7 @@ namespace Triton.Tests.Binding {
 
                 lua["x"] = 0;
 
-                lua.DoString("event:Remove(func)");
+                lua.DoString("TestClass2.Event:Remove(func)");
 
                 TestClass2.InvokeEvent();
 
@@ -218,10 +215,9 @@ namespace Triton.Tests.Binding {
                 lua.ImportType(typeof(TestClass2));
 
                 lua.DoString("func = function(obj, args) end");
-                lua.DoString("event = TestClass2.EventThrows2");
-                lua.DoString("event:Add(func)");
+                lua.DoString("TestClass2.EventThrows2:Add(func)");
 
-                Assert.Throws<LuaException>(() => lua.DoString("event:Remove(func)"));
+                Assert.Throws<LuaException>(() => lua.DoString("TestClass2.EventThrows2:Remove(func)"));
             }
         }
 

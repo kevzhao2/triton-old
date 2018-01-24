@@ -2,7 +2,7 @@
 
 namespace Triton.Benchmarks.Lua {
     public class DoStringBenchmark : IBenchmark {
-        public bool Enabled => false;
+        public bool Enabled => true;
         public string Name => "DoString";
 
         public (Action tritonAction, Action nluaAction) Benchmark_NoResults(Triton.Lua triton, NLua.Lua nlua) {

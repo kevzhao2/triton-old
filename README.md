@@ -73,13 +73,12 @@ class Test {
 
 lua["obj"] = new Test();
 lua.DoString("callback = function(obj, args) print(obj) end)");
-lua.DoString("event = obj.Event");
-lua.DoString("event:Add(callback)");
+lua.DoString("obj.Event:Add(callback)");
 // ...
-lua.DoString("event:Remove(callback)");
+lua.DoString("obj.Event:Remove(callback)");
 ```
 
-Note that `obj.Event` will return new wrapper objects each time, so to successfully remove your callback, you must save the value! Using events is also **highly unrecommended** in the first place, since you have no control over when the event is called. It could be called on a different thread, which is a problem because Lua is not thread-safe.
+Using events is **highly unrecommended** in the first place, since you have no control over when the event is called. It could be called on a different thread, which is a problem because Lua is not thread-safe.
 
 ### Passing .NET types
 
@@ -130,6 +129,7 @@ lua.DoString("list:Add(2018)");
 * Triton only supports event handler types that are "compatible" with the signature `void (object, EventArgs)`.
 * Triton does not support calling extension methods on objects as instance methods.
 * Triton does not currently have any debugging facilities.
+* Triton is somewhat slower for Lua -> .NET context switches. This is likely not a problem, because it's *highly* unlikely that this would be a bottleneck in your application.
 
 ### Roadmap
 * Implement dynamic operations on `LuaTable` using its metamethods.

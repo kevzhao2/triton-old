@@ -2,7 +2,7 @@
 
 namespace Triton.Benchmarks.Table {
     public class ReadTableBenchmark : IBenchmark {
-        public bool Enabled => false;
+        public bool Enabled => true;
         public string Name => "Read table";
 
         public (Action tritonAction, Action nluaAction) Benchmark_ReadNil(Triton.Lua triton, NLua.Lua nlua) {

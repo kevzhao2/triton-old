@@ -78,15 +78,38 @@ namespace Triton.Binding {
         public ObjectBinder(Lua lua) {
             // To callback into static methods, we need to provide a handle to the Lua environment.
             _luaHandle = GCHandle.Alloc(lua, GCHandleType.WeakTrackResurrection);
+            
+            var wrapIndexFunction = (LuaFunction)lua.DoString(@"
+                local error = error
+                local cache = setmetatable({}, { __mode = 'k' })
+                return function(fn)
+                    return function(obj, index)
+                        local objcache = cache[obj]
+                        if objcache == nil then
+                            objcache = {}
+                            cache[obj] = objcache
+                        end
+                        if objcache[index] ~= nil then
+                            return objcache[index]
+                        end
+
+                        local success, iscached, result = fn(obj, index)
+                        if not success then
+                            error(iscached, 2)
+                        end
+                        if iscached then
+                            objcache[index] = result
+                        end
+                        return result
+                    end
+                end")[0];
 
             // To raise Lua errors, we will do so directly in Lua. Doing so by P/Invoking luaL_error is problematic because luaL_error
             // performs a longjmp, which can destroy stack information.
             _wrapFunction = (LuaFunction)lua.DoString(@"
-                -- To prevent problems from occurring if error is modified, make a local copy.
                 local error = error
                 local function helper(success, ...)
                     if not success then
-                        -- Level 2 indicates that whatever called this function caused the error.
                         error(..., 2)
                     end
                     return ...
@@ -107,7 +130,9 @@ namespace Triton.Binding {
                 foreach (var kvp in metamethods) {
                     LuaApi.PushString(lua.MainState, kvp.Key);
                     var isWrapped = kvp.Key != "__gc" && kvp.Key != "__tostring";
-                    if (isWrapped) {
+                    if (kvp.Key == "__index") {
+                        wrapIndexFunction.PushOnto(lua.MainState);
+                    } else if (isWrapped) {
                         _wrapFunction.PushOnto(lua.MainState);
                     }
                     LuaApi.PushHandle(lua.MainState, _luaHandle);
@@ -438,6 +463,7 @@ namespace Triton.Binding {
 
                 if (member is MethodInfo method) {
                     // Methods return a function that handles the overload resolution!
+                    LuaApi.PushBoolean(state, true);
                     lua.Binder._wrapFunction.PushOnto(state);
                     LuaApi.PushValue(state, LuaApi.UpvalueIndex(1));
                     LuaApi.PushValue(state, 1);
@@ -447,6 +473,7 @@ namespace Triton.Binding {
                     LuaApi.PCallK(state, 1, 1);
                 } else if (member is PropertyInfo property) {
                     if (property.GetIndexParameters().Length > 0) {
+                        LuaApi.PushBoolean(state, true);
                         lua.PushObject(new IndexedPropertyWrapper(obj, property), state);
                     } else {
                         if (property.GetGetMethod() == null) {
@@ -454,19 +481,23 @@ namespace Triton.Binding {
                         }
 
                         try {
+                            LuaApi.PushBoolean(state, false);
                             lua.PushObject(property.GetValue(obj, null), state);
                         } catch (TargetInvocationException e) {
                             throw new LuaException($"attempt to get property threw:\n{e.InnerException}");
                         }
                     }
                 } else if (member is FieldInfo field) {
+                    LuaApi.PushBoolean(state, field.IsLiteral);
                     lua.PushObject(field.GetValue(obj), state);
                 } else if (member is EventInfo @event) {
+                    LuaApi.PushBoolean(state, true);
                     lua.PushObject(new EventWrapper(obj, @event), state);
                 } else {
+                    LuaApi.PushBoolean(state, true);
                     lua.PushObject(new TypeWrapper((Type)member), state);
                 }
-                return 1;
+                return 2;
             }
 
             if (obj is Array array && LuaApi.IsInteger(state, 2)) {
@@ -479,8 +510,9 @@ namespace Triton.Binding {
                     throw new LuaException("attempt to index array with out-of-bounds index");
                 }
 
+                LuaApi.PushBoolean(state, false);
                 lua.PushObject(array.GetValue(index), state);
-                return 1;
+                return 2;
             }
 
             throw new LuaException("attempt to index with invalid key");
@@ -761,7 +793,7 @@ namespace Triton.Binding {
 
         private static int ToString(IntPtr state) {
             var obj = LuaApi.ToHandle(state, 1).Target;
-            LuaApi.PushString(state, obj?.ToString() ?? "");
+            LuaApi.PushString(state, obj.ToString() ?? "");
             return 1;
         }
 
