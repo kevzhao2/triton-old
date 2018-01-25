@@ -33,6 +33,7 @@ namespace Triton.Interop {
         public const int MinStackSize = 20;
         public const int MultRet = -1;
         public const int RegistryIndex = -1001000;
+        public const int RidxGlobals = 2;
         public const int RidxMainThread = 1;
 
         public static readonly Delegates.CheckStack CheckStack;

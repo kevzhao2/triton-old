@@ -18,8 +18,8 @@ Triton provides an easy and efficient way to embed Lua 5.3 into your .NET applic
 ### Disadvantages
 * Triton only supports event handler types that are "compatible" with the signature `void (object, EventArgs)`.
 * Triton does not support calling extension methods on objects as instance methods.
-* Triton does not currently have any debugging facilities.
 * Triton is marginally slower for Lua -> .NET context switches. This is not a problem because it's *highly* unlikely that this would be a bottleneck in your application, and if it somehow is, then you shouldn't even be using an embedded scripting language for your purposes.
 
 ### Roadmap
 * Improve general performance.
+* Look into exposing debugging facilities.

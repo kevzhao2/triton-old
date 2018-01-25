@@ -42,6 +42,18 @@ namespace Triton.Tests {
         }
 
         [Fact]
+        public void GetDynamicMemberNames() {
+            using (var lua = new Lua()) {
+                dynamic table = lua.CreateTable();
+                table.x = 0;
+                table.y = 0;
+
+                var expected = new List<string> { "x", "y" }.OrderBy(k => k);
+                Assert.Equal(expected, ((LuaTable)table).GetDynamicMemberNames().OrderBy(k => k));
+            }
+        }
+
+        [Fact]
         public void BinaryOpDynamic() {
             using (var lua = new Lua()) {
                 var metatable = lua.CreateTable();

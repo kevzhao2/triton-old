@@ -19,6 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Linq;
 using Xunit;
 
 namespace Triton.Tests {
@@ -61,6 +62,27 @@ namespace Triton.Tests {
 
                 Assert.Throws<ArgumentException>(() => lua.x = table);
             }
+        }
+
+        [Fact]
+        public void GetDynamicMemberNames() {
+            using (dynamic lua = new Lua()) {
+                lua.x = 567;
+
+                var memberNames = ((Lua)lua).GetDynamicMemberNames().ToList();
+
+                Assert.Contains("_G", memberNames);
+                Assert.Contains("_VERSION", memberNames);
+                Assert.Contains("x", memberNames);
+            }
+        }
+
+        [Fact]
+        public void GetDynamicMemberNames_Disposed_ThrowsObjectDisposedException() {
+            dynamic lua = new Lua();
+            lua.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => lua.GetDynamicMemberNames());
         }
 
         [Fact]

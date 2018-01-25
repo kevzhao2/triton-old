@@ -27,11 +27,14 @@ using System.Linq.Expressions;
 #endif
 using System.Linq;
 using Triton.Interop;
+using System.Diagnostics;
 
 namespace Triton {
     /// <summary>
     /// Represents a Lua table that may be read and modified.
     /// </summary>
+    [DebuggerDisplay("Count = {Count}")]
+    [DebuggerTypeProxy(typeof(DebuggerView))]
     public sealed class LuaTable : LuaReference, IDictionary<object, object> {
 #if NETSTANDARD || NET40
         private static readonly Dictionary<ExpressionType, string> BinaryOperations = new Dictionary<ExpressionType, string> {
@@ -268,6 +271,9 @@ namespace Triton {
 
 #if NETSTANDARD || NET40
         /// <inheritdoc/>
+        public override IEnumerable<string> GetDynamicMemberNames() => Keys.OfType<string>();
+
+        /// <inheritdoc/>
         public override bool TryBinaryOperation(BinaryOperationBinder binder, object arg, out object result) {
             var operation = binder.Operation;
             if (!BinaryOperations.TryGetValue(operation, out var metamethod)) {
@@ -349,6 +355,8 @@ namespace Triton {
             return item.Value != null && this[item.Key]?.Equals(item.Value) == true && Remove(item.Key);
         }
 
+        [DebuggerDisplay("Count = {Count}")]
+        [DebuggerTypeProxy(typeof(DebuggerView))]
         private sealed class KeyCollection : ICollection<object> {
             private readonly LuaTable _table;
 
@@ -371,8 +379,19 @@ namespace Triton {
             public bool Remove(object item) => throw new NotSupportedException();
 
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+            private sealed class DebuggerView {
+                private readonly KeyCollection _collection;
+
+                public DebuggerView(KeyCollection collection) => _collection = collection;
+
+                [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
+                public object[] Items => _collection.ToArray();
+            }
         }
 
+        [DebuggerDisplay("Count = {Count}")]
+        [DebuggerTypeProxy(typeof(DebuggerView))]
         private sealed class ValueCollection : ICollection<object> {
             private readonly LuaTable _table;
 
@@ -395,6 +414,26 @@ namespace Triton {
             public bool Remove(object item) => throw new NotSupportedException();
 
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+            private sealed class DebuggerView {
+                private readonly ValueCollection _collection;
+
+                public DebuggerView(ValueCollection collection) => _collection = collection;
+
+                [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
+                public object[] Items => _collection.ToArray();
+            }
+        }
+
+        private sealed class DebuggerView {
+            private readonly LuaTable _table;
+
+            public DebuggerView(LuaTable table) => _table = table;
+
+            [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
+            public KeyValuePair<object, object>[] Items => _table.ToArray();
+
+            public LuaTable Metatable => _table.Metatable;
         }
     }
 }

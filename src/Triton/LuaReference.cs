@@ -39,7 +39,7 @@ namespace Triton {
             Lua = lua;
             _referenceId = referenceId;
         }
-
+        
         internal Lua Lua { get; }
 
         internal void PushOnto(IntPtr state) {

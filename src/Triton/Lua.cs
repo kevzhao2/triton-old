@@ -263,6 +263,15 @@ namespace Triton {
 #if NETSTANDARD || NET40
         /// <inheritdoc/>
         /// <exception cref="ObjectDisposedException">The <see cref="Lua"/> instance is disposed.</exception>
+        public override IEnumerable<string> GetDynamicMemberNames() {
+            ThrowIfDisposed();
+
+            var globalsTable = new LuaTable(this, LuaApi.RidxGlobals);
+            return globalsTable.GetDynamicMemberNames();
+        }
+
+        /// <inheritdoc/>
+        /// <exception cref="ObjectDisposedException">The <see cref="Lua"/> instance is disposed.</exception>
         public override bool TryGetMember(GetMemberBinder binder, out object result) {
             result = this[binder.Name];
             return true;
