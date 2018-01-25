@@ -57,6 +57,7 @@ namespace Triton.Interop {
         public static readonly Delegates.RawGetI RawGetI;
         public static readonly Delegates.Ref Ref;
         public static readonly Delegates.Resume Resume;
+        public static readonly Delegates.SetHook SetHook;
         public static readonly Delegates.SetMetatable SetMetatable;
         public static readonly Delegates.SetTable SetTable;
         public static readonly Delegates.SetTop SetTop;
@@ -120,6 +121,7 @@ namespace Triton.Interop {
             RawGetI = library.GetDelegate<Delegates.RawGetI>("lua_rawgeti");
             Ref = library.GetDelegate<Delegates.Ref>("luaL_ref");
             Resume = library.GetDelegate<Delegates.Resume>("lua_resume");
+            SetHook = library.GetDelegate<Delegates.SetHook>("lua_sethook");
             SetMetatable = library.GetDelegate<Delegates.SetMetatable>("lua_setmetatable");
             SetTable = library.GetDelegate<Delegates.SetTable>("lua_settable");
             SetTop = library.GetDelegate<Delegates.SetTop>("lua_settop");
@@ -309,6 +311,9 @@ namespace Triton.Interop {
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void SetGlobal(IntPtr state, [In] byte[] name);
+
+            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+            public delegate void SetHook(IntPtr state, LuaHook hook, LuaHookMask mask, int count);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void SetMetatable(IntPtr state, int index);

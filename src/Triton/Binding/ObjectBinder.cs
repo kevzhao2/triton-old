@@ -29,55 +29,23 @@ namespace Triton.Binding {
     /// <summary>
     /// Handles .NET object binding.
     /// </summary>
-    internal sealed class ObjectBinder : IDisposable {
+    internal sealed class ObjectBinder {
         private const string ObjectMetatable = "Triton$__object";
         private const string TypeMetatable = "Triton$__type";
-
-        private static readonly Dictionary<string, LuaCFunction> ObjectMetamethods = new Dictionary<string, LuaCFunction> {
-            ["__call"] = CallObject,
-            ["__index"] = IndexObject,
-            ["__newindex"] = NewIndexObject,
-            ["__add"] = AddObject,
-            ["__sub"] = SubObject,
-            ["__mul"] = MulObject,
-            ["__div"] = DivObject,
-            ["__mod"] = ModObject,
-            ["__band"] = BandObject,
-            ["__bor"] = BorObject,
-            ["__bxor"] = BxorObject,
-            ["__shr"] = ShrObject,
-            ["__shl"] = ShlObject,
-            ["__eq"] = EqObject,
-            ["__lt"] = LtObject,
-            ["__le"] = LeObject,
-            ["__unm"] = UnmObject,
-            ["__bnot"] = BnotObject,
-            ["__gc"] = Gc,
-            ["__tostring"] = ToString
-        };
-
-        private static readonly Dictionary<string, LuaCFunction> TypeMetamethods = new Dictionary<string, LuaCFunction> {
-            ["__call"] = CallType,
-            ["__index"] = IndexType,
-            ["__newindex"] = NewIndexType,
-            ["__gc"] = Gc,
-            ["__tostring"] = ToString
-        };
-
-        // Storing these delegates prevents the .NET GC from collecting them.
-        private static readonly LuaCFunction ProxyCallTypeDelegate = ProxyCallType;
-        private static readonly LuaCFunction ProxyCallObjectDelegate = ProxyCallObject;
-
-        private readonly GCHandle _luaHandle;
+        
+        private readonly Lua _lua;
         private readonly LuaFunction _wrapFunction;
+        private readonly Dictionary<string, LuaCFunction> _objectMetamethods;
+        private readonly Dictionary<string, LuaCFunction> _typeMetamethods;
+        private readonly LuaCFunction _proxyCallObjectDelegate;
+        private readonly LuaCFunction _proxyCallTypeDelegate;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ObjectBinder"/> class for the given <see cref="Lua"/> environment.
         /// </summary>
         /// <param name="lua">The <see cref="Lua"/> environment.</param>
         public ObjectBinder(Lua lua) {
-            // To callback into static methods, we need to provide a handle to the Lua environment.
-            _luaHandle = GCHandle.Alloc(lua, GCHandleType.WeakTrackResurrection);
+            _lua = lua;
             
             // The __index metamethod can be cached in certain situations, such as methods and events. This can significantly improve
             // performance.
@@ -122,8 +90,42 @@ namespace Triton.Binding {
                     end
                 end")[0];
 
-            NewMetatable(ObjectMetatable, ObjectMetamethods);
-            NewMetatable(TypeMetatable, TypeMetamethods);
+            // Storing the LuaCFunction delegates prevents the .NET GC from garbage collecting them.
+            _objectMetamethods = new Dictionary<string, LuaCFunction> {
+                ["__call"] = CallObject,
+                ["__index"] = IndexObject,
+                ["__newindex"] = NewIndexObject,
+                ["__add"] = AddObject,
+                ["__sub"] = SubObject,
+                ["__mul"] = MulObject,
+                ["__div"] = DivObject,
+                ["__mod"] = ModObject,
+                ["__band"] = BandObject,
+                ["__bor"] = BorObject,
+                ["__bxor"] = BxorObject,
+                ["__shr"] = ShrObject,
+                ["__shl"] = ShlObject,
+                ["__eq"] = EqObject,
+                ["__lt"] = LtObject,
+                ["__le"] = LeObject,
+                ["__unm"] = UnmObject,
+                ["__bnot"] = BnotObject,
+                ["__gc"] = Gc,
+                ["__tostring"] = ToString
+            };
+            _proxyCallObjectDelegate = ProxyCallObject;
+
+            _typeMetamethods = new Dictionary<string, LuaCFunction> {
+                ["__call"] = CallType,
+                ["__index"] = IndexType,
+                ["__newindex"] = NewIndexType,
+                ["__gc"] = Gc,
+                ["__tostring"] = ToString
+            };
+            _proxyCallTypeDelegate = ProxyCallType;
+
+            NewMetatable(ObjectMetatable, _objectMetamethods);
+            NewMetatable(TypeMetatable, _typeMetamethods);
 
             void NewMetatable(string name, Dictionary<string, LuaCFunction> metamethods) {
                 LuaApi.NewMetatable(lua.MainState, name);
@@ -136,8 +138,7 @@ namespace Triton.Binding {
                     } else if (isWrapped) {
                         _wrapFunction.PushOnto(lua.MainState);
                     }
-                    LuaApi.PushHandle(lua.MainState, _luaHandle);
-                    LuaApi.PushCClosure(lua.MainState, kvp.Value, 1);
+                    LuaApi.PushCClosure(lua.MainState, kvp.Value, 0);
                     if (isWrapped) {
                         LuaApi.PCallK(lua.MainState, 1, 1);
                     }
@@ -330,25 +331,21 @@ namespace Triton.Binding {
             }
         }
 
-        private static int CallObject(IntPtr state) {
+        private int CallObject(IntPtr state) {
             return WrappedCall(state, () => {
                 var obj = LuaApi.ToHandle(state, 1).Target;
                 if (!(obj is Delegate @delegate)) {
                     throw new LuaException("attempt to call non-delegate");
                 }
-
-                var lua = (Lua)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
+                
                 var top = LuaApi.GetTop(state) - 1;
-                var objs = lua.ToObjects(2, top, state);
+                var objs = _lua.ToObjects(2, top, state);
 
                 var method = @delegate.Method;
                 if (TryCoerce(objs, method.GetParameters(), out var args) == int.MinValue) {
                     throw new LuaException("attempt to call delegate with invalid args");
                 }
-
-                // Because calls tend to take a long time, let's clean references now.
-                lua.CleanReferences();
-
+                
                 object result;
                 try {
                     result = method.Invoke(@delegate.Target, args);
@@ -359,22 +356,21 @@ namespace Triton.Binding {
                 var numResults = 0;
                 if (method.ReturnType != typeof(void)) {
                     ++numResults;
-                    lua.PushObject(result, state);
+                    _lua.PushObject(result, state);
                 }
                 foreach (var param in method.GetParameters().Where(p => p.ParameterType.IsByRef)) {
                     ++numResults;
-                    lua.PushObject(args[param.Position], state);
+                    _lua.PushObject(args[param.Position], state);
                 }
                 return numResults;
             });
         }
 
-        private static int CallType(IntPtr state) {
+        private int CallType(IntPtr state) {
             return WrappedCall(state, () => {
-                var lua = (Lua)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
                 var type = (Type)LuaApi.ToHandle(state, 1).Target;
                 var top = LuaApi.GetTop(state) - 1;
-                var objs = lua.ToObjects(2, top, state);
+                var objs = _lua.ToObjects(2, top, state);
                 
                 object result;
                 if (type.ContainsGenericParameters) {
@@ -422,19 +418,19 @@ namespace Triton.Binding {
                     }
                 }
 
-                lua.PushObject(result, state);
+                _lua.PushObject(result, state);
                 return 1;
             });
         }
 
-        private static int IndexObject(IntPtr state) {
+        private int IndexObject(IntPtr state) {
             return WrappedCall(state, () => {
                 var obj = LuaApi.ToHandle(state, 1).Target;
                 return IndexShared(state, obj, obj.GetType());
             });
         }
 
-        private static int IndexType(IntPtr state) {
+        private int IndexType(IntPtr state) {
             return WrappedCall(state, () => {
                 var type = (Type)LuaApi.ToHandle(state, 1).Target;
                 if (type.IsInterface) {
@@ -448,9 +444,7 @@ namespace Triton.Binding {
             });
         }
 
-        private static int IndexShared(IntPtr state, object obj, Type type) {
-            var lua = (Lua)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
-
+        private int IndexShared(IntPtr state, object obj, Type type) {
             var keyType = LuaApi.Type(state, 2);
             if (keyType == LuaType.String) {
                 var name = LuaApi.ToString(state, 2);
@@ -465,17 +459,16 @@ namespace Triton.Binding {
                 if (member is MethodInfo method) {
                     // Methods return a function that handles the overload resolution!
                     LuaApi.PushBoolean(state, true);
-                    lua.Binder._wrapFunction.PushOnto(state);
-                    LuaApi.PushValue(state, LuaApi.UpvalueIndex(1));
+                    _wrapFunction.PushOnto(state);
                     LuaApi.PushValue(state, 1);
                     LuaApi.PushValue(state, 2);
                     LuaApi.PushInteger(state, 0);
-                    LuaApi.PushCClosure(state, isStatic ? ProxyCallTypeDelegate : ProxyCallObjectDelegate, 4);
+                    LuaApi.PushCClosure(state, isStatic ? _proxyCallTypeDelegate : _proxyCallObjectDelegate, 3);
                     LuaApi.PCallK(state, 1, 1);
                 } else if (member is PropertyInfo property) {
                     if (property.GetIndexParameters().Length > 0) {
                         LuaApi.PushBoolean(state, true);
-                        lua.PushObject(new IndexedPropertyWrapper(obj, property), state);
+                        _lua.PushObject(new IndexedPropertyWrapper(obj, property), state);
                     } else {
                         if (property.GetGetMethod() == null) {
                             throw new LuaException("attempt to get property without getter");
@@ -483,20 +476,20 @@ namespace Triton.Binding {
 
                         try {
                             LuaApi.PushBoolean(state, false);
-                            lua.PushObject(property.GetValue(obj, null), state);
+                            _lua.PushObject(property.GetValue(obj, null), state);
                         } catch (TargetInvocationException e) {
                             throw new LuaException($"attempt to get property threw:\n{e.InnerException}");
                         }
                     }
                 } else if (member is FieldInfo field) {
                     LuaApi.PushBoolean(state, field.IsLiteral);
-                    lua.PushObject(field.GetValue(obj), state);
+                    _lua.PushObject(field.GetValue(obj), state);
                 } else if (member is EventInfo @event) {
                     LuaApi.PushBoolean(state, true);
-                    lua.PushObject(new EventWrapper(obj, @event), state);
+                    _lua.PushObject(new EventWrapper(obj, @event), state);
                 } else {
                     LuaApi.PushBoolean(state, true);
-                    lua.PushObject(new TypeWrapper((Type)member), state);
+                    _lua.PushObject(new TypeWrapper((Type)member), state);
                 }
                 return 2;
             }
@@ -512,31 +505,30 @@ namespace Triton.Binding {
                 }
 
                 LuaApi.PushBoolean(state, false);
-                lua.PushObject(array.GetValue(index), state);
+                _lua.PushObject(array.GetValue(index), state);
                 return 2;
             }
 
             throw new LuaException("attempt to index with invalid key");
         }
 
-        private static int ProxyCallObject(IntPtr state) {
+        private int ProxyCallObject(IntPtr state) {
             return WrappedCall(state, () => {
-                var obj = LuaApi.ToHandle(state, LuaApi.UpvalueIndex(2)).Target;
+                var obj = LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
                 return ProxyCallShared(state, obj, obj.GetType());
             });
         }
 
-        private static int ProxyCallType(IntPtr state) {
+        private int ProxyCallType(IntPtr state) {
             return WrappedCall(state, () => {
-                var type = (Type)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(2)).Target;
+                var type = (Type)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
                 return ProxyCallShared(state, null, type);
             });
         }
 
-        private static int ProxyCallShared(IntPtr state, object obj, Type type) {
-            var lua = (Lua)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
-            var name = LuaApi.ToString(state, LuaApi.UpvalueIndex(3));
-            var numTypeArgs = (int)LuaApi.ToInteger(state, LuaApi.UpvalueIndex(4));
+        private int ProxyCallShared(IntPtr state, object obj, Type type) {
+            var name = LuaApi.ToString(state, LuaApi.UpvalueIndex(2));
+            var numTypeArgs = (int)LuaApi.ToInteger(state, LuaApi.UpvalueIndex(3));
             var top = LuaApi.GetTop(state) - 1;
             var info = type.GetBindingInfo();
             var isStatic = obj == null;
@@ -544,13 +536,13 @@ namespace Triton.Binding {
             // The arguments will start at 2 only if the call is an instance call and it's not a generic call. This is because the
             // obj:Method syntax will pass obj as the first argument, but a generic obj:Method call will not have obj as the first
             // argument because only the first "invocation" with the types will have obj as the first argument.
-            var objs = lua.ToObjects(isStatic || numTypeArgs > 0 ? 1 : 2, top, state);
+            var objs = _lua.ToObjects(isStatic || numTypeArgs > 0 ? 1 : 2, top, state);
 
             var methods = info.GetMethods(name, isStatic, numTypeArgs);
             if (numTypeArgs > 0) {
                 var typeArgs = new Type[numTypeArgs];
                 for (var i = 0; i < typeArgs.Length; ++i) {
-                    if (!(lua.ToObject(LuaApi.UpvalueIndex(5 + i), null, state) is Type typeArg)) {
+                    if (!(_lua.ToObject(LuaApi.UpvalueIndex(4 + i), null, state) is Type typeArg)) {
                         throw new LuaException("attempt to construct generic method with non-type arg");
                     }
                     if (typeArg.ContainsGenericParameters) {
@@ -589,22 +581,18 @@ namespace Triton.Binding {
                     throw new LuaException("attempt to call method with invalid args");
                 }
 
-                lua.Binder._wrapFunction.PushOnto(state);
+                _wrapFunction.PushOnto(state);
                 LuaApi.PushValue(state, LuaApi.UpvalueIndex(1));
                 LuaApi.PushValue(state, LuaApi.UpvalueIndex(2));
-                LuaApi.PushValue(state, LuaApi.UpvalueIndex(3));
                 LuaApi.PushInteger(state, objs.Length);
                 for (var i = isStatic ? 1 : 2; i <= top; ++i) {
                     LuaApi.PushValue(state, i);
                 }
-                LuaApi.PushCClosure(state, isStatic ? ProxyCallTypeDelegate : ProxyCallObjectDelegate, isStatic ? top + 4 : top + 3);
+                LuaApi.PushCClosure(state, isStatic ? _proxyCallTypeDelegate : _proxyCallObjectDelegate, isStatic ? top + 3 : top + 2);
                 LuaApi.PCallK(state, 1, 1);
                 return 1;
             }
-
-            // Because calls tend to take a long time, let's clean references now.
-            lua.CleanReferences();
-
+            
             object result;
             try {
                 result = method.Invoke(obj, args);
@@ -615,23 +603,23 @@ namespace Triton.Binding {
             var numResults = 0;
             if (method.ReturnType != typeof(void)) {
                 ++numResults;
-                lua.PushObject(result, state);
+                _lua.PushObject(result, state);
             }
             foreach (var param in method.GetParameters().Where(p => p.ParameterType.IsByRef)) {
                 ++numResults;
-                lua.PushObject(args[param.Position], state);
+                _lua.PushObject(args[param.Position], state);
             }
             return numResults;
         }
 
-        private static int NewIndexObject(IntPtr state) {
+        private int NewIndexObject(IntPtr state) {
             return WrappedCall(state, () => {
                 var obj = LuaApi.ToHandle(state, 1).Target;
                 return NewIndexShared(state, obj, obj.GetType());
             });
         }
 
-        private static int NewIndexType(IntPtr state) {
+        private int NewIndexType(IntPtr state) {
             return WrappedCall(state, () => {
                 var type = (Type)LuaApi.ToHandle(state, 1).Target;
                 if (type.IsInterface) {
@@ -645,9 +633,8 @@ namespace Triton.Binding {
             });
         }
 
-        private static int NewIndexShared(IntPtr state, object obj, Type type) {
-            var lua = (Lua)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
-            var value = lua.ToObject(3, null, state);
+        private int NewIndexShared(IntPtr state, object obj, Type type) {
+            var value = _lua.ToObject(3, null, state);
 
             var keyType = LuaApi.Type(state, 2);
             if (keyType == LuaType.String) {
@@ -715,25 +702,24 @@ namespace Triton.Binding {
             throw new LuaException("attempt to index with invalid key");
         }
 
-        private static int AddObject(IntPtr state) => BinaryOpShared(state, "perform arithmetic on", "op_Addition");
-        private static int SubObject(IntPtr state) => BinaryOpShared(state, "perform arithmetic on", "op_Subtraction");
-        private static int MulObject(IntPtr state) => BinaryOpShared(state, "perform arithmetic on", "op_Multiply");
-        private static int DivObject(IntPtr state) => BinaryOpShared(state, "perform arithmetic on", "op_Division");
-        private static int ModObject(IntPtr state) => BinaryOpShared(state, "perform arithmetic on", "op_Modulus");
-        private static int BandObject(IntPtr state) => BinaryOpShared(state, "perform bitwise operation on", "op_BitwiseAnd");
-        private static int BorObject(IntPtr state) => BinaryOpShared(state, "perform bitwise operation on", "op_BitwiseOr");
-        private static int BxorObject(IntPtr state) => BinaryOpShared(state, "perform bitwise operation on", "op_ExclusiveOr");
-        private static int EqObject(IntPtr state) => BinaryOpShared(state, "compare", "op_Equality");
-        private static int LtObject(IntPtr state) => BinaryOpShared(state, "compare", "op_LessThan");
-        private static int LeObject(IntPtr state) => BinaryOpShared(state, "compare", "op_LessThanOrEqual");
-        private static int ShlObject(IntPtr state) => BinaryOpShared(state, "perform bitwise operation on", "op_LeftShift");
-        private static int ShrObject(IntPtr state) => BinaryOpShared(state, "perform bitwise operation on", "op_RightShift");
+        private int AddObject(IntPtr state) => BinaryOpShared(state, "perform arithmetic on", "op_Addition");
+        private int SubObject(IntPtr state) => BinaryOpShared(state, "perform arithmetic on", "op_Subtraction");
+        private int MulObject(IntPtr state) => BinaryOpShared(state, "perform arithmetic on", "op_Multiply");
+        private int DivObject(IntPtr state) => BinaryOpShared(state, "perform arithmetic on", "op_Division");
+        private int ModObject(IntPtr state) => BinaryOpShared(state, "perform arithmetic on", "op_Modulus");
+        private int BandObject(IntPtr state) => BinaryOpShared(state, "perform bitwise operation on", "op_BitwiseAnd");
+        private int BorObject(IntPtr state) => BinaryOpShared(state, "perform bitwise operation on", "op_BitwiseOr");
+        private int BxorObject(IntPtr state) => BinaryOpShared(state, "perform bitwise operation on", "op_ExclusiveOr");
+        private int EqObject(IntPtr state) => BinaryOpShared(state, "compare", "op_Equality");
+        private int LtObject(IntPtr state) => BinaryOpShared(state, "compare", "op_LessThan");
+        private int LeObject(IntPtr state) => BinaryOpShared(state, "compare", "op_LessThanOrEqual");
+        private int ShlObject(IntPtr state) => BinaryOpShared(state, "perform bitwise operation on", "op_LeftShift");
+        private int ShrObject(IntPtr state) => BinaryOpShared(state, "perform bitwise operation on", "op_RightShift");
 
-        private static int BinaryOpShared(IntPtr state, string operation, string methodName) {
+        private int BinaryOpShared(IntPtr state, string operation, string methodName) {
             return WrappedCall(state, () => {
-                var lua = (Lua)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
-                var operand1 = lua.ToObject(1, null, state);
-                var operand2 = lua.ToObject(2, null, state);
+                var operand1 = _lua.ToObject(1, null, state);
+                var operand2 = _lua.ToObject(2, null, state);
                 var info1 = operand1.GetType().GetBindingInfo();
                 var info2 = operand2.GetType().GetBindingInfo();
 
@@ -755,17 +741,16 @@ namespace Triton.Binding {
                     throw new LuaException($"attempt to {operation} two objects threw:\n{e.InnerException}");
                 }
 
-                lua.PushObject(result, state);
+                _lua.PushObject(result, state);
                 return 1;
             });
         }
 
-        private static int UnmObject(IntPtr state) => UnaryOpShared(state, "perform arithmetic on", "op_UnaryNegation");
-        private static int BnotObject(IntPtr state) => UnaryOpShared(state, "perform bitwise operation on", "op_OnesComplement");
+        private int UnmObject(IntPtr state) => UnaryOpShared(state, "perform arithmetic on", "op_UnaryNegation");
+        private int BnotObject(IntPtr state) => UnaryOpShared(state, "perform bitwise operation on", "op_OnesComplement");
 
-        private static int UnaryOpShared(IntPtr state, string operation, string methodName) {
+        private int UnaryOpShared(IntPtr state, string operation, string methodName) {
             return WrappedCall(state, () => {
-                var lua = (Lua)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
                 var operand = LuaApi.ToHandle(state, 1).Target;
                 var info = operand.GetType().GetBindingInfo();
 
@@ -781,29 +766,21 @@ namespace Triton.Binding {
                     throw new LuaException($"attempt to {operation} an object threw:\n{e.InnerException}");
                 }
 
-                lua.PushObject(result, state);
+                _lua.PushObject(result, state);
                 return 1;
             });
         }
 
-        private static int Gc(IntPtr state) {
+        private int Gc(IntPtr state) {
             var handle = LuaApi.ToHandle(state, 1);
             handle.Free();
             return 0;
         }
 
-        private static int ToString(IntPtr state) {
+        private int ToString(IntPtr state) {
             var obj = LuaApi.ToHandle(state, 1).Target;
             LuaApi.PushString(state, obj.ToString() ?? "");
             return 1;
-        }
-
-        /// <summary>
-        /// Disposes the <see cref="ObjectBinder"/>.
-        /// </summary>
-        public void Dispose() {
-            // This is not safe, but we know Dispose will only be called once.
-            _luaHandle.Free();
         }
     }
 }

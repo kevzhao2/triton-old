@@ -38,11 +38,14 @@ namespace Triton {
 #else
 	public sealed class Lua : IDisposable {
 #endif
+        private const int CleanReferencesPeriod = 1000;
         private const string TempGlobal = "Triton$__temp";
         
         private static readonly object[] EmptyObjectArray = new object[0];
 
+        private readonly ObjectBinder _binder;
         private readonly Dictionary<IntPtr, WeakReference> _cachedLuaReferences = new Dictionary<IntPtr, WeakReference>();
+        private readonly LuaHook _cleanReferencesDelegate;
         private readonly Dictionary<IntPtr, int> _pointerToReferenceId = new Dictionary<IntPtr, int>();
 
         private bool _isDisposed;
@@ -54,7 +57,11 @@ namespace Triton {
             MainState = LuaApi.NewState();
             LuaApi.OpenLibs(MainState);
 
-            Binder = new ObjectBinder(this);
+            // To clean references, we set a hook that executes after a certain number of instructions have been executed.
+            _cleanReferencesDelegate = CleanReferences;
+            LuaApi.SetHook(MainState, _cleanReferencesDelegate, LuaHookMask.Count, CleanReferencesPeriod);
+
+            _binder = new ObjectBinder(this);
             this["using"] = CreateFunction(new Action<string>(ImportNamespace));
         }
 
@@ -95,8 +102,7 @@ namespace Triton {
                 LuaApi.SetGlobal(MainState, name);
             }
         }
-
-        internal ObjectBinder Binder { get; }
+        
         internal IntPtr MainState { get; }
 
         /// <summary>
@@ -404,10 +410,7 @@ namespace Triton {
             foreach (var arg in args) {
                 PushObject(arg, state);
             }
-
-            // Because calls tend to take a long time, let's clean references now.
-            CleanReferences();
-
+            
             var status = isResuming ? LuaApi.Resume(state, MainState, numArgs) : LuaApi.PCallK(state, numArgs);
             if (status != LuaStatus.Ok && status != LuaStatus.Yield) {
                 var errorMessage = LuaApi.ToString(state, -1);
@@ -430,18 +433,18 @@ namespace Triton {
             return results;
         }
 
-        internal void CleanReferences() {
+        private void CleanReferences(IntPtr state, IntPtr debug) {
             var deadPointers = new List<IntPtr>();
             foreach (var kvp in _cachedLuaReferences) {
                 if (!kvp.Value.IsAlive) {
                     deadPointers.Add(kvp.Key);
                 }
             }
-            
+
             foreach (var deadPointer in deadPointers) {
                 _cachedLuaReferences.Remove(deadPointer);
                 var referenceId = _pointerToReferenceId[deadPointer];
-                LuaApi.Unref(MainState, LuaApi.RegistryIndex, referenceId);
+                LuaApi.Unref(state, LuaApi.RegistryIndex, referenceId);
                 _pointerToReferenceId.Remove(deadPointer);
             }
         }
@@ -452,10 +455,9 @@ namespace Triton {
             }
 
             if (disposing) {
-                Binder.Dispose();
                 GC.SuppressFinalize(this);
             }
-
+            
             LuaApi.Close(MainState);
             _isDisposed = true;
         }

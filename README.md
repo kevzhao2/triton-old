@@ -1,6 +1,6 @@
 # Triton [![Build Status](https://travis-ci.org/kevzhao2/Triton.svg?branch=master)](https://travis-ci.org/kevzhao2/Triton) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Triton provides an easy and efficient way to embed Lua 5.3 into your .NET application! Check the wiki for more comprehensive documentation.
+Triton provides an easy and efficient way to embed Lua 5.3 into your .NET application! Check out [the wiki](https://github.com/kevzhao2/Triton/wiki) for more comprehensive documentation.
 ## Comparison with NLua
 
 ### Advantages
