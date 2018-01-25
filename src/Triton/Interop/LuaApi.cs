@@ -23,6 +23,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security;
 using System.Text;
 
 namespace Triton.Interop {
@@ -221,134 +222,177 @@ namespace Triton.Interop {
         /// Holds delegate definitions.
         /// </summary>
         public static class Delegates {
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate bool CheckStack(IntPtr state, int n);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void Close(IntPtr state);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void CreateTable(IntPtr state, int numArray = 0, int numNonArray = 0);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void GetField(IntPtr state, int index, [In] byte[] field);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate LuaType GetGlobal(IntPtr state, [In] byte[] name);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate bool GetMetatable(IntPtr state, int index);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate int GetStack(IntPtr state, int level, ref LuaDebug debug);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate LuaType GetTable(IntPtr state, int index);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate int GetTop(IntPtr state);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate bool IsInteger(IntPtr state, int index);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate LuaStatus LoadString(IntPtr state, [In] byte[] s);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate bool NewMetatable(IntPtr state, [In] byte[] name);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate IntPtr NewState();
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate IntPtr NewThread(IntPtr state);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate IntPtr NewUserdata(IntPtr state, UIntPtr size);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate bool Next(IntPtr state, int index);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void OpenLibs(IntPtr state);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate LuaStatus PCallK(
                 IntPtr state, int numArgs, int numResults = MultRet, int messageHandler = 0, IntPtr context = default(IntPtr),
                 LuaKFunction continuation = null);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void PushBoolean(IntPtr state, bool b);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void PushCClosure(IntPtr state, LuaCFunction function, int numUpvalues);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void PushInteger(IntPtr state, long i);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void PushNil(IntPtr state);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void PushNumber(IntPtr state, double n);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void PushLString(IntPtr state, [In] byte[] s, UIntPtr length);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void PushValue(IntPtr state, int index);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate LuaType RawGetI(IntPtr state, int index, long n);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate int Ref(IntPtr state, int index);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate LuaStatus Resume(IntPtr thread, IntPtr from, int numArgs);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void SetField(IntPtr state, int index, [In] byte[] field);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void SetGlobal(IntPtr state, [In] byte[] name);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void SetHook(IntPtr state, LuaHook hook, LuaHookMask mask, int count);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void SetMetatable(IntPtr state, int index);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void SetTable(IntPtr state, int index);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void SetTop(IntPtr state, int top);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate LuaStatus Status(IntPtr state);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate bool ToBoolean(IntPtr state, int index);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate long ToIntegerX(IntPtr state, int index, out bool isSuccess);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate IntPtr ToLString(IntPtr state, int index, out UIntPtr length);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate double ToNumberX(IntPtr state, int index, out bool isSuccess);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate IntPtr ToPointer(IntPtr state, int index);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate IntPtr ToUserdata(IntPtr state, int index);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate LuaType Type(IntPtr state, int index);
 
+            [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void Unref(IntPtr state, int index, int reference);
         }

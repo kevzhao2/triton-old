@@ -19,7 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
-#if NETSTANDARD || NET40
+#if FEATURE_DYNAMIC
 using System.Dynamic;
 #endif
 using Triton.Interop;
@@ -28,7 +28,7 @@ namespace Triton {
     /// <summary>
     /// Represents a Lua reference which is stored in the registry of some <see cref="Triton.Lua"/> environment.
     /// </summary>
-#if NETSTANDARD || NET40
+#if FEATURE_DYNAMIC
     public abstract class LuaReference : DynamicObject {
 #else
 	public abstract class LuaReference {

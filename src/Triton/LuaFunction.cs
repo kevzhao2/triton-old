@@ -19,7 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
-#if NETSTANDARD || NET40
+#if FEATURE_DYNAMIC
 using System.Dynamic;
 #endif
 
@@ -50,7 +50,7 @@ namespace Triton {
             return Lua.Call(args);
         }
 
-#if NETSTANDARD || NET40
+#if FEATURE_DYNAMIC
         /// <inheritdoc/>
         /// <exception cref="LuaException">A Lua error occurs.</exception>
         public override bool TryInvoke(InvokeBinder binder, object[] args, out object result) {

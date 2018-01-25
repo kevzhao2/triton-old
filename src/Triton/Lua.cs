@@ -21,7 +21,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-#if NETSTANDARD || NET40
+#if FEATURE_DYNAMIC
 using System.Dynamic;
 #endif
 using System.Linq;
@@ -33,7 +33,7 @@ namespace Triton {
     /// <summary>
     /// Acts as a managed wrapper around a Lua environment.
     /// </summary>
-#if NETSTANDARD || NET40
+#if FEATURE_DYNAMIC
     public sealed class Lua : DynamicObject, IDisposable {
 #else
 	public sealed class Lua : IDisposable {
@@ -260,7 +260,7 @@ namespace Triton {
             LuaApi.SetGlobal(MainState, cleanName);
         }
 
-#if NETSTANDARD || NET40
+#if FEATURE_DYNAMIC
         /// <inheritdoc/>
         /// <exception cref="ObjectDisposedException">The <see cref="Lua"/> instance is disposed.</exception>
         public override IEnumerable<string> GetDynamicMemberNames() {

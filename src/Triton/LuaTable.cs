@@ -21,7 +21,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-#if NETSTANDARD || NET40
+#if FEATURE_DYNAMIC
 using System.Dynamic;
 using System.Linq.Expressions;
 #endif
@@ -36,7 +36,7 @@ namespace Triton {
     [DebuggerDisplay("Count = {Count}")]
     [DebuggerTypeProxy(typeof(DebuggerView))]
     public sealed class LuaTable : LuaReference, IDictionary<object, object> {
-#if NETSTANDARD || NET40
+#if FEATURE_DYNAMIC
         private static readonly Dictionary<ExpressionType, string> BinaryOperations = new Dictionary<ExpressionType, string> {
             [ExpressionType.Add] = "__add",
             [ExpressionType.AddChecked] = "__add",
@@ -269,7 +269,7 @@ namespace Triton {
             return value != null;
         }
 
-#if NETSTANDARD || NET40
+#if FEATURE_DYNAMIC
         /// <inheritdoc/>
         public override IEnumerable<string> GetDynamicMemberNames() => Keys.OfType<string>();
 
