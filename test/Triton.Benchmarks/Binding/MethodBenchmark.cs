@@ -16,7 +16,7 @@ namespace Triton.Benchmarks.Binding {
         public (Action tritonAction, Action nluaAction) Benchmark_CallInstance(Triton.Lua triton, NLua.Lua nlua) {
             triton["test"] = new TestClass();
             nlua["test"] = new TestClass();
-            var tritonFunction = triton.LoadString("test:x()");
+            var tritonFunction = triton.CreateFunction("test:x()");
             var nluaFunction = nlua.LoadString("test:x()", "test");
 
             void Triton() => tritonFunction.Call();
@@ -27,7 +27,7 @@ namespace Triton.Benchmarks.Binding {
         public (Action tritonAction, Action nluaAction) Benchmark_CallStatic(Triton.Lua triton, NLua.Lua nlua) {
             triton.ImportType(typeof(TestClass));
             nlua.DoString("TestClass = luanet.import_type('Triton.Benchmarks.Binding.MethodBenchmark+TestClass')");
-            var tritonFunction = triton.LoadString("TestClass.X()");
+            var tritonFunction = triton.CreateFunction("TestClass.X()");
             var nluaFunction = nlua.LoadString("TestClass.X()", "test");
 
             void Triton() => tritonFunction.Call();

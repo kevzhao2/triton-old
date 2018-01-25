@@ -18,12 +18,18 @@ var x = (string)lua["x"];
 Assert.Equal("test", x);
 ```
 
-If you're going to execute a certain string many times, you can also use the `LoadString` method, which will return a `LuaFunction` that you can then call multiple times:
+If you're going to execute a certain string many times, you can also use the `CreateFunction` method, which will return a `LuaFunction` that you can then call multiple times:
 ```csharp
-var function = lua.LoadString("print('Hello!')");
+var function = lua.CreateFunction("print('Hello!')");
 for (var i = 0; i < 10000; ++i) {
     function.Call();
 }
+```
+
+The `CreateFunction` method can also be used to create a function from a .NET delegate:
+```csharp
+var function = lua.CreateFunction(new Func<int, int>(x => x * x * x));
+Assert.Equal(216L, function.Call(6)[0]);
 ```
 
 ### Passing .NET objects

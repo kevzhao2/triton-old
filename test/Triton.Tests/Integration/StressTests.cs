@@ -14,7 +14,7 @@ namespace Triton.Tests.Integration {
         public void GetProperty(int n) {
             using (var lua = new Lua()) {
                 lua["test"] = new TestClass();
-                var function = lua.LoadString("x = test.TestProperty");
+                var function = lua.CreateFunction("x = test.TestProperty");
 
                 for (var i = 0; i < n; ++i) {
                     function.Call();
@@ -27,7 +27,7 @@ namespace Triton.Tests.Integration {
         public void SetProperty(int n) {
             using (var lua = new Lua()) {
                 lua["test"] = new TestClass();
-                var function = lua.LoadString("test.TestProperty = 0");
+                var function = lua.CreateFunction("test.TestProperty = 0");
 
                 for (var i = 0; i < n; ++i) {
                     function.Call();
@@ -40,7 +40,7 @@ namespace Triton.Tests.Integration {
         public void CallMethod(int n) {
             using (var lua = new Lua()) {
                 lua["test"] = new TestClass();
-                var function = lua.LoadString("test:TestMethod()");
+                var function = lua.CreateFunction("test:TestMethod()");
 
                 for (var i = 0; i < n; ++i) {
                     function.Call();

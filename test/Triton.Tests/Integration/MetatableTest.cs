@@ -15,7 +15,7 @@ namespace Triton.Tests.Integration {
         [Fact]
         public void Test() {
             using (var lua = new Lua()) {
-                var indexFunction = lua.LoadString("return 1");
+                var indexFunction = lua.CreateFunction("return 1");
                 var metatable = lua.CreateTable();
                 metatable["__index"] = indexFunction;
 

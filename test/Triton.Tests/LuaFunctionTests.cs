@@ -31,7 +31,7 @@ namespace Triton.Tests {
         [Fact]
         public void CallDynamic() {
 			using (var lua = new Lua()) {
-				dynamic function = lua.LoadString("return 6");
+				dynamic function = lua.CreateFunction("return 6");
 
 				dynamic results = function();
 
@@ -43,7 +43,7 @@ namespace Triton.Tests {
         [Fact]
         public void Call_NoArgs() {
             using (var lua = new Lua()) {
-				var function = lua.LoadString("return 1979");
+				var function = lua.CreateFunction("return 1979");
 
 				var results = function.Call();
 
@@ -55,10 +55,9 @@ namespace Triton.Tests {
         [Fact]
         public void Call_OneArg() {
 			using (var lua = new Lua()) {
-				var results = lua.DoString("return function(x) return x end");
-				var function = results[0] as LuaFunction;
+                var function = lua.CreateFunction("return ...");
 
-				results = function.Call("test");
+				var results = function.Call("test");
 
 				Assert.Single(results);
 				Assert.Equal("test", results[0]);
@@ -68,16 +67,14 @@ namespace Triton.Tests {
 		[Fact]
 		public void Call_ManyArgs() {
 			using (var lua = new Lua()) {
-				var results = lua.DoString("return function(...)\n" +
-										   "  result = 0\n" +
-										   "  for _, val in ipairs({...}) do\n" +
-										   "    result = result + val\n" +
-										   "  end\n" +
-										   "  return result\n" +
-										   "end");
-				var function = results[0] as LuaFunction;
+                var function = lua.CreateFunction(@"
+                    result = 0
+                    for _, val in ipairs({...}) do
+                        result = result + val
+                    end
+                    return result");
 
-				results = function.Call(6, 51, 29, -51, -29, 12);
+				var results = function.Call(6, 51, 29, -51, -29, 12);
 
 				Assert.Single(results);
 				Assert.Equal(18L, results[0]);
@@ -87,7 +84,7 @@ namespace Triton.Tests {
         [Fact]
         public void Call_NoResults() {
             using (var lua = new Lua()) {
-				var function = lua.LoadString("return");
+				var function = lua.CreateFunction("return");
 
 				var results = function.Call();
 
@@ -98,7 +95,7 @@ namespace Triton.Tests {
         [Fact]
         public void Call_ManyResults() {
             using (var lua = new Lua()) {
-				var function = lua.LoadString("return 0, 1, 4, 9, 16");
+				var function = lua.CreateFunction("return 0, 1, 4, 9, 16");
 
 				var results = function.Call("test");
 
@@ -114,7 +111,7 @@ namespace Triton.Tests {
         [Fact]
         public void Call_NullArgs_ThrowsArgumentNullException() {
             using (var lua = new Lua()) {
-				var function = lua.LoadString("");
+				var function = lua.CreateFunction("");
 
 				Assert.Throws<ArgumentNullException>(() => function.Call(null));
             }
@@ -123,7 +120,7 @@ namespace Triton.Tests {
         [Fact]
         public void Call_TooManyArgs_ThrowsLuaException() {
             using (var lua = new Lua()) {
-				var function = lua.LoadString("");
+				var function = lua.CreateFunction("");
 
 				Assert.Throws<LuaException>(() => function.Call(new object[10000000]));
             }
@@ -133,7 +130,7 @@ namespace Triton.Tests {
         [MemberData(nameof(RuntimeErrors))]
         public void Call_RuntimeError_ThrowsLuaException(string s) {
             using (var lua = new Lua()) {
-				var function = lua.LoadString(s);
+				var function = lua.CreateFunction(s);
 
 				Assert.Throws<LuaException>(() => function.Call());
             }
@@ -143,7 +140,7 @@ namespace Triton.Tests {
         public void Call_ArgWrongLuaEnvironment_ThrowsArgumentException() {
             using (var lua = new Lua())
             using (var lua2 = new Lua()) {
-                var function = lua.LoadString("");
+                var function = lua.CreateFunction("");
                 var table = lua2.CreateTable();
 
                 Assert.Throws<ArgumentException>(() => function.Call(table));

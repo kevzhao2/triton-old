@@ -12,7 +12,7 @@ namespace Triton.Tests.Integration {
         [Fact]
         public void Test() {
             using (var lua = new Lua()) {
-                var function = lua.LoadString(TestString);
+                var function = lua.CreateFunction(TestString);
                 var thread = lua.CreateThread(function);
                 Assert.True(thread.CanResume);
 

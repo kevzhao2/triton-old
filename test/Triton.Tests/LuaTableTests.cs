@@ -85,6 +85,41 @@ namespace Triton.Tests {
         }
 
         [Fact]
+        public void CallDynamic() {
+            using (var lua = new Lua()) {
+                var metatable = lua.CreateTable();
+                metatable["__call"] = lua.DoString("return function(o) return 6 end")[0];
+                dynamic table = lua.CreateTable();
+                table.Metatable = metatable;
+
+                var results = table();
+
+                Assert.Single(results);
+                Assert.Equal(6L, results[0]);
+            }
+        }
+
+        [Fact]
+        public void CallDynamic_NoMetatable_ThrowsBindingException() {
+            using (var lua = new Lua()) {
+                dynamic table = lua.CreateTable();
+
+                Assert.Throws<RuntimeBinderException>(() => table());
+            }
+        }
+
+        [Fact]
+        public void CallDynamic_NoCallMetamethod_ThrowsBindingException() {
+            using (var lua = new Lua()) {
+                var metatable = lua.CreateTable();
+                dynamic table = lua.CreateTable();
+                table.Metatable = metatable;
+
+                Assert.Throws<RuntimeBinderException>(() => table());
+            }
+        }
+
+        [Fact]
         public void UnaryOpDynamic() {
             using (var lua = new Lua()) {
                 var metatable = lua.CreateTable();
@@ -463,7 +498,7 @@ namespace Triton.Tests {
         public void GetSet_Function() {
             using (var lua = new Lua()) {
                 var table = lua.CreateTable();
-                var function = lua.LoadString("return 0");
+                var function = lua.CreateFunction("return 0");
 
                 table["test"] = function;
 

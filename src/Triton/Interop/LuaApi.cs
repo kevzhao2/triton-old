@@ -228,10 +228,10 @@ namespace Triton.Interop {
             public delegate void CreateTable(IntPtr state, int numArray = 0, int numNonArray = 0);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-            public delegate void GetField(IntPtr state, int index, byte[] field);
+            public delegate void GetField(IntPtr state, int index, [In] byte[] field);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-            public delegate LuaType GetGlobal(IntPtr state, byte[] name);
+            public delegate LuaType GetGlobal(IntPtr state, [In] byte[] name);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate bool GetMetatable(IntPtr state, int index);
@@ -249,10 +249,10 @@ namespace Triton.Interop {
             public delegate bool IsInteger(IntPtr state, int index);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-            public delegate LuaStatus LoadString(IntPtr state, byte[] s);
+            public delegate LuaStatus LoadString(IntPtr state, [In] byte[] s);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-            public delegate bool NewMetatable(IntPtr state, byte[] name);
+            public delegate bool NewMetatable(IntPtr state, [In] byte[] name);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate IntPtr NewState();
@@ -290,7 +290,7 @@ namespace Triton.Interop {
             public delegate void PushNumber(IntPtr state, double n);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-            public delegate void PushLString(IntPtr state, byte[] s, UIntPtr length);
+            public delegate void PushLString(IntPtr state, [In] byte[] s, UIntPtr length);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void PushValue(IntPtr state, int index);
@@ -305,10 +305,10 @@ namespace Triton.Interop {
             public delegate LuaStatus Resume(IntPtr thread, IntPtr from, int numArgs);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-            public delegate void SetField(IntPtr state, int index, byte[] field);
+            public delegate void SetField(IntPtr state, int index, [In] byte[] field);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-            public delegate void SetGlobal(IntPtr state, byte[] name);
+            public delegate void SetGlobal(IntPtr state, [In] byte[] name);
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void SetMetatable(IntPtr state, int index);

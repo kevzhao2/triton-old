@@ -295,6 +295,18 @@ namespace Triton {
         }
 
         /// <inheritdoc/>
+        public override bool TryInvoke(InvokeBinder binder, object[] args, out object result) {
+            var metatable = Metatable;
+            if (metatable == null || !(metatable["__call"] is LuaFunction metafunction)) {
+                result = null;
+                return false;
+            }
+            
+            result = metafunction.Call(args);
+            return true;
+        }
+
+        /// <inheritdoc/>
         public override bool TrySetMember(SetMemberBinder binder, object value) {
             this[binder.Name] = value;
             return true;

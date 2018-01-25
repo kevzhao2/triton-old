@@ -96,7 +96,7 @@ namespace Triton.Benchmarks.Table {
         public (Action tritonAction, Action nluaAction) Benchmark_ReadReference(Triton.Lua triton, NLua.Lua nlua) {
             var tritonTable = triton.CreateTable();
             var nluaTable = (NLua.LuaTable)nlua.DoString("return {}")[0];
-            tritonTable["test"] = triton.LoadString("");
+            tritonTable["test"] = triton.CreateFunction("");
             nluaTable["test"] = nlua.LoadString("", "test");
 
             void Triton() {

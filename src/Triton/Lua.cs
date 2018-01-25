@@ -38,6 +38,8 @@ namespace Triton {
 #else
 	public sealed class Lua : IDisposable {
 #endif
+        private const string TempGlobal = "Triton$__temp";
+        
         private static readonly object[] EmptyObjectArray = new object[0];
 
         private readonly Dictionary<IntPtr, WeakReference> _cachedLuaReferences = new Dictionary<IntPtr, WeakReference>();
@@ -53,7 +55,7 @@ namespace Triton {
             LuaApi.OpenLibs(MainState);
 
             Binder = new ObjectBinder(this);
-            this["using"] = new Action<string>(ImportNamespace);
+            this["using"] = CreateFunction(new Action<string>(ImportNamespace));
         }
 
         /// <summary>
@@ -96,6 +98,53 @@ namespace Triton {
 
         internal ObjectBinder Binder { get; }
         internal IntPtr MainState { get; }
+
+        /// <summary>
+        /// Creates a <see cref="LuaFunction"/> from the given delegate.
+        /// </summary>
+        /// <param name="delegate">The delegate.</param>
+        /// <returns>The resulting <see cref="LuaFunction"/>.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="delegate"/> is <c>null</c>.</exception>
+        /// <exception cref="ObjectDisposedException">The <see cref="Lua"/> environment is disposed.</exception>
+        public LuaFunction CreateFunction(Delegate @delegate) {
+            if (@delegate == null) {
+                throw new ArgumentNullException(nameof(@delegate));
+            }
+            ThrowIfDisposed();
+
+            this[TempGlobal] = @delegate;
+            var result = (LuaFunction)DoString($@"
+                local temp = _G['{TempGlobal}']
+                return function(...)
+                    return temp(...)
+                end")[0];
+            this[TempGlobal] = null;
+            return result;
+        }
+
+        /// <summary>
+        /// Creates a <see cref="LuaFunction"/> from the given string as a Lua chunk.
+        /// </summary>
+        /// <returns>The resulting <see cref="LuaFunction"/>.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="s"/> is <c>null</c>.</exception>
+        /// <exception cref="LuaException">A Lua error occurs.</exception>
+        /// <exception cref="ObjectDisposedException">The <see cref="Lua"/> environment is disposed.</exception>
+        public LuaFunction CreateFunction(string s) {
+            if (s == null) {
+                throw new ArgumentNullException(nameof(s));
+            }
+            ThrowIfDisposed();
+
+            if (LuaApi.LoadString(MainState, s) != LuaStatus.Ok) {
+                var errorMessage = LuaApi.ToString(MainState, -1);
+                LuaApi.Pop(MainState, 1);
+                throw new LuaException(errorMessage);
+            }
+
+            var result = (LuaFunction)ToObject(-1, LuaType.Function);
+            LuaApi.Pop(MainState, 1);
+            return result;
+        }
 
         /// <summary>
         /// Creates a <see cref="LuaTable"/>.
@@ -203,30 +252,6 @@ namespace Triton {
             ObjectBinder.PushNetObject(MainState, new TypeWrapper(type));
             var cleanName = type.Name.Split('`')[0];
             LuaApi.SetGlobal(MainState, cleanName);
-        }
-
-        /// <summary>
-        /// Loads the given string as a Lua chunk.
-        /// </summary>
-        /// <returns>The resulting <see cref="LuaFunction"/>.</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="s"/> is <c>null</c>.</exception>
-        /// <exception cref="LuaException">A Lua error occurs.</exception>
-        /// <exception cref="ObjectDisposedException">The <see cref="Lua"/> environment is disposed.</exception>
-        public LuaFunction LoadString(string s) {
-            if (s == null) {
-                throw new ArgumentNullException(nameof(s));
-            }
-            ThrowIfDisposed();
-
-            if (LuaApi.LoadString(MainState, s) != LuaStatus.Ok) {
-                var errorMessage = LuaApi.ToString(MainState, -1);
-                LuaApi.Pop(MainState, 1);
-                throw new LuaException(errorMessage);
-            }
-
-            var result = (LuaFunction)ToObject(-1, LuaType.Function);
-            LuaApi.Pop(MainState, 1);
-            return result;
         }
 
 #if NETSTANDARD || NET40

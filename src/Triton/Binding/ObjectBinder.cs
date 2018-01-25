@@ -30,8 +30,8 @@ namespace Triton.Binding {
     /// Handles .NET object binding.
     /// </summary>
     internal sealed class ObjectBinder : IDisposable {
-        private const string ObjectMetatable = "$__object";
-        private const string TypeMetatable = "$__type";
+        private const string ObjectMetatable = "Triton$__object";
+        private const string TypeMetatable = "Triton$__type";
 
         private static readonly Dictionary<string, LuaCFunction> ObjectMetamethods = new Dictionary<string, LuaCFunction> {
             ["__call"] = CallObject,

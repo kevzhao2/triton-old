@@ -2,7 +2,7 @@
 
 namespace Triton.Benchmarks.Lua {
     public class WriteGlobalBenchmark : IBenchmark {
-        public bool Enabled => false;
+        public bool Enabled => true;
         public string Name => "Write globals";
 
         public (Action tritonAction, Action nluaAction) Benchmark_WriteNil(Triton.Lua triton, NLua.Lua nlua) {
@@ -42,7 +42,7 @@ namespace Triton.Benchmarks.Lua {
         }
 
         public (Action tritonAction, Action nluaAction) Benchmark_WriteReference(Triton.Lua triton, NLua.Lua nlua) {
-            var tritonFunction = triton.LoadString("");
+            var tritonFunction = triton.CreateFunction("");
             var nluaFunction = nlua.LoadString("", "test");
 
             void Triton() => triton["test"] = tritonFunction;
