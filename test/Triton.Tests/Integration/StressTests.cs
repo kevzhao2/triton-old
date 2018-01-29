@@ -27,6 +27,10 @@ namespace Triton.Tests.Integration {
 
             public void TestMethod() {
             }
+            public void TestMethod<T>() {
+            }
+            public void TestMethod2(int x, int y) {
+            }
         }
 
         [Theory]
@@ -61,6 +65,33 @@ namespace Triton.Tests.Integration {
             using (var lua = new Lua()) {
                 lua["test"] = new TestClass();
                 var function = lua.CreateFunction("test:TestMethod()");
+
+                for (var i = 0; i < n; ++i) {
+                    function.Call();
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(1000000)]
+        public void CallMethod_Args(int n) {
+            using (var lua = new Lua()) {
+                lua["test"] = new TestClass();
+                var function = lua.CreateFunction("test:TestMethod2(0, 0)");
+
+                for (var i = 0; i < n; ++i) {
+                    function.Call();
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(1000000)]
+        public void CallGenericMethod(int n) {
+            using (var lua = new Lua()) {
+                lua.ImportType(typeof(int));
+                lua["test"] = new TestClass();
+                var function = lua.CreateFunction("test:TestMethod(Int32)()");
 
                 for (var i = 0; i < n; ++i) {
                     function.Call();

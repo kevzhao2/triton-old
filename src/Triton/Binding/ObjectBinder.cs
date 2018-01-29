@@ -202,7 +202,8 @@ namespace Triton.Binding {
                 case TypeCode.Double:
                 case TypeCode.Decimal:
                     try {
-                        result = Convert.ChangeType(result, typeCode);
+                        // We can pass null for provider because we're converting a long. This results in a marginal speed increase.
+                        result = Convert.ChangeType(result, typeCode, null);
                         return true;
                     } catch (OverflowException) {
                         return false;

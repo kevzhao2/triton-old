@@ -59,36 +59,27 @@ namespace Triton.Benchmarks {
             }
 
             // Run benchmarks.
-            var sw = new Stopwatch();
-            var tritonIterations = 0;
-            sw.Start();
-            while (sw.ElapsedMilliseconds < 1000) {
-                tritonAction();
-                ++tritonIterations;
-            }
-
-            sw.Reset();
-            var nluaIterations = 0;
-            sw.Start();
-            while (sw.ElapsedMilliseconds < 1000) {
-                nluaAction();
-                ++nluaIterations;
-            }
-            sw.Stop();
+            var tritonIterations = GetIterations(tritonAction);
+            var nluaIterations = GetIterations(nluaAction);
+            var maxIterations = Math.Max(tritonIterations, nluaIterations);
             
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine($"  {name}:");
+            Console.ForegroundColor = tritonIterations == maxIterations ? ConsoleColor.Green : ConsoleColor.Red;
+            Console.WriteLine($"    Triton:  {tritonIterations,9}it/s");
+            Console.ForegroundColor = nluaIterations == maxIterations ? ConsoleColor.Green : ConsoleColor.Red;
+            Console.WriteLine($"      NLua:  {nluaIterations,9}it/s");
 
-            if (tritonIterations > nluaIterations) {
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"    Triton:  {tritonIterations,9}it/s");
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"      NLua:  {nluaIterations,9}it/s");
-            } else {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"    Triton:  {tritonIterations,9}it/s");
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"      NLua:  {nluaIterations,9}it/s");
+            int GetIterations(Action action) {
+                var sw = new Stopwatch();
+                sw.Start();
+
+                var iterations = 0;
+                while (sw.ElapsedMilliseconds < 1000) {
+                    action();
+                    ++iterations;
+                }
+                return iterations;
             }
         }
     }

@@ -23,17 +23,25 @@ using System;
 namespace Triton.Benchmarks.Binding {
     public class MethodBenchmark : IBenchmark {
         public class TestClass {
-            public static void X() {
+            public static void X() { }
+            public static void X2(int x, int y) { }
+            public static int Y2(out int x) {
+                x = 0;
+                return 0;
             }
 
-            public void x() {
+            public void x() { }
+            public void x2(int x, int y) { }
+            public int y2(out int x) {
+                x = 0;
+                return 0;
             }
         }
 
         public bool Enabled => true;
         public string Name => "Methods";
 
-        public (Action tritonAction, Action nluaAction) Benchmark_CallInstance(Triton.Lua triton, NLua.Lua nlua) {
+        public (Action tritonAction, Action nluaAction) Benchmark_CallInstance_NoArgs(Triton.Lua triton, NLua.Lua nlua) {
             triton["test"] = new TestClass();
             nlua["test"] = new TestClass();
             var tritonFunction = triton.CreateFunction("test:x()");
@@ -44,11 +52,55 @@ namespace Triton.Benchmarks.Binding {
             return (Triton, NLua);
         }
 
-        public (Action tritonAction, Action nluaAction) Benchmark_CallStatic(Triton.Lua triton, NLua.Lua nlua) {
+        public (Action tritonAction, Action nluaAction) Benchmark_CallStatic_NoArgs(Triton.Lua triton, NLua.Lua nlua) {
             triton.ImportType(typeof(TestClass));
             nlua.DoString("TestClass = luanet.import_type('Triton.Benchmarks.Binding.MethodBenchmark+TestClass')");
             var tritonFunction = triton.CreateFunction("TestClass.X()");
             var nluaFunction = nlua.LoadString("TestClass.X()", "test");
+
+            void Triton() => tritonFunction.Call();
+            void NLua() => nluaFunction.Call();
+            return (Triton, NLua);
+        }
+
+        public (Action tritonAction, Action nluaAction) Benchmark_CallInstance_Args(Triton.Lua triton, NLua.Lua nlua) {
+            triton["test"] = new TestClass();
+            nlua["test"] = new TestClass();
+            var tritonFunction = triton.CreateFunction("test:x2(0, 0)");
+            var nluaFunction = nlua.LoadString("test:x2(0, 0)", "test");
+
+            void Triton() => tritonFunction.Call();
+            void NLua() => nluaFunction.Call();
+            return (Triton, NLua);
+        }
+
+        public (Action tritonAction, Action nluaAction) Benchmark_CallStatic_Args(Triton.Lua triton, NLua.Lua nlua) {
+            triton.ImportType(typeof(TestClass));
+            nlua.DoString("TestClass = luanet.import_type('Triton.Benchmarks.Binding.MethodBenchmark+TestClass')");
+            var tritonFunction = triton.CreateFunction("TestClass.X2(0, 0)");
+            var nluaFunction = nlua.LoadString("TestClass.X2(0, 0)", "test");
+
+            void Triton() => tritonFunction.Call();
+            void NLua() => nluaFunction.Call();
+            return (Triton, NLua);
+        }
+
+        public (Action tritonAction, Action nluaAction) Benchmark_CallInstance_Results(Triton.Lua triton, NLua.Lua nlua) {
+            triton["test"] = new TestClass();
+            nlua["test"] = new TestClass();
+            var tritonFunction = triton.CreateFunction("x, y = test:y2()");
+            var nluaFunction = nlua.LoadString("x, y = test:y2()", "test");
+
+            void Triton() => tritonFunction.Call();
+            void NLua() => nluaFunction.Call();
+            return (Triton, NLua);
+        }
+
+        public (Action tritonAction, Action nluaAction) Benchmark_CallStatic_Results(Triton.Lua triton, NLua.Lua nlua) {
+            triton.ImportType(typeof(TestClass));
+            nlua.DoString("TestClass = luanet.import_type('Triton.Benchmarks.Binding.MethodBenchmark+TestClass')");
+            var tritonFunction = triton.CreateFunction("x, y = TestClass.Y2()");
+            var nluaFunction = nlua.LoadString("x, y = TestClass.Y2()", "test");
 
             void Triton() => tritonFunction.Call();
             void NLua() => nluaFunction.Call();
