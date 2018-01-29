@@ -24,6 +24,17 @@ using Xunit;
 namespace Triton.Tests {
     public class LuaThreadTests {
         [Fact]
+        public void CallDynamic() {
+            using (var lua = new Lua()) {
+                dynamic thread = lua.DoString("return coroutine.create(function() x = 4 end)")[0] as LuaThread;
+
+                thread();
+
+                Assert.Equal(4L, lua["x"]);
+            }
+        }
+
+        [Fact]
         public void CanResume_Created_True() {
 			using (var lua = new Lua()) {
 				var thread = lua.DoString("return coroutine.create(function() x = 4 end)")[0] as LuaThread;

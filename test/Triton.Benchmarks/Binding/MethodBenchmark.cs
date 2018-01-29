@@ -38,8 +38,8 @@ namespace Triton.Benchmarks.Binding {
             }
         }
 
-        public bool Enabled => true;
-        public string Name => "Methods";
+        public bool Enabled => false;
+        public string Name => "Calling methods";
 
         public (Action tritonAction, Action nluaAction) Benchmark_CallInstance_NoArgs(Triton.Lua triton, NLua.Lua nlua) {
             triton["test"] = new TestClass();

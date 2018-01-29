@@ -52,6 +52,9 @@ namespace Triton {
 
 #if FEATURE_DYNAMIC
         /// <inheritdoc/>
+        /// <exception cref="ArgumentException">
+        /// One of the supplied arguments is a <see cref="LuaReference"/> which is tied to a different <see cref="Lua"/> environment.
+        /// </exception>
         /// <exception cref="LuaException">A Lua error occurs.</exception>
         public override bool TryInvoke(InvokeBinder binder, object[] args, out object result) {
             result = Call(args);

@@ -297,40 +297,43 @@ namespace Triton {
                 return;
             }
 
-            var typeCode = Convert.GetTypeCode(obj);
-            switch (typeCode) {
-            case TypeCode.Boolean:
-                LuaApi.PushBoolean(state, (bool)obj);
-                return;
+            if (obj is IConvertible conv) {
+                switch (conv.GetTypeCode()) {
+                case TypeCode.Boolean:
+                    LuaApi.PushBoolean(state, (bool)obj);
+                    return;
 
-            case TypeCode.SByte:
-            case TypeCode.Byte:
-            case TypeCode.Int16:
-            case TypeCode.UInt16:
-            case TypeCode.Int32:
-            case TypeCode.UInt32:
-            case TypeCode.Int64:
-                LuaApi.PushInteger(state, Convert.ToInt64(obj));
-                return;
+                case TypeCode.SByte:
+                case TypeCode.Byte:
+                case TypeCode.Int16:
+                case TypeCode.UInt16:
+                case TypeCode.Int32:
+                case TypeCode.UInt32:
+                case TypeCode.Int64:
+                    LuaApi.PushInteger(state, conv.ToInt64(null));
+                    return;
 
-            case TypeCode.UInt64:
-                LuaApi.PushInteger(state, (long)((ulong)obj));
-                return;
+                case TypeCode.UInt64:
+                    LuaApi.PushInteger(state, (long)((ulong)conv));
+                    return;
 
-            case TypeCode.Single:
-            case TypeCode.Double:
-            case TypeCode.Decimal:
-                LuaApi.PushNumber(state, Convert.ToDouble(obj));
-                return;
+                case TypeCode.Single:
+                case TypeCode.Double:
+                case TypeCode.Decimal:
+                    LuaApi.PushNumber(state, conv.ToDouble(null));
+                    return;
 
-            case TypeCode.Char:
-            case TypeCode.String:
-                LuaApi.PushString(state, obj.ToString());
-                return;
-            }
+                case TypeCode.Char:
+                case TypeCode.String:
+                    LuaApi.PushString(state, conv.ToString());
+                    return;
 
-            if (obj is LuaReference lr) {
-                lr.PushOnto(state);
+                default:
+                    ObjectBinder.PushNetObject(state, conv);
+                    return;
+                }
+            } else if (obj is LuaReference luaReference) {
+                luaReference.PushOnto(state);
             } else {
                 ObjectBinder.PushNetObject(state, obj);
             }

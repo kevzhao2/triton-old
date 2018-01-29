@@ -19,6 +19,9 @@
 // IN THE SOFTWARE.
 
 using System;
+#if FEATURE_DYNAMIC
+using System.Dynamic;
+#endif
 using Triton.Interop;
 
 namespace Triton {
@@ -74,5 +77,18 @@ namespace Triton {
 
             return Lua.Call(args, _threadState, true);
         }
+
+#if FEATURE_DYNAMIC
+        /// <inheritdoc/>
+        /// <exception cref="ArgumentException">
+        /// One of the supplied arguments is a <see cref="LuaReference"/> which is tied to a different <see cref="Lua"/> environment.
+        /// </exception>
+        /// <exception cref="InvalidOperationException">The <see cref="LuaThread"/> cannot be resumed.</exception>
+        /// <exception cref="LuaException">A Lua error occurs.</exception>
+        public override bool TryInvoke(InvokeBinder binder, object[] args, out object result) {
+            result = Resume(args);
+            return true;
+        }
+#endif
     }
 }

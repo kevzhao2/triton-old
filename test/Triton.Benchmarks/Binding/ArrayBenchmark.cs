@@ -28,7 +28,7 @@ namespace Triton.Benchmarks.Binding {
         }
 
         public bool Enabled => false;
-        public string Name => "Arrays";
+        public string Name => "Reading/writing arrays";
 
         public (Action tritonAction, Action nluaAction) Benchmark_Read(Triton.Lua triton, NLua.Lua nlua) {
             triton["test"] = new int[10];
