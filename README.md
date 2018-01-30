@@ -5,7 +5,7 @@ Triton provides an easy and efficient way to embed Lua 5.3 into your .NET applic
 
 ### Advantages
 
-* Triton works with an unmodified Lua library, and targets Lua 5.3, which has native support for integer types among other things.
+* Triton works with an unmodified Lua library and targets Lua 5.3, which has native support for integer types among other things.
 * Triton supports .NET callbacks from coroutines.
 * Triton supports `LuaThread` manipulation.
 * Triton supports generic method invocation and generic type instantiation.

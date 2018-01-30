@@ -26,7 +26,7 @@ namespace Triton.Tests {
         [Fact]
         public void CallDynamic() {
             using (var lua = new Lua()) {
-                dynamic thread = lua.DoString("return coroutine.create(function() x = 4 end)")[0] as LuaThread;
+                dynamic thread = (LuaThread)lua.DoString("return coroutine.create(function() x = 4 end)")[0];
 
                 thread();
 
@@ -37,7 +37,7 @@ namespace Triton.Tests {
         [Fact]
         public void CanResume_Created_True() {
 			using (var lua = new Lua()) {
-				var thread = lua.DoString("return coroutine.create(function() x = 4 end)")[0] as LuaThread;
+				var thread = (LuaThread)lua.DoString("return coroutine.create(function() x = 4 end)")[0];
 
                 Assert.True(thread.CanResume);
             }
@@ -46,7 +46,7 @@ namespace Triton.Tests {
         [Fact]
         public void CanResume_Yielded_True() {
             using (var lua = new Lua()) {
-				var thread = lua.DoString("return coroutine.create(function() coroutine.yield() end)")[0] as LuaThread;
+				var thread = (LuaThread)lua.DoString("return coroutine.create(function() coroutine.yield() end)")[0];
 
                 thread.Resume();
 
@@ -57,7 +57,7 @@ namespace Triton.Tests {
         [Fact]
         public void CanResume_Dead_False() {
 			using (var lua = new Lua()) {
-				var thread = lua.DoString("return coroutine.create(function() end)")[0] as LuaThread;
+				var thread = (LuaThread)lua.DoString("return coroutine.create(function() end)")[0];
 
 				thread.Resume();
 
@@ -68,7 +68,7 @@ namespace Triton.Tests {
         [Fact]
         public void Resume_NoArgs() {
             using (var lua = new Lua()) {
-				var thread = lua.DoString("return coroutine.create(function() x = 4 end)")[0] as LuaThread;
+				var thread = (LuaThread)lua.DoString("return coroutine.create(function() x = 4 end)")[0];
 
                 thread.Resume();
 
@@ -79,7 +79,7 @@ namespace Triton.Tests {
         [Fact]
         public void Resume_OneArg() {
             using (var lua = new Lua()) {
-				var thread = lua.DoString("return coroutine.create(function(y) x = y end)")[0] as LuaThread;
+				var thread = (LuaThread)lua.DoString("return coroutine.create(function(y) x = y end)")[0];
 
                 thread.Resume(12);
 
@@ -90,7 +90,7 @@ namespace Triton.Tests {
         [Fact]
         public void Resume_YieldedOneArg() {
             using (var lua = new Lua()) {
-				var thread = lua.DoString("return coroutine.create(function() x = coroutine.yield() end)")[0] as LuaThread;
+				var thread = (LuaThread)lua.DoString("return coroutine.create(function() x = coroutine.yield() end)")[0];
 
                 thread.Resume();
                 thread.Resume(12);
@@ -102,7 +102,7 @@ namespace Triton.Tests {
         [Fact]
         public void Resume_ManyArgs() {
             using (var lua = new Lua()) {
-				var thread = lua.DoString("return coroutine.create(function(a, b, c) x = a + b + c end)")[0] as LuaThread;
+				var thread = (LuaThread)lua.DoString("return coroutine.create(function(a, b, c) x = a + b + c end)")[0];
 
                 thread.Resume(12, 67, 123);
 
@@ -113,7 +113,7 @@ namespace Triton.Tests {
         [Fact]
         public void Resume_OneResult() {
             using (var lua = new Lua()) {
-				var thread = lua.DoString("return coroutine.create(function() coroutine.yield('test') end)")[0] as LuaThread;
+				var thread = (LuaThread)lua.DoString("return coroutine.create(function() coroutine.yield('test') end)")[0];
 
                 var results = thread.Resume();
 
@@ -125,7 +125,7 @@ namespace Triton.Tests {
         [Fact]
         public void Resume_ManyResults() {
             using (var lua = new Lua()) {
-				var thread = lua.DoString("return coroutine.create(function() coroutine.yield(5, 4, 3) end)")[0] as LuaThread;
+				var thread = (LuaThread)lua.DoString("return coroutine.create(function() coroutine.yield(5, 4, 3) end)")[0];
 
                 var results = thread.Resume();
 
@@ -139,7 +139,7 @@ namespace Triton.Tests {
         [Fact]
         public void Resume_NullArgs_ThrowsArgumentNullException() {
             using (var lua = new Lua()) {
-				var thread = lua.DoString("return coroutine.create(function() end)")[0] as LuaThread;
+				var thread = (LuaThread)lua.DoString("return coroutine.create(function() end)")[0];
 
                 Assert.Throws<ArgumentNullException>(() => thread.Resume(null));
             }
@@ -148,7 +148,7 @@ namespace Triton.Tests {
         [Fact]
         public void Resume_NotResumable_ThrowsInvalidOperationException() {
             using (var lua = new Lua()) {
-				var thread = lua.DoString("return coroutine.create(function() end)")[0] as LuaThread;
+				var thread = (LuaThread)lua.DoString("return coroutine.create(function() end)")[0];
 
                 thread.Resume();
 
@@ -159,7 +159,7 @@ namespace Triton.Tests {
         [Fact]
         public void Resume_TooManyArguments_ThrowsLuaException() {
             using (var lua = new Lua()) {
-				var thread = lua.DoString("return coroutine.create(function() end)")[0] as LuaThread;
+				var thread = (LuaThread)lua.DoString("return coroutine.create(function() end)")[0];
 
                 Assert.Throws<LuaException>(() => thread.Resume(new object[1000000]));
             }
@@ -168,7 +168,7 @@ namespace Triton.Tests {
         [Fact]
         public void Resume_RuntimeError_ThrowsLuaException() {
             using (var lua = new Lua()) {
-				var thread = lua.DoString("return coroutine.create(function() error('test') end)")[0] as LuaThread;
+				var thread = (LuaThread)lua.DoString("return coroutine.create(function() error('test') end)")[0];
 
                 Assert.Throws<LuaException>(() => thread.Resume());
             }
@@ -178,7 +178,7 @@ namespace Triton.Tests {
         public void Resume_ArgWrongLuaEnvironment_ThrowsArgumentException() {
             using (var lua = new Lua())
             using (var lua2 = new Lua()) {
-                var thread = lua.DoString("return coroutine.create(function() end)")[0] as LuaThread;
+                var thread = (LuaThread)lua.DoString("return coroutine.create(function() end)")[0];
                 var table = lua2.CreateTable();
 
                 Assert.Throws<ArgumentException>(() => thread.Resume(table));
