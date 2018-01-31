@@ -291,7 +291,7 @@ namespace Triton.Interop {
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate LuaStatus PCallK(
                 IntPtr state, int numArgs, int numResults = MultRet, int messageHandler = 0, IntPtr context = default(IntPtr),
-                LuaKFunction continuation = null);
+                IntPtr continuation = default(IntPtr));
 
             [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
