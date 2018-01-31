@@ -76,7 +76,6 @@ namespace Triton.Interop {
         private static readonly Delegates.NewMetatable NewMetatableDelegate;
         private static readonly Delegates.NewUserdata NewUserdataDelegate;
         private static readonly Delegates.PushLString PushLString;
-        private static readonly Delegates.SetField SetFieldDelegate;
         private static readonly Delegates.SetGlobal SetGlobalDelegate;
         private static readonly Delegates.ToIntegerX ToIntegerX;
         private static readonly Delegates.ToLString ToLString;
@@ -140,7 +139,6 @@ namespace Triton.Interop {
             NewMetatableDelegate = library.GetDelegate<Delegates.NewMetatable>("luaL_newmetatable");
             NewUserdataDelegate = library.GetDelegate<Delegates.NewUserdata>("lua_newuserdata");
             PushLString = library.GetDelegate<Delegates.PushLString>("lua_pushlstring");
-            SetFieldDelegate = library.GetDelegate<Delegates.SetField>("lua_setfield");
             SetGlobalDelegate = library.GetDelegate<Delegates.SetGlobal>("lua_setglobal");
             ToIntegerX = library.GetDelegate<Delegates.ToIntegerX>("lua_tointegerx");
             ToNumberX = library.GetDelegate<Delegates.ToNumberX>("lua_tonumberx");
@@ -172,8 +170,7 @@ namespace Triton.Interop {
             var buffer = Encoding.UTF8.GetBytes(s);
             PushLString(state, buffer, new UIntPtr((uint)buffer.Length));
         }
-
-        public static void SetField(IntPtr state, int index, string field) => SetFieldDelegate(state, index, GetUtf8String(field));
+        
         public static void SetGlobal(IntPtr state, string name) => SetGlobalDelegate(state, GetUtf8String(name));
 
         public static GCHandle ToHandle(IntPtr state, int index) {
@@ -335,11 +332,7 @@ namespace Triton.Interop {
             [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate LuaStatus Resume(IntPtr thread, IntPtr from, int numArgs);
-
-            [SuppressUnmanagedCodeSecurity]
-            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-            public delegate void SetField(IntPtr state, int index, [In] byte[] field);
-
+            
             [SuppressUnmanagedCodeSecurity]
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             public delegate void SetGlobal(IntPtr state, [In] byte[] name);

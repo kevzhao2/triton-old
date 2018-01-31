@@ -457,8 +457,20 @@ namespace Triton.Binding {
                     throw new LuaException("attempt to index invalid member");
                 }
 
-                if (member is MethodInfo method) {
-                    // Methods return a function that handles the overload resolution!
+                switch (member.MemberType) {
+                case MemberTypes.Event:
+                    var @event = (EventInfo)member;
+                    LuaApi.PushBoolean(state, true);
+                    _lua.PushObject(new EventWrapper(obj, @event), state);
+                    return 2;
+
+                case MemberTypes.Field:
+                    var field = (FieldInfo)member;
+                    LuaApi.PushBoolean(state, field.IsLiteral);
+                    _lua.PushObject(field.GetValue(obj), state);
+                    return 2;
+
+                case MemberTypes.Method:
                     LuaApi.PushBoolean(state, true);
                     _wrapFunction.PushOnto(state);
                     LuaApi.PushValue(state, 1);
@@ -466,7 +478,10 @@ namespace Triton.Binding {
                     LuaApi.PushInteger(state, 0);
                     LuaApi.PushCClosure(state, isStatic ? _proxyCallTypeDelegate : _proxyCallObjectDelegate, 3);
                     LuaApi.PCallK(state, 1, 1);
-                } else if (member is PropertyInfo property) {
+                    return 2;
+
+                case MemberTypes.Property:
+                    var property = (PropertyInfo)member;
                     if (property.GetIndexParameters().Length > 0) {
                         LuaApi.PushBoolean(state, true);
                         _lua.PushObject(new IndexedPropertyWrapper(obj, property), state);
@@ -482,17 +497,13 @@ namespace Triton.Binding {
                             throw new LuaException($"attempt to get property threw:\n{e.InnerException}");
                         }
                     }
-                } else if (member is FieldInfo field) {
-                    LuaApi.PushBoolean(state, field.IsLiteral);
-                    _lua.PushObject(field.GetValue(obj), state);
-                } else if (member is EventInfo @event) {
-                    LuaApi.PushBoolean(state, true);
-                    _lua.PushObject(new EventWrapper(obj, @event), state);
-                } else {
+                    return 2;
+
+                default:
                     LuaApi.PushBoolean(state, true);
                     _lua.PushObject(new TypeWrapper((Type)member), state);
+                    return 2;
                 }
-                return 2;
             }
 
             if (obj is Array array && LuaApi.IsInteger(state, 2)) {
@@ -648,7 +659,27 @@ namespace Triton.Binding {
                     throw new LuaException("attempt to set invalid member");
                 }
 
-                if (member is PropertyInfo property) {
+                switch (member.MemberType) {
+                case MemberTypes.Event:
+                    throw new LuaException("attempt to set event");
+
+                case MemberTypes.Field:
+                    var field = (FieldInfo)member;
+                    if (field.IsLiteral) {
+                        throw new LuaException("attempt to set constant field");
+                    }
+                    if (!TryCoerce(value, field.FieldType, out value)) {
+                        throw new LuaException("attempt to set field with invalid value");
+                    }
+
+                    field.SetValue(obj, value);
+                    return 0;
+
+                case MemberTypes.Method:
+                    throw new LuaException("attempt to set method");
+
+                case MemberTypes.Property:
+                    var property = (PropertyInfo)member;
                     if (property.GetSetMethod() == null) {
                         throw new LuaException("attempt to set property without setter");
                     }
@@ -664,23 +695,11 @@ namespace Triton.Binding {
                     } catch (TargetInvocationException e) {
                         throw new LuaException($"attempt to set property threw:\n{e.InnerException}");
                     }
-                } else if (member is FieldInfo field) {
-                    if (field.IsLiteral) {
-                        throw new LuaException("attempt to set constant field");
-                    }
-                    if (!TryCoerce(value, field.FieldType, out value)) {
-                        throw new LuaException("attempt to set field with invalid value");
-                    }
+                    return 0;
 
-                    field.SetValue(obj, value);
-                } else if (member is EventInfo @event) {
-                    throw new LuaException("attempt to set event");
-                } else if (member is MethodInfo method) {
-                    throw new LuaException("attempt to set method");
-                } else {
+                default:
                     throw new LuaException("attempt to set nested type");
                 }
-                return 0;
             }
 
             if (obj is Array array && keyType == LuaType.Number && LuaApi.IsInteger(state, 2)) {

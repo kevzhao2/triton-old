@@ -27,7 +27,7 @@ namespace Triton.Benchmarks.Binding {
             public TestClass(int x, int y) { }
         }
 
-        public bool Enabled => true;
+        public bool Enabled => false;
         public string Name => "Calling constructors";
 
         public (Action tritonAction, Action nluaAction) Benchmark_Construct(Triton.Lua triton, NLua.Lua nlua) {

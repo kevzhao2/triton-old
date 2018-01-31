@@ -27,7 +27,7 @@ namespace Triton.Benchmarks.Binding {
             public int x { get; set; }
         }
 
-        public bool Enabled => false;
+        public bool Enabled => true;
         public string Name => "Reading/writing properties";
 
         public (Action tritonAction, Action nluaAction) Benchmark_ReadInstance(Triton.Lua triton, NLua.Lua nlua) {

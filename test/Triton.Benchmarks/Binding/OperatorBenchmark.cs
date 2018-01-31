@@ -36,7 +36,7 @@ namespace Triton.Benchmarks.Binding {
             public static Complex operator -(Complex c) => new Complex(-c.R, -c.I);
         }
 
-        public bool Enabled => true;
+        public bool Enabled => false;
         public string Name => "Calling operators";
 
         public (Action tritonAction, Action nluaAction) Benchmark_BinaryOperator(Triton.Lua triton, NLua.Lua nlua) {
