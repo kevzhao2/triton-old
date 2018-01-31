@@ -32,8 +32,7 @@ namespace Triton.Tests.Binding {
             }
 
             public event EventHandler EventThrows2 {
-                add {
-                }
+                add { }
                 remove => throw new NotImplementedException();
             }
 
@@ -53,8 +52,7 @@ namespace Triton.Tests.Binding {
             }
 
             public static event EventHandler EventThrows2 {
-                add {
-                }
+                add { }
                 remove => throw new NotImplementedException();
             }
 

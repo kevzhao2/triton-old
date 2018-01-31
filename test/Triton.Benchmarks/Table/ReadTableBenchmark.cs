@@ -21,10 +21,7 @@
 using System;
 
 namespace Triton.Benchmarks.Table {
-    public class ReadTableBenchmark : IBenchmark {
-        public bool Enabled => false;
-        public string Name => "Read table";
-
+    public class ReadTableBenchmark {
         public (Action tritonAction, Action nluaAction) Benchmark_ReadNil(Triton.Lua triton, NLua.Lua nlua) {
             var tritonTable = triton.CreateTable();
             var nluaTable = (NLua.LuaTable)nlua.DoString("return {}")[0];

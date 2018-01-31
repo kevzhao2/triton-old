@@ -255,7 +255,7 @@ namespace Triton {
             }
             ThrowIfDisposed();
 
-            ObjectBinder.PushNetObject(MainState, new TypeWrapper(type));
+            ObjectBinder.PushNetType(MainState, type);
             var cleanName = type.Name.Split('`')[0];
             LuaApi.SetGlobal(MainState, cleanName);
         }

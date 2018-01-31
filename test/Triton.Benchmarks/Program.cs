@@ -25,17 +25,23 @@ using System.Linq;
 namespace Triton.Benchmarks {
     class Program {
         static void Main(string[] args) {
-            var benchmarkTypes = typeof(Program).Assembly.GetExportedTypes()
-                .Where(t => !t.IsAbstract && typeof(IBenchmark).IsAssignableFrom(t));
+            var benchmarkTypes = typeof(Program).Assembly.GetExportedTypes().Where(t => !t.IsAbstract);
             foreach (var benchmarkType in benchmarkTypes) {
-                var benchmark = (IBenchmark)Activator.CreateInstance(benchmarkType);
-                if (!benchmark.Enabled) {
+                object benchmark;
+                try {
+                    benchmark = Activator.CreateInstance(benchmarkType);
+                } catch (MissingMethodException) {
+                    continue;
+                }
+
+                var benchmarkMethods = benchmarkType.GetMethods().Where(m => m.Name.StartsWith("Benchmark_")).ToList();
+                if (benchmarkMethods.Count == 0) {
                     continue;
                 }
 
                 Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.WriteLine($"{benchmark.Name}:");
-                foreach (var benchmarkMethod in benchmarkType.GetMethods().Where(m => m.Name.StartsWith("Benchmark_"))) {
+                Console.WriteLine($"{benchmarkType.Name}:");
+                foreach (var benchmarkMethod in benchmarkMethods) {
                     using (var triton = new Triton.Lua())
                     using (var nlua = new NLua.Lua()) {
                         nlua.DoString("luanet.load_assembly('Triton.Benchmarks')");

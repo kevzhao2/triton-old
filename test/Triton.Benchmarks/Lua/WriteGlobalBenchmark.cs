@@ -21,10 +21,7 @@
 using System;
 
 namespace Triton.Benchmarks.Lua {
-    public class WriteGlobalBenchmark : IBenchmark {
-        public bool Enabled => false;
-        public string Name => "Write globals";
-
+    public class WriteGlobalBenchmark {
         public (Action tritonAction, Action nluaAction) Benchmark_WriteNil(Triton.Lua triton, NLua.Lua nlua) {
             void Triton() => triton["test"] = null;
             void NLua() => nlua["test"] = null;

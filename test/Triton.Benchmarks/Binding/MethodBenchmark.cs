@@ -21,7 +21,7 @@
 using System;
 
 namespace Triton.Benchmarks.Binding {
-    public class MethodBenchmark : IBenchmark {
+    public class MethodBenchmark {
         public class TestClass {
             public static void X() { }
             public static void X2(int x, int y) { }
@@ -37,10 +37,7 @@ namespace Triton.Benchmarks.Binding {
                 return 0;
             }
         }
-
-        public bool Enabled => false;
-        public string Name => "Calling methods";
-
+        
         public (Action tritonAction, Action nluaAction) Benchmark_CallInstance_NoArgs(Triton.Lua triton, NLua.Lua nlua) {
             triton["test"] = new TestClass();
             nlua["test"] = new TestClass();

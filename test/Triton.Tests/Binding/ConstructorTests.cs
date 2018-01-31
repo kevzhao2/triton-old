@@ -26,8 +26,7 @@ namespace Triton.Tests.Binding {
         private class TestClass {
             public int X { get; set; }
 
-            public TestClass() : this(10) {
-            }
+            public TestClass() : this(10) { }
 
             public TestClass(int x) {
                 X = x;
@@ -40,11 +39,8 @@ namespace Triton.Tests.Binding {
             private TestClass2() { }
         }
 
-        private abstract class TestClass3 {
-        }
-
-        private interface ITest {
-        }
+        private abstract class TestClass3 { }
+        private interface ITest { }
 
         [Fact]
         public void Constructor_NoArgs() {

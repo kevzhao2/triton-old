@@ -55,7 +55,6 @@
     <Compile Include="Binding\OperatorBenchmark.cs" />
     <Compile Include="Binding\PropertyBenchmark.cs" />
     <Compile Include="Binding\FieldBenchmark.cs" />
-    <Compile Include="IBenchmark.cs" />
     <Compile Include="Lua\DoStringBenchmark.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

@@ -22,8 +22,7 @@ using Xunit;
 
 namespace Triton.Tests.Binding {
     public class InterfaceTests {
-        private interface ITest {
-        }
+        private interface ITest { }
 
         [Fact]
         public void GetMember_Fails() {

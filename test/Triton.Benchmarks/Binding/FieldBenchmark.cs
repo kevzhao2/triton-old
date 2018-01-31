@@ -21,15 +21,12 @@
 using System;
 
 namespace Triton.Benchmarks.Binding {
-    public class FieldBenchmark : IBenchmark {
+    public class FieldBenchmark {
         public class TestClass {
             public static int X;
             public int x;
         }
-
-        public bool Enabled => true;
-        public string Name => "Reading/writing fields";
-
+        
         public (Action tritonAction, Action nluaAction) Benchmark_ReadInstance(Triton.Lua triton, NLua.Lua nlua) {
             triton["test"] = new TestClass();
             nlua["test"] = new TestClass();

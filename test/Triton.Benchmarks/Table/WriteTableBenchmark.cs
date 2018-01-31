@@ -21,10 +21,7 @@
 using System;
 
 namespace Triton.Benchmarks.Table {
-    public class WriteTableBenchmark : IBenchmark {
-        public bool Enabled => false;
-        public string Name => "Write table";
-
+    public class WriteTableBenchmark {
         public (Action tritonAction, Action nluaAction) Benchmark_WriteNil(Triton.Lua triton, NLua.Lua nlua) {
             var tritonTable = triton.CreateTable();
             var nluaTable = (NLua.LuaTable)nlua.DoString("return {}")[0];

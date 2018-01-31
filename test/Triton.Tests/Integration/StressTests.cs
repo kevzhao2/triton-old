@@ -25,11 +25,13 @@ namespace Triton.Tests.Integration {
         private class TestClass {
             public int TestProperty { get; set; }
 
-            public void TestMethod() {
-            }
-            public void TestMethod<T>() {
-            }
-            public void TestMethod2(int x, int y) {
+            public void TestMethod() { }
+            public void TestMethod<T>() { }
+            public void TestMethod2(int x, int y) { }
+
+            public int TestMethod3(out int y) {
+                y = 0;
+                return 0;
             }
         }
 
@@ -78,6 +80,19 @@ namespace Triton.Tests.Integration {
             using (var lua = new Lua()) {
                 lua["test"] = new TestClass();
                 var function = lua.CreateFunction("test:TestMethod2(0, 0)");
+
+                for (var i = 0; i < n; ++i) {
+                    function.Call();
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(1000000)]
+        public void CallMethod_Results(int n) {
+            using (var lua = new Lua()) {
+                lua["test"] = new TestClass();
+                var function = lua.CreateFunction("x, y = test:TestMethod3()");
 
                 for (var i = 0; i < n; ++i) {
                     function.Call();

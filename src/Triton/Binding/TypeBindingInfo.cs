@@ -79,11 +79,11 @@ namespace Triton.Binding {
         }
 
         /// <summary>
-        /// Gets the operators with the given name.
+        /// Gets the operators with the given method name.
         /// </summary>
-        /// <param name="name">The name.</param>
+        /// <param name="methodName">The method name.</param>
         /// <returns>The operators.</returns>
-        public IEnumerable<MethodInfo> GetOperators(string name) => _operators[name];
+        public IEnumerable<MethodInfo> GetOperators(string methodName) => _operators[methodName];
 
         /// <summary>
         /// Constructs a <see cref="TypeBindingInfo"/> for the given type.

@@ -21,10 +21,7 @@
 using System;
 
 namespace Triton.Benchmarks.Lua {
-    public class ReadGlobalBenchmark : IBenchmark {
-        public bool Enabled => false;
-        public string Name => "Read globals";
-
+    public class ReadGlobalBenchmark {
         public (Action tritonAction, Action nluaAction) Benchmark_ReadNil(Triton.Lua triton, NLua.Lua nlua) {
             void Triton() {
                 var t = triton["test"];
