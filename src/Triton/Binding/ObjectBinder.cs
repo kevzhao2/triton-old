@@ -347,119 +347,111 @@ namespace Triton.Binding {
             return 1;
         }
 
-        private int CallObject(IntPtr state) {
-            return WrappedCall(state, () => {
-                var obj = LuaApi.ToHandle(state, 1).Target;
-                if (!(obj is Delegate @delegate)) {
-                    throw new LuaException("attempt to call non-delegate");
-                }
-                
-                var top = LuaApi.GetTop(state) - 1;
-                var objs = _lua.ToObjects(2, top, state);
+        private int CallObject(IntPtr state) => WrappedCall(state, () => {
+            var obj = LuaApi.ToHandle(state, 1).Target;
+            if (!(obj is Delegate @delegate)) {
+                throw new LuaException("attempt to call non-delegate");
+            }
 
-                var method = @delegate.Method;
-                if (TryCoerce(objs, method.GetParameters(), out var args) == int.MinValue) {
-                    throw new LuaException("attempt to call delegate with invalid args");
+            var top = LuaApi.GetTop(state) - 1;
+            var objs = _lua.ToObjects(2, top, state);
+
+            var method = @delegate.Method;
+            if (TryCoerce(objs, method.GetParameters(), out var args) == int.MinValue) {
+                throw new LuaException("attempt to call delegate with invalid args");
+            }
+
+            object result;
+            try {
+                result = method.Invoke(@delegate.Target, args);
+            } catch (TargetInvocationException e) {
+                throw new LuaException($"attempt to call delegate threw:\n{e.InnerException}");
+            }
+
+            var numResults = 0;
+            if (method.ReturnType != typeof(void)) {
+                ++numResults;
+                _lua.PushObject(result, state);
+            }
+            foreach (var param in method.GetParameters().Where(p => p.ParameterType.IsByRef)) {
+                ++numResults;
+                _lua.PushObject(args[param.Position], state);
+            }
+            return numResults;
+        });
+
+        private int CallType(IntPtr state) => WrappedCall(state, () => {
+            var type = (Type)LuaApi.ToHandle(state, 1).Target;
+            var top = LuaApi.GetTop(state) - 1;
+            var objs = _lua.ToObjects(2, top, state);
+
+            if (type.ContainsGenericParameters) {
+                var typeArgs = type.GetGenericArguments();
+                if (objs.Length != typeArgs.Length) {
+                    throw new LuaException("attempt to construct generic type with incorrect number of type args");
                 }
-                
+
+                for (var i = 0; i < typeArgs.Length; ++i) {
+                    if (!(objs[i] is Type typeArg)) {
+                        throw new LuaException("attempt to construct generic type with non-type arg");
+                    }
+                    if (typeArg.ContainsGenericParameters) {
+                        throw new LuaException("attempt to construct generic type with generic type arg");
+                    }
+
+                    typeArgs[i] = typeArg;
+                }
+
+                Type result;
+                try {
+                    result = type.MakeGenericType(typeArgs);
+                } catch (ArgumentException) {
+                    throw new LuaException("attempt to construct generic type threw: type constraints");
+                }
+                PushNetType(state, result);
+            } else {
+                if (type.IsAbstract) {
+                    throw new LuaException("attempt to instantiate abstract type");
+                }
+
+                var info = type.GetBindingInfo();
+                var ctors = info.GetConstructors();
+                if (ctors.Count == 0) {
+                    throw new LuaException("attempt to instantiate type with no constructors");
+                }
+
+                var ctor = ResolveMethodCall(objs, ctors, out var args);
+                if (ctor == null) {
+                    throw new LuaException("attempt to instantiate type with invalid args");
+                }
+
                 object result;
                 try {
-                    result = method.Invoke(@delegate.Target, args);
+                    result = ctor.Invoke(args);
                 } catch (TargetInvocationException e) {
-                    throw new LuaException($"attempt to call delegate threw:\n{e.InnerException}");
+                    throw new LuaException($"attempt to instantiate type threw:\n{e.InnerException}");
                 }
+                _lua.PushObject(result, state);
+            }
+            return 1;
+        });
 
-                var numResults = 0;
-                if (method.ReturnType != typeof(void)) {
-                    ++numResults;
-                    _lua.PushObject(result, state);
-                }
-                foreach (var param in method.GetParameters().Where(p => p.ParameterType.IsByRef)) {
-                    ++numResults;
-                    _lua.PushObject(args[param.Position], state);
-                }
-                return numResults;
-            });
-        }
+        private int IndexObject(IntPtr state) => WrappedCall(state, () => {
+            var obj = LuaApi.ToHandle(state, 1).Target;
+            return IndexShared(state, obj, obj.GetType());
+        });
 
-        private int CallType(IntPtr state) {
-            return WrappedCall(state, () => {
-                var type = (Type)LuaApi.ToHandle(state, 1).Target;
-                var top = LuaApi.GetTop(state) - 1;
-                var objs = _lua.ToObjects(2, top, state);
+        private int IndexType(IntPtr state) => WrappedCall(state, () => {
+            var type = (Type)LuaApi.ToHandle(state, 1).Target;
+            if (type.IsInterface) {
+                throw new LuaException("attempt to index interface");
+            }
+            if (type.ContainsGenericParameters) {
+                throw new LuaException("attempt to index generic type");
+            }
 
-                if (type.ContainsGenericParameters) {
-                    var typeArgs = type.GetGenericArguments();
-                    if (objs.Length != typeArgs.Length) {
-                        throw new LuaException("attempt to construct generic type with incorrect number of type args");
-                    }
-
-                    for (var i = 0; i < typeArgs.Length; ++i) {
-                        if (!(objs[i] is Type typeArg)) {
-                            throw new LuaException("attempt to construct generic type with non-type arg");
-                        }
-                        if (typeArg.ContainsGenericParameters) {
-                            throw new LuaException("attempt to construct generic type with generic type arg");
-                        }
-
-                        typeArgs[i] = typeArg;
-                    }
-
-                    Type result;
-                    try {
-                        result = type.MakeGenericType(typeArgs);
-                    } catch (ArgumentException) {
-                        throw new LuaException("attempt to construct generic type threw: type constraints");
-                    }
-                    PushNetType(state, result);
-                } else {
-                    if (type.IsAbstract) {
-                        throw new LuaException("attempt to instantiate abstract type");
-                    }
-
-                    var info = type.GetBindingInfo();
-                    var ctors = info.GetConstructors();
-                    if (ctors.Count == 0) {
-                        throw new LuaException("attempt to instantiate type with no constructors");
-                    }
-
-                    var ctor = ResolveMethodCall(objs, ctors, out var args);
-                    if (ctor == null) {
-                        throw new LuaException("attempt to instantiate type with invalid args");
-                    }
-
-                    object result;
-                    try {
-                        result = ctor.Invoke(args);
-                    } catch (TargetInvocationException e) {
-                        throw new LuaException($"attempt to instantiate type threw:\n{e.InnerException}");
-                    }
-                    _lua.PushObject(result, state);
-                }
-                return 1;
-            });
-        }
-
-        private int IndexObject(IntPtr state) {
-            return WrappedCall(state, () => {
-                var obj = LuaApi.ToHandle(state, 1).Target;
-                return IndexShared(state, obj, obj.GetType());
-            });
-        }
-
-        private int IndexType(IntPtr state) {
-            return WrappedCall(state, () => {
-                var type = (Type)LuaApi.ToHandle(state, 1).Target;
-                if (type.IsInterface) {
-                    throw new LuaException("attempt to index interface");
-                }
-                if (type.ContainsGenericParameters) {
-                    throw new LuaException("attempt to index generic type");
-                }
-
-                return IndexShared(state, null, type);
-            });
-        }
+            return IndexShared(state, null, type);
+        });
 
         private int IndexShared(IntPtr state, object obj, Type type) {
             var keyType = LuaApi.Type(state, 2);
@@ -540,19 +532,15 @@ namespace Triton.Binding {
             throw new LuaException("attempt to index with invalid key");
         }
 
-        private int ProxyCallObject(IntPtr state) {
-            return WrappedCall(state, () => {
-                var obj = LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
-                return ProxyCallShared(state, obj, obj.GetType());
-            });
-        }
+        private int ProxyCallObject(IntPtr state) => WrappedCall(state, () => {
+            var obj = LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
+            return ProxyCallShared(state, obj, obj.GetType());
+        });
 
-        private int ProxyCallType(IntPtr state) {
-            return WrappedCall(state, () => {
-                var type = (Type)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
-                return ProxyCallShared(state, null, type);
-            });
-        }
+        private int ProxyCallType(IntPtr state) => WrappedCall(state, () => {
+            var type = (Type)LuaApi.ToHandle(state, LuaApi.UpvalueIndex(1)).Target;
+            return ProxyCallShared(state, null, type);
+        });
 
         private int ProxyCallShared(IntPtr state, object obj, Type type) {
             var methodName = LuaApi.ToString(state, LuaApi.UpvalueIndex(2));
@@ -640,26 +628,22 @@ namespace Triton.Binding {
             return numResults;
         }
 
-        private int NewIndexObject(IntPtr state) {
-            return WrappedCall(state, () => {
-                var obj = LuaApi.ToHandle(state, 1).Target;
-                return NewIndexShared(state, obj, obj.GetType());
-            });
-        }
+        private int NewIndexObject(IntPtr state) => WrappedCall(state, () => {
+            var obj = LuaApi.ToHandle(state, 1).Target;
+            return NewIndexShared(state, obj, obj.GetType());
+        });
 
-        private int NewIndexType(IntPtr state) {
-            return WrappedCall(state, () => {
-                var type = (Type)LuaApi.ToHandle(state, 1).Target;
-                if (type.IsInterface) {
-                    throw new LuaException("attempt to index interface");
-                }
-                if (type.ContainsGenericParameters) {
-                    throw new LuaException("attempt to index generic type");
-                }
+        private int NewIndexType(IntPtr state) => WrappedCall(state, () => {
+            var type = (Type)LuaApi.ToHandle(state, 1).Target;
+            if (type.IsInterface) {
+                throw new LuaException("attempt to index interface");
+            }
+            if (type.ContainsGenericParameters) {
+                throw new LuaException("attempt to index generic type");
+            }
 
-                return NewIndexShared(state, null, type);
-            });
-        }
+            return NewIndexShared(state, null, type);
+        });
 
         private int NewIndexShared(IntPtr state, object obj, Type type) {
             var value = _lua.ToObject(3, null, state);
@@ -752,57 +736,53 @@ namespace Triton.Binding {
         private int ShlObject(IntPtr state) => BinaryOpShared(state, "op_LeftShift", "perform bitwise operation on");
         private int ShrObject(IntPtr state) => BinaryOpShared(state, "op_RightShift", "perform bitwise operation on");
 
-        private int BinaryOpShared(IntPtr state, string methodName, string errorText) {
-            return WrappedCall(state, () => {
-                var operand1 = _lua.ToObject(1, null, state);
-                var operand2 = _lua.ToObject(2, null, state);
-                var info1 = operand1.GetType().GetBindingInfo();
-                var info2 = operand2.GetType().GetBindingInfo();
+        private int BinaryOpShared(IntPtr state, string methodName, string errorText) => WrappedCall(state, () => {
+            var operand1 = _lua.ToObject(1, null, state);
+            var operand2 = _lua.ToObject(2, null, state);
+            var info1 = operand1.GetType().GetBindingInfo();
+            var info2 = operand2.GetType().GetBindingInfo();
 
-                // Binary operators can be declared on either of the operands' types, so check both of them.
-                var ops = info1.GetOperators(methodName);
-                if (info2 != info1) {
-                    ops = ops.Concat(info2.GetOperators(methodName));
-                }
+            // Binary operators can be declared on either of the operands' types, so check both of them.
+            var ops = info1.GetOperators(methodName);
+            if (info2 != info1) {
+                ops = ops.Concat(info2.GetOperators(methodName));
+            }
 
-                var op = ResolveMethodCall(new[] { operand1, operand2 }, ops, out var args);
-                if (op == null) {
-                    throw new LuaException($"attempt to {errorText} two objects");
-                }
+            var op = ResolveMethodCall(new[] { operand1, operand2 }, ops, out var args);
+            if (op == null) {
+                throw new LuaException($"attempt to {errorText} two objects");
+            }
 
-                object result;
-                try {
-                    result = op.Invoke(null, args);
-                } catch (TargetInvocationException e) {
-                    throw new LuaException($"attempt to {errorText} two objects threw:\n{e.InnerException}");
-                }
-                _lua.PushObject(result, state);
-                return 1;
-            });
-        }
+            object result;
+            try {
+                result = op.Invoke(null, args);
+            } catch (TargetInvocationException e) {
+                throw new LuaException($"attempt to {errorText} two objects threw:\n{e.InnerException}");
+            }
+            _lua.PushObject(result, state);
+            return 1;
+        });
 
         private int UnmObject(IntPtr state) => UnaryOpShared(state, "op_UnaryNegation", "perform arithmetic on");
         private int BnotObject(IntPtr state) => UnaryOpShared(state, "op_OnesComplement", "perform bitwise operation on");
 
-        private int UnaryOpShared(IntPtr state, string methodName, string errorText) {
-            return WrappedCall(state, () => {
-                var operand = LuaApi.ToHandle(state, 1).Target;
-                var info = operand.GetType().GetBindingInfo();
+        private int UnaryOpShared(IntPtr state, string methodName, string errorText) => WrappedCall(state, () => {
+            var operand = LuaApi.ToHandle(state, 1).Target;
+            var info = operand.GetType().GetBindingInfo();
 
-                var op = info.GetOperators(methodName).SingleOrDefault();
-                if (op == null) {
-                    throw new LuaException($"attempt to {errorText} an object");
-                }
+            var op = info.GetOperators(methodName).SingleOrDefault();
+            if (op == null) {
+                throw new LuaException($"attempt to {errorText} an object");
+            }
 
-                object result;
-                try {
-                    result = op.Invoke(null, new[] { operand });
-                } catch (TargetInvocationException e) {
-                    throw new LuaException($"attempt to {errorText} an object threw:\n{e.InnerException}");
-                }
-                _lua.PushObject(result, state);
-                return 1;
-            });
-        }
+            object result;
+            try {
+                result = op.Invoke(null, new[] { operand });
+            } catch (TargetInvocationException e) {
+                throw new LuaException($"attempt to {errorText} an object threw:\n{e.InnerException}");
+            }
+            _lua.PushObject(result, state);
+            return 1;
+        });
     }
 }
