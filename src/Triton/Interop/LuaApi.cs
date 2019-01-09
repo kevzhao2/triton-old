@@ -91,14 +91,15 @@ namespace Triton.Interop {
                 libraryFolder = "linux-{0}";
                 libraryName = "liblua53.so";
             }
-            var libraryPath = Path.Combine(string.Format(libraryFolder, Platform.Is64Bit ? "x64" : "x86"), libraryName);
+            var libraryPath = Path.Combine(string.Format(libraryFolder, Platform.Is64Bit ? "x64" : "x86"), "native", libraryName);
 
             // There are two possible base paths: the assembly directory, and for unpublished .NET core projects using a NuGet package,
             // the assembly directory up two levels.
             var assemblyDirectory = Path.GetDirectoryName(GetAssemblyPath(typeof(LuaApi).Assembly));
-            var path1 = new[] { assemblyDirectory, "runtimes", libraryPath }.Aggregate(Path.Combine);
-            var path2 = new[] { assemblyDirectory, "..", "..", "runtimes", libraryPath }.Aggregate(Path.Combine);
-            var library = new NativeLibrary(path1, path2);
+            var path1 = new[] { assemblyDirectory, libraryName }.Aggregate(Path.Combine);
+            var path2 = new[] { assemblyDirectory, "runtimes", libraryPath }.Aggregate(Path.Combine);
+            var path3 = new[] { assemblyDirectory, "..", "..", "runtimes", libraryPath }.Aggregate(Path.Combine);
+            var library = new NativeLibrary(path1, path2, path3);
 
             CheckStack = library.GetDelegate<Delegates.CheckStack>("lua_checkstack");
             Close = library.GetDelegate<Delegates.Close>("lua_close");
