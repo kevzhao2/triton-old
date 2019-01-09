@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net40;net35</TargetFrameworks>
@@ -29,7 +29,7 @@
       <Pack>true</Pack>
       <PackagePath>runtimes/</PackagePath>
     </Content>
-    <None Update="runtimes\Triton.targets">
+    <None Include="runtimes\Triton.targets">
       <Pack>true</Pack>
       <PackagePath>build/net40/;build/net35/</PackagePath>
     </None>
