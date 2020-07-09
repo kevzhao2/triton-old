@@ -16,14 +16,14 @@
     </None>
   </ItemGroup>
 
-  <ItemGroup Condition=" '$(OS)' == 'OSX' ">
+  <ItemGroup Condition=" '$(OS)' == 'Unix' and Exists('/usr/lib/libc.dylib')">
     <None Include="runtimes\osx\native\liblua54.dylib" Visible="false">
       <Link>liblua54.dylib</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 
-  <ItemGroup Condition=" '$(OS)' == 'Unix' ">
+  <ItemGroup Condition=" '$(OS)' == 'Unix' and !Exists('/usr/lib/libc.dylib')">
     <None Include="runtimes\linux-x64\native\liblua54.so" Visible="false">
       <Link>liblua54.so</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

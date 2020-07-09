@@ -49,5 +49,5 @@ jobs:
       - name: Publish artifacts (${{matrix.os }} Release)
         uses: actions/upload-artifact@v2
         with:
-          name: Orion.Core (${{matrix.os }} Release)
+          name: Triton (${{matrix.os }} Release)
           path: src/Triton/bin/Release/netstandard2.0/publish
