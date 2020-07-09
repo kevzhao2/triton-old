@@ -1,50 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net40;net35</TargetFrameworks>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-  </PropertyGroup>
-  
-  <PropertyGroup>
-    <Authors>Kevin Zhao</Authors>
-    <Copyright>Kevin Zhao</Copyright>
-    <Description>Provides an easy and efficient way to embed Lua into your .NET application.</Description>
-    <PackageTags>lua;script;scripting;interop</PackageTags>
-    <PackageLicenseUrl>https://github.com/kevzhao2/Triton/blob/master/LICENSE</PackageLicenseUrl>
-    <PackageProjectUrl>https://github.com/kevzhao2/Triton</PackageProjectUrl>
-    <RepositoryType>git</RepositoryType>
-    <RepositoryUrl>https://github.com/kevzhao2/Triton</RepositoryUrl>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <SignAssembly>true</SignAssembly>
-    <AssemblyOriginatorKeyFile>key.pfx</AssemblyOriginatorKeyFile>
-  </PropertyGroup>
-  
-  <ItemGroup>
-    <Content Include="runtimes\*\**">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Pack>true</Pack>
-      <PackagePath>runtimes/</PackagePath>
-    </Content>
-    <None Update="runtimes\Triton.targets">
-      <Pack>true</Pack>
-      <PackagePath>build/net40/;build/net35/</PackagePath>
-    </None>
-  </ItemGroup>
-
-  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-    <DefineConstants>FEATURE_DYNAMIC;NETSTANDARD</DefineConstants>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net40'">
-    <DefineConstants>FEATURE_DYNAMIC;NETFULL</DefineConstants>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net35'">
-    <DefineConstants>NETFULL</DefineConstants>
+    <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
 
 </Project>
