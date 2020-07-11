@@ -18,6 +18,15 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using System.Runtime.CompilerServices;
-
-[assembly: InternalsVisibleTo("Triton.Tests")]
+namespace Triton.Native
+{
+    /// <summary>
+    /// Specifies a Lua comparison operation.
+    /// </summary>
+    internal enum LuaComparisonOp
+    {
+        Eq = 0,
+        Lt = 1,
+        Le = 2
+    }
+}

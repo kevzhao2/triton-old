@@ -18,6 +18,18 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using System.Runtime.CompilerServices;
-
-[assembly: InternalsVisibleTo("Triton.Tests")]
+namespace Triton.Native
+{
+    /// <summary>
+    /// Specifies the status of a Lua thread or some operation.
+    /// </summary>
+    internal enum LuaStatus
+    {
+        Ok = 0,
+        Yield = 1,
+        ErrRun = 2,
+        ErrSyntax = 3,
+        ErrMem = 4,
+        ErrErr = 5
+    }
+}

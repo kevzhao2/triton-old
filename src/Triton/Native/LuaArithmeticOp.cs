@@ -18,6 +18,26 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using System.Runtime.CompilerServices;
-
-[assembly: InternalsVisibleTo("Triton.Tests")]
+namespace Triton.Native
+{
+    /// <summary>
+    /// Specifies a Lua arithmetic operation.
+    /// </summary>
+    internal enum LuaArithmeticOp
+    {
+        Add = 0,
+        Sub = 1,
+        Mul = 2,
+        Mod = 3,
+        Pow = 4,
+        Div = 5,
+        Idiv = 6,
+        Band = 7,
+        Bor = 8,
+        Bxor = 9,
+        Shl = 10,
+        Shr = 11,
+        Unm = 12,
+        Bnot = 13
+    }
+}
