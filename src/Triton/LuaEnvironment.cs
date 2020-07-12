@@ -104,21 +104,31 @@ namespace Triton
                 // We require 1 stack slot since the value of the global is pushed onto the stack.
                 ThrowIfNotEnoughLuaStack(_state, 1);
 
+#if DEBUG
+                var oldTop = lua_gettop(_state);
+#endif
+
+                // May throw an exception
                 var buffer = MarshalString(s, out _, out var wasAllocated, isNullTerminated: true);
+
+                var type = lua_getglobal(_state, buffer);
+
+                if (wasAllocated)
+                {
+                    Marshal.FreeHGlobal((IntPtr)buffer);
+                }
 
                 try
                 {
-                    var type = lua_getglobal(_state, buffer);
                     return ToObject(_state, -1, typeHint: type);  // May throw an exception
                 }
                 finally
                 {
-                    if (wasAllocated)
-                    {
-                        Marshal.FreeHGlobal((IntPtr)buffer);
-                    }
+                    lua_pop(_state, 1);  // Pop the value of the global off of the stack
 
-                    lua_pop(_state, 1);
+#if DEBUG
+                    Debug.Assert(lua_gettop(_state) == oldTop);
+#endif
                 }
             }
 
@@ -134,22 +144,35 @@ namespace Triton
                 // We require 1 stack slot since the new value of the global is pushed onto the stack.
                 ThrowIfNotEnoughLuaStack(_state, 1);
 
+#if DEBUG
+                var oldTop = lua_gettop(_state);
+#endif
+
                 // Push the value onto the stack first, as it may involve using the string buffer.
                 PushObject(_state, value);  // May throw an exception
 
-                var buffer = MarshalString(s, out _, out var wasAllocated, isNullTerminated: true);
-
                 try
                 {
+                    var buffer = MarshalString(s, out _, out var wasAllocated, isNullTerminated: true);
+
                     lua_setglobal(_state, buffer);
-                }
-                finally
-                {
+
                     if (wasAllocated)
                     {
                         Marshal.FreeHGlobal((IntPtr)buffer);
                     }
                 }
+                catch (EncoderFallbackException)
+                {
+                    lua_pop(_state, 1);  // Pop the value of the global off of the stack
+                    throw;
+                }
+#if DEBUG
+                finally
+                {
+                    Debug.Assert(lua_gettop(_state) == oldTop);
+                }
+#endif
             }
         }
 
@@ -198,18 +221,30 @@ namespace Triton
                     nameof(nonSequentialCapacity), "Non-sequential capacity is negative");
             }
 
-            lua_createtable(_state, sequentialCapacity, nonSequentialCapacity);
+#if DEBUG
+            var oldTop = lua_gettop(_state);
 
-            // Because we just created a table, it is guaranteed to be a unique table. So we can just construct a new
-            // `LuaTable` instance without checking if it is cached.
+            try
+            {
+#endif
+                lua_createtable(_state, sequentialCapacity, nonSequentialCapacity);
 
-            var ptr = (IntPtr)lua_topointer(_state, -1);
-            var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
-            var table = new LuaTable(this, reference, _state);
+                // Because we just created a table, it is guaranteed to be a unique table. So we can just construct a
+                // new `LuaTable` instance without checking if it is cached.
+                var ptr = (IntPtr)lua_topointer(_state, -1);
+                var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
+                var table = new LuaTable(this, reference, _state);
 
-            _references[ptr] = reference;
-            _luaObjects[ptr] = new WeakReference<LuaObject>(table);
-            return table;
+                _references[ptr] = reference;
+                _luaObjects[ptr] = new WeakReference<LuaObject>(table);
+                return table;
+#if DEBUG
+            }
+            finally
+            {
+                Debug.Assert(lua_gettop(_state) == oldTop);
+            }
+#endif
         }
 
         /// <summary>
@@ -229,18 +264,30 @@ namespace Triton
 
             ThrowIfDisposed();
 
-            LoadString(s);
+#if DEBUG
+            var oldTop = lua_gettop(_state);
 
-            // Because we just created a function, it is guaranteed to be a unique function. So we can just construct a
-            // new `LuaFunction` instance without checking if it is cached.
-            
-            var ptr = (IntPtr)lua_topointer(_state, -1);
-            var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
-            var function = new LuaFunction(this, reference, _state);
+            try
+            {
+#endif
+                LoadString(s);
 
-            _references[ptr] = reference;
-            _luaObjects[ptr] = new WeakReference<LuaObject>(function);
-            return function;
+                // Because we just created a function, it is guaranteed to be a unique function. So we can just
+                // construct a new `LuaFunction` instance without checking if it is cached.
+                var ptr = (IntPtr)lua_topointer(_state, -1);
+                var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
+                var function = new LuaFunction(this, reference, _state);
+
+                _references[ptr] = reference;
+                _luaObjects[ptr] = new WeakReference<LuaObject>(function);
+                return function;
+#if DEBUG
+            }
+            finally
+            {
+                Debug.Assert(lua_gettop(_state) == oldTop);
+            }
+#endif
         }
 
         #region Stack manipulation helpers
@@ -526,37 +573,50 @@ namespace Triton
                 return luaObject;
             }
 
-            Debug.Assert(lua_checkstack(state, 1));
+#if DEBUG
+            var oldTop = lua_gettop(_state);
 
-            // Construct the Lua object by storing a reference to it inside of the Lua registry. This prevents Lua from
-            // garbage collecting the object.
-            lua_pushvalue(state, index);
-            var reference = luaL_ref(state, LUA_REGISTRYINDEX);
-
-            Debug.Assert(reference != LUA_REFNIL);
-
-            luaObject = (typeHint ?? lua_type(state, index)) switch
+            try
             {
-                LuaType.Table => new LuaTable(this, reference, _state),
-                LuaType.Function => new LuaFunction(this, reference, _state),
-                LuaType.Thread => new LuaThread(this, reference, (lua_State*)ptr),  // Special case for threads
-                _ => throw new InvalidOperationException()
-            };
+#endif
+                Debug.Assert(lua_checkstack(state, 1));
 
-            // Try to reuse the weak reference, if possible. This reduces the number of allocations.
-            if (weakLuaObject != null)
-            {
-                weakLuaObject.SetTarget(luaObject);
+                // Construct the Lua object by storing a reference to it inside of the Lua registry. This prevents Lua
+                // from garbage collecting the object.
+                lua_pushvalue(state, index);
+                var reference = luaL_ref(state, LUA_REGISTRYINDEX);
+
+                Debug.Assert(reference != LUA_REFNIL);
+
+                luaObject = (typeHint ?? lua_type(state, index)) switch
+                {
+                    LuaType.Table => new LuaTable(this, reference, _state),
+                    LuaType.Function => new LuaFunction(this, reference, _state),
+                    LuaType.Thread => new LuaThread(this, reference, (lua_State*)ptr),  // Special case for threads
+                    _ => throw new InvalidOperationException()
+                };
+
+                // Try to reuse the weak reference, if possible. This reduces the number of allocations.
+                if (weakLuaObject != null)
+                {
+                    weakLuaObject.SetTarget(luaObject);
+                }
+                else
+                {
+                    _luaObjects[ptr] = new WeakReference<LuaObject>(luaObject);
+                }
+
+                // Store the reference information so that dead Lua objects can be properly cleaned up when Lua performs
+                // a garbage collection.
+                _references[ptr] = reference;
+                return luaObject;
+#if DEBUG
             }
-            else
+            finally
             {
-                _luaObjects[ptr] = new WeakReference<LuaObject>(luaObject);
+                Debug.Assert(lua_gettop(_state) == oldTop);
             }
-
-            // Store the reference information so that dead Lua objects can be properly cleaned up when Lua performs a
-            // garbage collection.
-            _references[ptr] = reference;
-            return luaObject;
+#endif
         }
 
         #endregion
@@ -582,8 +642,6 @@ namespace Triton
                 {
                     len = (UIntPtr)Encoding.GetBytes(sPtr, s.Length, buffer, maxByteLength);  // May throw an exception
                 }
-
-                var str = Encoding.GetString(buffer, 5);
 
                 if (isNullTerminated)
                 {

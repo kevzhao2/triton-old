@@ -58,6 +58,16 @@ namespace Triton
         }
 
         [Fact]
+        public void Item_Get_EncoderFallbackExceptionThrown()
+        {
+            var encoding = Encoding.GetEncoding(
+                "us-ascii", new EncoderExceptionFallback(), new DecoderExceptionFallback());
+            using var environment = new LuaEnvironment(encoding);
+
+            Assert.Throws<EncoderFallbackException>(() => environment["tést"]);
+        }
+
+        [Fact]
         public void Item_Set_NullS_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();
@@ -72,6 +82,16 @@ namespace Triton
             environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => environment["test"]);
+        }
+
+        [Fact]
+        public void Item_Set_EncoderFallbackExceptionThrown()
+        {
+            var encoding = Encoding.GetEncoding(
+                "us-ascii", new EncoderExceptionFallback(), new DecoderExceptionFallback());
+            using var environment = new LuaEnvironment(encoding);
+
+            Assert.Throws<EncoderFallbackException>(() => environment["tést"] = 1234);
         }
 
         [Fact]
