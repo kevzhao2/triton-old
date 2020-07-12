@@ -38,12 +38,12 @@ namespace Triton
         /// Calls the function with no arguments.
         /// </summary>
         /// <returns>The function results.</returns>
-        /// <exception cref="LuaException">A Lua error occurs.</exception>
+        /// <exception cref="LuaException">A Lua error occurred.</exception>
         public object?[] Call()
         {
-            CheckStackInternal(1);
+            _environment.CheckStack(_state, 1);
 
-            _environment.Push(_state, (LuaObject)this);
+            lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
 
             return CallInternal(0);
         }
@@ -54,12 +54,12 @@ namespace Triton
         /// <typeparam name="T">The type of the argument.</typeparam>
         /// <param name="arg">The argument.</param>
         /// <returns>The function results.</returns>
-        /// <exception cref="LuaException">A Lua error occurs.</exception>
+        /// <exception cref="LuaException">A Lua error occurred.</exception>
         public object?[] Call<T>(T arg)
         {
-            CheckStackInternal(2);
+            _environment.CheckStack(_state, 2);
 
-            _environment.Push(_state, (LuaObject)this);
+            lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
             _environment.Push(_state, arg);
 
             return CallInternal(1);
@@ -73,12 +73,12 @@ namespace Triton
         /// <param name="arg1">The first argument.</param>
         /// <param name="arg2">The second argument.</param>
         /// <returns>The function results.</returns>
-        /// <exception cref="LuaException">A Lua error occurs.</exception>
+        /// <exception cref="LuaException">A Lua error occurred.</exception>
         public object?[] Call<T1, T2>(T1 arg1, T2 arg2)
         {
-            CheckStackInternal(3);
+            _environment.CheckStack(_state, 3);
 
-            _environment.Push(_state, (LuaObject)this);
+            lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
             _environment.Push(_state, arg1);
             _environment.Push(_state, arg2);
 
@@ -95,27 +95,17 @@ namespace Triton
         /// <param name="arg2">The second argument.</param>
         /// <param name="arg3">The third argument.</param>
         /// <returns>The function results.</returns>
-        /// <exception cref="LuaException">A Lua error occurs.</exception>
+        /// <exception cref="LuaException">A Lua error occurred.</exception>
         public object?[] Call<T1, T2, T3>(T1 arg1, T2 arg2, T3 arg3)
         {
-            CheckStackInternal(4);
+            _environment.CheckStack(_state, 4);
 
-            _environment.Push(_state, (LuaObject)this);
+            lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
             _environment.Push(_state, arg1);
             _environment.Push(_state, arg2);
             _environment.Push(_state, arg3);
 
             return CallInternal(3);
-        }
-
-        private void CheckStackInternal(int numSlots)
-        {
-            Debug.Assert(numSlots >= 1);
-
-            if (!lua_checkstack(_state, numSlots))
-            {
-                throw new LuaException("Not enough Lua stack space");
-            }
         }
 
         private object?[] CallInternal(int numArgs)
@@ -126,9 +116,7 @@ namespace Triton
             var status = lua_pcall(_state, numArgs, -1, 0);
             if (status != Native.LuaStatus.Ok)
             {
-                var errorMessage = _environment.ToString(_state, -1);
-                lua_pop(_state, 1);
-                throw new LuaException(errorMessage);
+                throw _environment.ToLuaException(_state);
             }
 
             var numResults = lua_gettop(_state) - top;
@@ -139,7 +127,7 @@ namespace Triton
 
             // We potentially need one extra slot on the stack, in case one of the results is a Lua object and it needs
             // to be pushed in order for `luaL_ref` to be called on it.
-            CheckStackInternal(1);
+            _environment.CheckStack(_state, 1);
 
             var results = new object?[numResults];
             for (var i = 0; i < numResults; ++i)

@@ -27,6 +27,14 @@ namespace Triton
     public unsafe class LuaEnvironmentTests
     {
         [Fact]
+        public void Ctor()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Same(Encoding.ASCII, environment.Encoding);
+        }
+
+        [Fact]
         public void Ctor_NullEncoding_ThrowsArgumentNullException()
         {
             Assert.Throws<ArgumentNullException>(() => new LuaEnvironment(null!));
@@ -35,15 +43,15 @@ namespace Triton
         [Fact]
         public void Encoding_Get()
         {
-            using var environment = new LuaEnvironment(Encoding.ASCII);
+            using var environment = new LuaEnvironment(Encoding.UTF8);
 
-            Assert.Same(Encoding.ASCII, environment.Encoding);
+            Assert.Same(Encoding.UTF8, environment.Encoding);
         }
 
         [Fact]
         public void CreateTable_ObjectDisposed_ThrowsObjectDisposedException()
         {
-            var environment = new LuaEnvironment(Encoding.ASCII);
+            var environment = new LuaEnvironment();
             environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => environment.CreateTable());
@@ -52,7 +60,7 @@ namespace Triton
         [Fact]
         public void CreateTable_NegativeSequentialCapacity_ThrowsArgumentOutOfRangeException()
         {
-            using var environment = new LuaEnvironment(Encoding.ASCII);
+            using var environment = new LuaEnvironment();
 
             Assert.Throws<ArgumentOutOfRangeException>(() => environment.CreateTable(sequentialCapacity: -1));
         }
@@ -60,7 +68,7 @@ namespace Triton
         [Fact]
         public void CreateTable_NegativeNonSequentialCapacity_ThrowsArgumentOutOfRangeException()
         {
-            using var environment = new LuaEnvironment(Encoding.ASCII);
+            using var environment = new LuaEnvironment();
 
             Assert.Throws<ArgumentOutOfRangeException>(() => environment.CreateTable(nonSequentialCapacity: -1));
         }
@@ -68,7 +76,7 @@ namespace Triton
         [Fact]
         public void CreateFunction_NullS_ThrowsArgumentNullException()
         {
-            using var environment = new LuaEnvironment(Encoding.ASCII);
+            using var environment = new LuaEnvironment();
 
             Assert.Throws<ArgumentNullException>(() => environment.CreateFunction(null!));
         }
@@ -76,7 +84,7 @@ namespace Triton
         [Fact]
         public void CreateFunction_ObjectDisposed_ThrowsObjectDisposedException()
         {
-            var environment = new LuaEnvironment(Encoding.ASCII);
+            var environment = new LuaEnvironment();
             environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => environment.CreateFunction("return 0"));
@@ -85,7 +93,7 @@ namespace Triton
         [Fact]
         public void CreateFunction()
         {
-            using var environment = new LuaEnvironment(Encoding.ASCII);
+            using var environment = new LuaEnvironment();
 
             var function = environment.CreateFunction("return 0");
         }

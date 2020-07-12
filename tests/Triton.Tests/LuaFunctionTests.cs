@@ -18,7 +18,6 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using System.Text;
 using Xunit;
 
 namespace Triton
@@ -28,7 +27,7 @@ namespace Triton
         [Fact]
         public void Call_NoArgs_OneResult()
         {
-            using var environment = new LuaEnvironment(Encoding.ASCII);
+            using var environment = new LuaEnvironment();
 
             var function = environment.CreateFunction("return 1234");
 
@@ -40,7 +39,7 @@ namespace Triton
         [Fact]
         public void Call_OneArg_OneResult()
         {
-            using var environment = new LuaEnvironment(Encoding.ASCII);
+            using var environment = new LuaEnvironment();
 
             var function = environment.CreateFunction("return ...");
 
@@ -52,7 +51,7 @@ namespace Triton
         [Fact]
         public void Call_TwoArgs_OneResult()
         {
-            using var environment = new LuaEnvironment(Encoding.ASCII);
+            using var environment = new LuaEnvironment();
 
             var function = environment.CreateFunction(@"
                 result = 0
@@ -69,7 +68,7 @@ namespace Triton
         [Fact]
         public void Call_ThreeArgs_OneResult()
         {
-            using var environment = new LuaEnvironment(Encoding.ASCII);
+            using var environment = new LuaEnvironment();
 
             var function = environment.CreateFunction(@"
                 result = 0
@@ -86,7 +85,7 @@ namespace Triton
         [Fact]
         public void Call_NoArgs_TwoResults()
         {
-            using var environment = new LuaEnvironment(Encoding.ASCII);
+            using var environment = new LuaEnvironment();
 
             var function = environment.CreateFunction("return 1234, 5678");
 
@@ -99,7 +98,7 @@ namespace Triton
         [Fact]
         public void Call_NoArgs_ThreeResults()
         {
-            using var environment = new LuaEnvironment(Encoding.ASCII);
+            using var environment = new LuaEnvironment();
 
             var function = environment.CreateFunction("return 1, 2, 3");
 
@@ -113,7 +112,7 @@ namespace Triton
         [Fact]
         public void Call_LuaError_ThrowsLuaException()
         {
-            using var environment = new LuaEnvironment(Encoding.ASCII);
+            using var environment = new LuaEnvironment();
 
             var function = environment.CreateFunction("error('test')");
 

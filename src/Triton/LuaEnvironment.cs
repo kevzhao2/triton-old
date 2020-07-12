@@ -48,6 +48,13 @@ namespace Triton
         private bool _isDisposed;
 
         /// <summary>
+        /// Initializes a new instance of the <see cref="LuaEnvironment"/> class with the default encoding, ASCII.
+        /// </summary>
+        public LuaEnvironment() : this(Encoding.ASCII)
+        {
+        }
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="LuaEnvironment"/> class with the specified
         /// <paramref name="encoding"/>.
         /// </summary>
@@ -59,6 +66,7 @@ namespace Triton
             _stringBuffer = (byte*)Marshal.AllocHGlobal(StringBufferSize);
 
             Encoding = encoding ?? throw new ArgumentNullException(nameof(encoding));
+            Globals = new LuaTable(this, LUA_RIDX_GLOBALS, _state);
 
             luaL_openlibs(_state);
 
@@ -78,6 +86,12 @@ namespace Triton
         /// </summary>
         /// <value>The Lua environment's encoding.</value>
         public Encoding Encoding { get; }
+
+        /// <summary>
+        /// Gets the Lua environment's globals as a table.
+        /// </summary>
+        /// <value>The Lua environment's globals as a table.</value>
+        public LuaTable Globals { get; }
 
         /// <inheritdoc/>
         public void Dispose()
@@ -109,8 +123,16 @@ namespace Triton
             }
 
             lua_createtable(_state, sequentialCapacity, nonSequentialCapacity);
-            var table = (LuaTable)ToLuaObject(_state, -1, typeHint: LuaType.Table);
-            lua_pop(_state, 1);
+
+            // Because we just created a table, it is guaranteed to be a unique table. So we can just construct a new
+            // `LuaTable` instance without checking if it is cached.
+
+            var ptr = (IntPtr)lua_topointer(_state, -1);
+            var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
+            var table = new LuaTable(this, reference, _state);
+
+            _references[ptr] = reference;
+            _luaObjects[ptr] = new WeakReference<LuaObject>(table);
             return table;
         }
 
@@ -120,6 +142,7 @@ namespace Triton
         /// <param name="s">The string to load as a Lua chunk.</param>
         /// <returns>The resulting Lua function.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="s"/> is <see langword="null"/>.</exception>
+        /// <exception cref="LuaException">A Lua error occurred.</exception>
         /// <exception cref="ObjectDisposedException">The environment is disposed.</exception>
         public LuaFunction CreateFunction(string s)
         {
@@ -130,10 +153,92 @@ namespace Triton
 
             ThrowIfDisposed();
 
-            LoadString(s);
-            var function = (LuaFunction)ToLuaObject(_state, -1, typeHint: LuaType.Function);
-            lua_pop(_state, 1);
+            LoadStringInternal(s);
+
+            // Because we just created a function, it is guaranteed to be a unique function. So we can just construct a
+            // new `LuaFunction` instance without checking if it is cached.
+            
+            var ptr = (IntPtr)lua_topointer(_state, -1);
+            var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
+            var function = new LuaFunction(this, reference, _state);
+
+            _references[ptr] = reference;
+            _luaObjects[ptr] = new WeakReference<LuaObject>(function);
             return function;
+        }
+
+        internal void Push(lua_State* state, object value)
+        {
+            Debug.Assert(lua_checkstack(state, 1));
+
+            if (value is null)
+            {
+                lua_pushnil(state);
+            }
+            else if (value is bool b)
+            {
+                Push(state, b);
+            }
+            else if (value is sbyte n)
+            {
+                Push(state, (long)n);
+            }
+            else if (value is byte n2)
+            {
+                Push(state, (long)n2);
+            }
+            else if (value is short n3)
+            {
+                Push(state, (long)n3);
+            }
+            else if (value is ushort n4)
+            {
+                Push(state, (long)n4);
+            }
+            else if (value is int n5)
+            {
+                Push(state, (long)n5);
+            }
+            else if (value is uint n6)
+            {
+                Push(state, (long)n6);
+            }
+            else if (value is long n7)
+            {
+                Push(state, n7);
+            }
+            else if (value is ulong n8)
+            {
+                Push(state, (long)n8);
+            }
+            else if (value is float n9)
+            {
+                Push(state, (double)n9);
+            }
+            else if (value is double n10)
+            {
+                Push(state, n10);
+            }
+            else if (value is decimal n11)
+            {
+                Push(state, n11);
+            }
+            else if (value is char c)
+            {
+                Push(state, c.ToString());
+            }
+            else if (value is string s)
+            {
+                Push(state, s);
+            }
+            else if (value is LuaObject luaObject)
+            {
+                Push(state, luaObject);
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }
         }
 
         internal void Push<T>(lua_State* state, T value)
@@ -274,11 +379,9 @@ namespace Triton
             lua_rawgeti(state, LUA_REGISTRYINDEX, obj._reference);
         }
 
-        internal object? ToObject(lua_State* state, int index)
+        internal object? ToObject(lua_State* state, int index, LuaType? typeHint = null)
         {
-            var type = lua_type(state, index);
-
-            return type switch
+            return (typeHint ?? lua_type(state, index)) switch
             {
                 LuaType.Nil => null,
                 LuaType.Boolean => ToBoolean(state, index),
@@ -363,13 +466,30 @@ namespace Triton
             return luaObject;
         }
 
-        private void LoadString(string s)
+        // Throws an exception if the Lua stack cannot hold a number of extra slots.
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void CheckStack(lua_State* state, int slots)
+        {
+            Debug.Assert(slots >= 1);
+
+            if (!lua_checkstack(state, slots))
+            {
+                throw new LuaException("Not enough Lua stack space");
+            }
+        }
+
+        internal LuaException ToLuaException(lua_State* state)
+        {
+            var errorMessage = ToString(state, -1);
+            lua_pop(state, 1);
+            return new LuaException(errorMessage);
+        }
+
+        private void LoadStringInternal(string s)
         {
             if (LoadString(s) != LuaStatus.Ok)
             {
-                var errorMessage = ToString(_state, -1);
-                lua_pop(_state, 1);
-                throw new Exception(errorMessage);
+                throw ToLuaException(_state);
             }
 
             LuaStatus LoadString(string s)
@@ -388,7 +508,7 @@ namespace Triton
                     {
                         byteLength = Encoding.GetBytes(sPtr, s.Length, buffer, maxByteLength);
                     }
-                    buffer[byteLength] = 0;
+                    buffer[byteLength] = 0;  // Write the null terminator.
 
                     return luaL_loadstring(_state, buffer);
                 }
