@@ -36,6 +36,13 @@ namespace Triton.Native
     [SuppressUnmanagedCodeSecurity]
     internal static unsafe class NativeMethods
     {
+        public const int LUAI_MAXSTACK = 1000000;
+
+        public const int LUA_REGISTRYINDEX = -LUAI_MAXSTACK - 1000;
+
+        public const int LUA_RIDX_MAINTHREAD = 1;
+        public const int LUA_RIDX_GLOBALS = 2;
+
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void* lua_Alloc(void* ud, void* ptr, size_t osize, size_t nsize);
 
@@ -119,12 +126,18 @@ namespace Triton.Native
         // TODO: lua_isboolean
         // TODO: lua_iscfunction
         // TODO: lua_isfunction
-        // TODO: lua_isinteger
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern bool lua_isinteger(lua_State* L, int index);
+
         // TODO: lua_islightuserdata
         // TODO: lua_isnil
         // TODO: lua_isnone
         // TODO: lua_isnoneornil
-        // TODO: lua_isnumber
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern bool lua_isnumber(lua_State* L, int index);
+
         // TODO: lua_isstring
         // TODO: lua_istable
         // TODO: lua_isthread
@@ -152,7 +165,7 @@ namespace Triton.Native
         public static extern LuaStatus lua_pcallk(
             lua_State* L, int nargs, int nresults, int msgh, lua_KContext ctx, lua_KFunction? k);
 
-        // TODO: lua_pop
+        public static void lua_pop(lua_State* L, int n) => lua_settop(L, -n - 1);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_pushboolean(lua_State* L, bool b);
@@ -193,8 +206,13 @@ namespace Triton.Native
 
         // TODO: lua_pushvfstring
         // TODO: lua_rawequal
-        // TODO: lua_rawget
-        // TODO: lua_rawgeti
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern LuaType lua_rawget(lua_State* L, int index);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern LuaType lua_rawgeti(lua_State* L, int index, long n);
+
         // TODO: lua_rawgetp
         // TODO: lua_rawlen
         // TODO: lua_rawset
@@ -249,10 +267,10 @@ namespace Triton.Native
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern byte* lua_tolstring(lua_State* L, int index, size_t* len);
 
-        public static float lua_tonumber(lua_State* L, int index) => lua_tonumberx(L, index, null);
+        public static double lua_tonumber(lua_State* L, int index) => lua_tonumberx(L, index, null);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        public static extern float lua_tonumberx(lua_State* L, int index, bool* isnum);
+        public static extern double lua_tonumberx(lua_State* L, int index, bool* isnum);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void* lua_topointer(lua_State* L, int index);
@@ -269,7 +287,9 @@ namespace Triton.Native
         public static extern LuaType lua_type(lua_State* L, int index);
 
         // TODO: lua_typename
-        // TODO: lua_upvalueindex
+
+        public static int lua_upvalueindex(int i) => LUA_REGISTRYINDEX - i;
+
         // TODO: lua_version
         // TODO: lua_warning
         // TODO: lua_xmove
@@ -280,18 +300,86 @@ namespace Triton.Native
         // lauxlib.h functions
         //
 
-        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        public static extern lua_State* luaL_newstate();
+        // TODO: luaL_addchar
+        // TODO: luaL_addgsub
+        // TODO: luaL_addlstring
+        // TODO: luaL_addsize
+        // TODO: luaL_addstring
+        // TODO: luaL_addvalue
+        // TODO: luaL_argcheck
+        // TODO: luaL_argerror
+        // TODO: luaL_argexpected
+        // TODO: luaL_buffaddr
+        // TODO: luaL_buffinit
+        // TODO: luaL_bufflen
+        // TODO: luaL_buffinitsize
+        // TODO: luaL_buffsub
+        // TODO: luaL_callmeta
+        // TODO: luaL_checkany
+        // TODO: luaL_checkinteger
+        // TODO: luaL_checklstring
+        // TODO: luaL_checknumber
+        // TODO: luaL_checkoption
+        // TODO: luaL_checkstack
+        // TODO: luaL_checkstring
+        // TODO: luaL_checktype
+        // TODO: luaL_checkudata
+        // TODO: luaL_checkversion
+        // TODO: luaL_dofile
+        // TODO: luaL_dostring
+        // TODO: luaL_error
+        // TODO: luaL_execresult
+        // TODO: luaL_fileresult
+        // TODO: luaL_getmetafield
+        // TODO: luaL_getmetatable
+        // TODO: luaL_getsubtable
+        // TODO: luaL_gsub
+        // TODO: luaL_len
+        // TODO: luaL_loadbuffer
+        // TODO: luaL_loadbufferx
+        // TODO: luaL_loadfile
+        // TODO: luaL_loadfilex
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern LuaStatus luaL_loadstring(lua_State* L, byte* s);
 
-        // =============================================================================================================
-        // lualib.h functions
-        //
+        // TODO: luaL_newlib
+        // TODO: luaL_newlibtable
+        // TODO: luaL_newmetatable
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern lua_State* luaL_newstate();
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void luaL_openlibs(lua_State* L);
+
+        // TODO: luaL_opt
+        // TODO: luaL_optinteger
+        // TODO: luaL_optlstring
+        // TODO: luaL_optnumber
+        // TODO: luaL_optstring
+        // TODO: luaL_prepbuffer
+        // TODO: luaL_prepbuffsize
+        // TODO: luaL_pushfail
+        // TODO: luaL_pushresult
+        // TODO: luaL_pushresultsize
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int luaL_ref(lua_State* L, int t);
+
+        // TODO: luaL_requiref
+        // TODO: luaL_setfuncs
+        // TODO: luaL_setmetatable
+        // TODO: luaL_testudata
+        // TODO: luaL_tolstring
+        // TODO: luaL_traceback
+        // TODO: luaL_typeerror
+        // TODO: luaL_typename
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void luaL_unref(lua_State* L, int t, int @ref);
+
+        // TODO: luaL_where
 
         /// <summary>
         /// An opaque structure which represents a Lua thread.

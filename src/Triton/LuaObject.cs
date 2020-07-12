@@ -18,22 +18,29 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-namespace Triton.Native
+using System.Diagnostics;
+using System.Dynamic;
+using static Triton.Native.NativeMethods;
+
+namespace Triton
 {
     /// <summary>
-    /// Specifies the type of a Lua value.
+    /// Provides the base class for a Lua object.
     /// </summary>
-    internal enum LuaType
+    public abstract unsafe class LuaObject : DynamicObject
     {
-        None = -1,
-        Nil = 0,
-        Boolean = 1,
-        LightUserdata = 2,
-        Number = 3,
-        String = 4,
-        Table = 5,
-        Function = 6,
-        Userdata = 7,
-        Thread = 8
+        internal readonly LuaEnvironment _environment;
+        internal readonly int _reference;
+        private protected readonly lua_State* _state;
+
+        private protected LuaObject(LuaEnvironment environment, int reference, lua_State* state)
+        {
+            Debug.Assert(environment != null);
+            Debug.Assert(state != null);
+
+            _environment = environment;
+            _reference = reference;
+            _state = state;
+        }
     }
 }
