@@ -25,7 +25,7 @@ using System.Runtime.Serialization;
 namespace Triton
 {
     /// <summary>
-    /// The exception that is thrown when an error from within Lua occurs.
+    /// The exception that is thrown for Lua-related errors.
     /// </summary>
     [ExcludeFromCodeCoverage]
     [Serializable]

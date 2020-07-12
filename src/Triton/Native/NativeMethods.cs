@@ -43,6 +43,8 @@ namespace Triton.Native
         public const int LUA_RIDX_MAINTHREAD = 1;
         public const int LUA_RIDX_GLOBALS = 2;
 
+        public const int LUA_REFNIL = -1;
+
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void* lua_Alloc(void* ud, void* ptr, size_t osize, size_t nsize);
 
@@ -177,8 +179,8 @@ namespace Triton.Native
 
         // TODO: lua_pushfstring
 
-        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void lua_pushglobaltable(lua_State* L);
+        public static void lua_pushglobaltable(lua_State* L) =>
+            lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_pushinteger(lua_State* L, long n);

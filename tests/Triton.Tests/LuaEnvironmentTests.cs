@@ -91,11 +91,125 @@ namespace Triton
         }
 
         [Fact]
+        public void CreateFunction_InvalidLuaCode_ThrowsLuaLoadException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<LuaLoadException>(() => environment.CreateFunction("retur 0"));
+        }
+
+        [Fact]
         public void CreateFunction()
         {
             using var environment = new LuaEnvironment();
 
             var function = environment.CreateFunction("return 0");
+        }
+
+        [Fact]
+        public void Item_Get_NullS_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<ArgumentNullException>(() => environment[null!]);
+        }
+
+        [Fact]
+        public void Item_Get_ObjectDisposed_ThrowsObjectDisposedException()
+        {
+            var environment = new LuaEnvironment();
+            environment.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => environment["test"]);
+        }
+
+        [Fact]
+        public void Item_Set_NullS_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<ArgumentNullException>(() => environment[null!] = 1234);
+        }
+
+        [Fact]
+        public void Item_Set_ObjectDisposed_ThrowsArgumentNullException()
+        {
+            var environment = new LuaEnvironment();
+            environment.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => environment["test"]);
+        }
+
+        [Fact]
+        public void Item_Set_Get_Nil()
+        {
+            using var environment = new LuaEnvironment();
+
+            environment["test"] = null;
+
+            Assert.Null(environment["test"]);
+        }
+
+        [Fact]
+        public void Item_Set_Get_Boolean()
+        {
+            using var environment = new LuaEnvironment();
+
+            environment["test"] = true;
+
+            Assert.Equal(true, environment["test"]);
+        }
+
+        [Fact]
+        public void Item_Set_Get_Integer()
+        {
+            using var environment = new LuaEnvironment();
+
+            environment["test"] = 1234;
+
+            Assert.Equal(1234L, environment["test"]);
+        }
+
+        [Fact]
+        public void Item_Set_Get_Number()
+        {
+            using var environment = new LuaEnvironment();
+
+            environment["test"] = 1.234;
+
+            Assert.Equal(1.234, environment["test"]);
+        }
+
+        [Fact]
+        public void Item_Set_Get_String()
+        {
+            using var environment = new LuaEnvironment();
+
+            environment["test"] = "This is a test string!";
+
+            Assert.Equal("This is a test string!", environment["test"]);
+        }
+
+        [Fact]
+        public void Item_Set_Get_Table()
+        {
+            using var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+
+            environment["test"] = table;
+
+            Assert.Same(table, environment["test"]);
+        }
+
+        [Fact]
+        public void Item_Set_Get_Function()
+        {
+            using var environment = new LuaEnvironment();
+            var function = environment.CreateFunction("return 0");
+
+            environment["test"] = function;
+
+            Assert.Same(function, environment["test"]);
         }
     }
 }
