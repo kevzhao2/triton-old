@@ -109,5 +109,15 @@ namespace Triton
                 value => Assert.Equal(2L, value),
                 value => Assert.Equal(3L, value));
         }
+
+        [Fact]
+        public void Call_LuaError_ThrowsLuaException()
+        {
+            using var environment = new LuaEnvironment(Encoding.ASCII);
+
+            var function = environment.CreateFunction("error('test')");
+
+            Assert.Throws<LuaException>(() => function.Call());
+        }
     }
 }
