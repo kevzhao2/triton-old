@@ -41,72 +41,6 @@ namespace Triton
         }
 
         [Fact]
-        public void Encoding_Get()
-        {
-            using var environment = new LuaEnvironment(Encoding.UTF8);
-
-            Assert.Same(Encoding.UTF8, environment.Encoding);
-        }
-
-        [Fact]
-        public void CreateTable_ObjectDisposed_ThrowsObjectDisposedException()
-        {
-            var environment = new LuaEnvironment();
-            environment.Dispose();
-
-            Assert.Throws<ObjectDisposedException>(() => environment.CreateTable());
-        }
-
-        [Fact]
-        public void CreateTable_NegativeSequentialCapacity_ThrowsArgumentOutOfRangeException()
-        {
-            using var environment = new LuaEnvironment();
-
-            Assert.Throws<ArgumentOutOfRangeException>(() => environment.CreateTable(sequentialCapacity: -1));
-        }
-
-        [Fact]
-        public void CreateTable_NegativeNonSequentialCapacity_ThrowsArgumentOutOfRangeException()
-        {
-            using var environment = new LuaEnvironment();
-
-            Assert.Throws<ArgumentOutOfRangeException>(() => environment.CreateTable(nonSequentialCapacity: -1));
-        }
-
-        [Fact]
-        public void CreateFunction_NullS_ThrowsArgumentNullException()
-        {
-            using var environment = new LuaEnvironment();
-
-            Assert.Throws<ArgumentNullException>(() => environment.CreateFunction(null!));
-        }
-
-        [Fact]
-        public void CreateFunction_ObjectDisposed_ThrowsObjectDisposedException()
-        {
-            var environment = new LuaEnvironment();
-            environment.Dispose();
-
-            Assert.Throws<ObjectDisposedException>(() => environment.CreateFunction("return 0"));
-        }
-
-        [Fact]
-        public void CreateFunction_InvalidLuaCode_ThrowsLuaLoadException()
-        {
-            using var environment = new LuaEnvironment();
-
-            Assert.Throws<LuaLoadException>(() => environment.CreateFunction("retur 0"));
-        }
-
-        [Fact]
-        public void CreateFunction()
-        {
-            using var environment = new LuaEnvironment();
-
-            var function = environment.CreateFunction("return 0");
-        }
-
-        [Fact]
         public void Item_Get_NullS_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();
@@ -115,7 +49,7 @@ namespace Triton
         }
 
         [Fact]
-        public void Item_Get_ObjectDisposed_ThrowsObjectDisposedException()
+        public void Item_Get_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
             var environment = new LuaEnvironment();
             environment.Dispose();
@@ -132,7 +66,7 @@ namespace Triton
         }
 
         [Fact]
-        public void Item_Set_ObjectDisposed_ThrowsArgumentNullException()
+        public void Item_Set_EnvironmentDisposed_ThrowsArgumentNullException()
         {
             var environment = new LuaEnvironment();
             environment.Dispose();
@@ -210,6 +144,82 @@ namespace Triton
             environment["test"] = function;
 
             Assert.Same(function, environment["test"]);
+        }
+
+        [Fact]
+        public void Encoding_Get()
+        {
+            using var environment = new LuaEnvironment(Encoding.UTF8);
+
+            Assert.Same(Encoding.UTF8, environment.Encoding);
+        }
+
+        [Fact]
+        public void Globals_Get()
+        {
+            using var environment = new LuaEnvironment(Encoding.UTF8);
+
+            var globals = environment.Globals;
+
+            // TODO: finish this test
+        }
+
+        [Fact]
+        public void CreateTable_EnvironmentDisposed_ThrowsObjectDisposedException()
+        {
+            var environment = new LuaEnvironment();
+            environment.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => environment.CreateTable());
+        }
+
+        [Fact]
+        public void CreateTable_NegativeSequentialCapacity_ThrowsArgumentOutOfRangeException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => environment.CreateTable(sequentialCapacity: -1));
+        }
+
+        [Fact]
+        public void CreateTable_NegativeNonSequentialCapacity_ThrowsArgumentOutOfRangeException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => environment.CreateTable(nonSequentialCapacity: -1));
+        }
+
+        [Fact]
+        public void CreateFunction_NullS_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<ArgumentNullException>(() => environment.CreateFunction(null!));
+        }
+
+        [Fact]
+        public void CreateFunction_EnvironmentDisposed_ThrowsObjectDisposedException()
+        {
+            var environment = new LuaEnvironment();
+            environment.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => environment.CreateFunction("return 0"));
+        }
+
+        [Fact]
+        public void CreateFunction_InvalidLuaCode_ThrowsLuaLoadException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<LuaLoadException>(() => environment.CreateFunction("retur 0"));
+        }
+
+        [Fact]
+        public void CreateFunction()
+        {
+            using var environment = new LuaEnvironment();
+
+            var function = environment.CreateFunction("return 0");
         }
     }
 }

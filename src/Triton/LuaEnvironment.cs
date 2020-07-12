@@ -88,7 +88,8 @@ namespace Triton
         /// <param name="s">The string.</param>
         /// <returns>The value of the global with name <paramref name="s"/>.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="s"/> is <see langword="null"/>.</exception>
-        /// <exception cref="LuaException">A Lua error occurred.</exception>
+        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public object? this[string s]
         {
             get
@@ -581,6 +582,8 @@ namespace Triton
                 {
                     len = (UIntPtr)Encoding.GetBytes(sPtr, s.Length, buffer, maxByteLength);  // May throw an exception
                 }
+
+                var str = Encoding.GetString(buffer, 5);
 
                 if (isNullTerminated)
                 {
