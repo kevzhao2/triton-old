@@ -22,6 +22,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using Triton.Native;
 using static Triton.Native.NativeMethods;
 
 namespace Triton
@@ -54,42 +55,25 @@ namespace Triton
                 }
 
                 _environment.ThrowIfDisposed();
+                _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
 
-                // We require 2 stack slots since the table and the value of the field are pushed onto the stack.
-                _environment.ThrowIfNotEnoughLuaStack(_state, 2);
-
-#if DEBUG
-                var oldTop = lua_gettop(_state);
+                var stackDelta = 0;
 
                 try
                 {
-#endif
-                    // May throw an exception
-                    var buffer = _environment.MarshalString(s, out _, out var wasAllocated, isNullTerminated: true);
-
                     lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-                    var type = lua_getfield(_state, -1, buffer);
+                    ++stackDelta;
 
-                    if (wasAllocated)
-                    {
-                        Marshal.FreeHGlobal((IntPtr)buffer);
-                    }
+                    using var buffer = _environment.MarshalString(s, isNullTerminated: true);
+                    var type = lua_getfield(_state, -1, buffer.Pointer);
+                    ++stackDelta;
 
-                    try
-                    {
-                        return _environment.ToObject(_state, -1, typeHint: type);  // May throw an exception
-                    }
-                    finally
-                    {
-                        lua_pop(_state, 2);  // Pop the table and the field value off of the stack
-                    }
-#if DEBUG
+                    return _environment.ToObject(_state, -1, typeHint: type);
                 }
                 finally
                 {
-                    Debug.Assert(lua_gettop(_state) == oldTop);
+                    lua_pop(_state, stackDelta);
                 }
-#endif
             }
 
             set
@@ -100,45 +84,153 @@ namespace Triton
                 }
 
                 _environment.ThrowIfDisposed();
+                _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
 
-                // We require 2 stack slots since the table and the new value of the field are pushed onto the stack.
-                _environment.ThrowIfNotEnoughLuaStack(_state, 2);
-
-#if DEBUG
-                var oldTop = lua_gettop(_state);
-#endif
-
-                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+                var stackDelta = 0;
 
                 try
                 {
-                    // Push the value onto the stack first, as it may involve using the string buffer.
-                    _environment.PushObject(_state, value);  // May throw an exception
+                    lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+                    ++stackDelta;
 
-                    try
-                    {
-                        // May throw an exception
-                        var buffer = _environment.MarshalString(s, out _, out var wasAllocated, isNullTerminated: true);
-                        lua_setfield(_state, -2, buffer);
-                        if (wasAllocated)
-                        {
-                            Marshal.FreeHGlobal((IntPtr)buffer);
-                        }
+                    _environment.PushObject(_state, value);
+                    ++stackDelta;
 
-                    }
-                    catch (EncoderFallbackException)
-                    {
-                        lua_pop(_state, 1);  // Pop the new value of the field off the stack
-                        throw;
-                    }
+                    using var buffer = _environment.MarshalString(s, isNullTerminated: true);
+                    lua_setfield(_state, -2, buffer.Pointer);
+                    --stackDelta;
                 }
                 finally
                 {
-                    lua_pop(_state, 1);  // Pop the table off the stack
-#if DEBUG
+                    lua_pop(_state, stackDelta);
+                }
+            }
+        }
 
-                    Debug.Assert(lua_gettop(_state) == oldTop);
-#endif
+        /// <summary>
+        /// Gets or sets the value with index <paramref name="n"/>.
+        /// </summary>
+        /// <param name="n">The number.</param>
+        /// <returns>The value with index <paramref name="n"/>.</returns>
+        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
+        public object? this[long n]
+        {
+            get
+            {
+                _environment.ThrowIfDisposed();
+                _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
+
+                var stackDelta = 0;
+
+                try
+                { 
+                    lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+                    ++stackDelta;
+
+                    var type = lua_geti(_state, -1, n);
+                    ++stackDelta;
+
+                    return _environment.ToObject(_state, -1, typeHint: type);
+                }
+                finally
+                {
+                    lua_pop(_state, stackDelta);
+                }
+            }
+
+            set
+            {
+                _environment.ThrowIfDisposed();
+                _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
+
+                var stackDelta = 0;
+
+                try
+                {
+                    lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+                    ++stackDelta;
+
+                    _environment.PushObject(_state, value);
+                    ++stackDelta;
+
+                    lua_seti(_state, -2, n);
+                    --stackDelta;
+                }
+                finally
+                {
+                    lua_pop(_state, stackDelta);
+                }
+            }
+        }
+ 
+        /// <summary>
+        /// Gets or sets the value corresponding to the given <paramref name="key"/>.
+        /// </summary>
+        /// <param name="key">The key.</param>
+        /// <returns>The value corresponding to the given <paramref name="key"/>.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is <see langword="null"/>.</exception>
+        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
+        public object? this[object key]
+        {
+            get
+            {
+                if (key is null)
+                {
+                    throw new ArgumentNullException(nameof(key));
+                }
+
+                _environment.ThrowIfDisposed();
+                _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
+
+                var stackDelta = 0;
+
+                try
+                {
+                    lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+                    ++stackDelta;
+
+                    _environment.PushObject(_state, key);
+                    ++stackDelta;
+
+                    var type = lua_gettable(_state, -2);
+                    return _environment.ToObject(_state, -1, typeHint: type);
+                }
+                finally
+                {
+                    lua_pop(_state, stackDelta);
+                }
+            }
+
+            set
+            {
+                if (key is null)
+                {
+                    throw new ArgumentNullException(nameof(key));
+                }
+
+                _environment.ThrowIfDisposed();
+                _environment.ThrowIfNotEnoughLuaStack(_state, 3);  // 3 stack slots required
+
+                var stackDelta = 0;
+
+                try
+                {
+                    lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+                    ++stackDelta;
+
+                    _environment.PushObject(_state, key);
+                    ++stackDelta;
+
+                    _environment.PushObject(_state, value);
+                    ++stackDelta;
+
+                    lua_settable(_state, -3);
+                    stackDelta -= 2;
+                }
+                finally
+                {
+                    lua_pop(_state, stackDelta);
                 }
             }
         }

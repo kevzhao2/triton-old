@@ -167,7 +167,13 @@ namespace Triton.Native
         public static extern LuaStatus lua_pcallk(
             lua_State* L, int nargs, int nresults, int msgh, lua_KContext ctx, lua_KFunction? k);
 
-        public static void lua_pop(lua_State* L, int n) => lua_settop(L, -n - 1);
+        public static void lua_pop(lua_State* L, int n)
+        {
+            if (n != 0)
+            {
+                lua_settop(L, -n - 1);
+            }
+        }
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_pushboolean(lua_State* L, bool b);

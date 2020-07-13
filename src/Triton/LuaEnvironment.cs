@@ -34,7 +34,7 @@ namespace Triton
     /// <summary>
     /// Represents a managed Lua environment. This class is not thread-safe.
     /// </summary>
-    public sealed unsafe class LuaEnvironment : DynamicObject, IDisposable
+    public sealed unsafe partial class LuaEnvironment : DynamicObject, IDisposable
     {
         private const int StringBufferSize = 1 << 16;
 
@@ -103,7 +103,6 @@ namespace Triton
 
                 // We require 1 stack slot since the value of the global is pushed onto the stack.
                 ThrowIfNotEnoughLuaStack(_state, 1);
-
 #if DEBUG
                 var oldTop = lua_gettop(_state);
 #endif
@@ -125,7 +124,6 @@ namespace Triton
                 finally
                 {
                     lua_pop(_state, 1);  // Pop the value of the global off of the stack
-
 #if DEBUG
                     Debug.Assert(lua_gettop(_state) == oldTop);
 #endif
@@ -143,7 +141,6 @@ namespace Triton
 
                 // We require 1 stack slot since the new value of the global is pushed onto the stack.
                 ThrowIfNotEnoughLuaStack(_state, 1);
-
 #if DEBUG
                 var oldTop = lua_gettop(_state);
 #endif
@@ -220,7 +217,6 @@ namespace Triton
                 throw new ArgumentOutOfRangeException(
                     nameof(nonSequentialCapacity), "Non-sequential capacity is negative");
             }
-
 #if DEBUG
             var oldTop = lua_gettop(_state);
 
@@ -263,7 +259,6 @@ namespace Triton
             }
 
             ThrowIfDisposed();
-
 #if DEBUG
             var oldTop = lua_gettop(_state);
 
@@ -572,7 +567,6 @@ namespace Triton
             {
                 return luaObject;
             }
-
 #if DEBUG
             var oldTop = lua_gettop(_state);
 
@@ -621,7 +615,44 @@ namespace Triton
 
         #endregion
 
-        #region Miscellaneous helpers
+        // Marshals a string to a string buffer using the Lua environment's encoding.
+        internal StringBuffer MarshalString(string s, bool isNullTerminated)
+        {
+            Debug.Assert(s != null);
+
+            var maxByteLength = Encoding.GetMaxByteCount(s.Length) + (isNullTerminated ? 1 : 0);
+
+            // If the maximum byte length is small enough, then we can use `_stringBuffer`. Otherwise, we'll have to
+            // perform an allocation.
+            var isAllocated = maxByteLength > StringBufferSize;
+
+            byte* pointer = isAllocated ? (byte*)Marshal.AllocHGlobal(maxByteLength) : _stringBuffer;
+
+            try
+            {
+                UIntPtr length;
+                fixed (char* sPtr = s)
+                {
+                    length = (UIntPtr)Encoding.GetBytes(sPtr, s.Length, pointer, maxByteLength);  // May throw
+                }
+
+                if (isNullTerminated)
+                {
+                    pointer[(int)length] = 0;
+                }
+
+                return new StringBuffer(pointer, length, isAllocated);
+            }
+            catch (EncoderFallbackException)
+            {
+                if (isAllocated)
+                {
+                    Marshal.FreeHGlobal((IntPtr)pointer);
+                }
+
+                throw;
+            }
+        }
 
         // Marshals a string to a byte pointer using the Lua environment's encoding.
         internal byte* MarshalString(string s, out UIntPtr len, out bool wasAllocated, bool isNullTerminated)
@@ -680,8 +711,6 @@ namespace Triton
                 throw new LuaStackException(requestedSlots);
             }
         }
-
-        #endregion
 
         // Loads a string as a function and pushes it on top of the stack.
         private void LoadString(string s)

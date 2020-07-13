@@ -163,5 +163,67 @@ namespace Triton
 
             Assert.Same(function, table["test"]);
         }
+
+        [Fact]
+        public void Item_Long_Get_EnvironmentDisposed_ThrowsObjectDisposedException()
+        {
+            var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+            environment.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => table[1]);
+        }
+
+        [Fact]
+        public void Item_Long_Set_EnvironmentDisposed_ThrowsObjectDisposedException()
+        {
+            var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+            environment.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => table[1] = 1234);
+        }
+
+        [Fact]
+        public void Item_Long_Set_Get()
+        {
+            using var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+
+            table[1] = 1234;
+
+            Assert.Equal(1234L, table[1]);
+        }
+
+        [Fact]
+        public void Item_Object_Get_EnvironmentDisposed_ThrowsObjectDisposedException()
+        {
+            var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+            environment.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => table[true]);
+        }
+
+        [Fact]
+        public void Item_Object_Set_EnvironmentDisposed_ThrowsObjectDisposedException()
+        {
+            var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+            environment.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => table[true] = 1234);
+        }
+
+        [Fact]
+        public void Item_Object_Set_Get()
+        {
+            using var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+
+            table[true] = 1234;
+
+            Assert.Equal(1234L, table[true]);
+        }
     }
 }
