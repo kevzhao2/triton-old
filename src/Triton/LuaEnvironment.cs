@@ -701,19 +701,17 @@ namespace Triton
 
             LuaStatus LoadString(string s)
             {
+                // May throw an exception
                 var buffer = MarshalString(s, out _, out var wasAllocated, isNullTerminated: true);
 
-                try
+                var status = luaL_loadstring(_state, buffer);
+
+                if (wasAllocated)
                 {
-                    return luaL_loadstring(_state, buffer);
+                    Marshal.FreeHGlobal((IntPtr)buffer);
                 }
-                finally
-                {
-                    if (wasAllocated)
-                    {
-                        Marshal.FreeHGlobal((IntPtr)buffer);
-                    }
-                }
+
+                return status;
             }
         }
 

@@ -56,75 +56,51 @@ namespace Triton.Benchmarks.Micro
         }
 
         [Benchmark]
-        public void NLua_ZeroArguments()
-        {
-            _ = _nluaFunction.Call();
-        }
+        public void NLua_ZeroArguments() => _ = _nluaFunction.Call();
 
         [Benchmark]
-        public void Triton_ZeroArguments()
-        {
-            _ = _tritonFunction.Call();
-        }
+        public void Triton_ZeroArguments() => _ = _tritonFunction.Call();
 
         [Benchmark]
-        public void NLua_IntArgument()
-        {
-            _ = _nluaFunction.Call(1234);
-        }
+        public void NLua_NilArgument() => _ = _nluaFunction.Call(null);
 
         [Benchmark]
-        public void Triton_IntArgument()
-        {
-            _ = _tritonFunction.Call(1234);
-        }
+        public void Triton_NilArgument() => _ = _tritonFunction.Call<object>(null);
 
         [Benchmark]
-        public void NLua_DoubleArgument()
-        {
-            _ = _nluaFunction.Call(1.234);
-        }
+        public void NLua_BoolArgument() => _ = _nluaFunction.Call(true);
 
         [Benchmark]
-        public void Triton_DoubleArgument()
-        {
-            _ = _tritonFunction.Call(1.234);
-        }
+        public void Triton_BoolArgument() => _ = _tritonFunction.Call(true);
 
         [Benchmark]
-        public void NLua_StringArgument()
-        {
-            _ = _nluaFunction.Call("test");
-        }
+        public void NLua_IntArgument() => _ = _nluaFunction.Call(1234);
 
         [Benchmark]
-        public void Triton_StringArgument()
-        {
-            _ = _tritonFunction.Call("test");
-        }
+        public void Triton_IntArgument() => _ = _tritonFunction.Call(1234);
 
         [Benchmark]
-        public void NLua_TableArgument()
-        {
-            _ = _nluaFunction.Call(_nluaTable);
-        }
+        public void NLua_DoubleArgument() => _ = _nluaFunction.Call(1.234);
 
         [Benchmark]
-        public void Triton_TableArgument()
-        {
-            _ = _tritonFunction.Call(_tritonTable);
-        }
+        public void Triton_DoubleArgument() => _ = _tritonFunction.Call(1.234);
 
         [Benchmark]
-        public void NLua_FunctionArgument()
-        {
-            _ = _nluaFunction.Call(_nluaFunction);
-        }
+        public void NLua_StringArgument() => _ = _nluaFunction.Call("test");
 
         [Benchmark]
-        public void Triton_FunctionArgument()
-        {
-            _ = _tritonFunction.Call(_tritonFunction);
-        }
+        public void Triton_StringArgument() => _ = _tritonFunction.Call("test");
+
+        [Benchmark]
+        public void NLua_TableArgument() => _ = _nluaFunction.Call(_nluaTable);
+
+        [Benchmark]
+        public void Triton_TableArgument() => _ = _tritonFunction.Call(_tritonTable);
+
+        [Benchmark]
+        public void NLua_FunctionArgument() => _ = _nluaFunction.Call(_nluaFunction);
+
+        [Benchmark]
+        public void Triton_FunctionArgument() => _ = _tritonFunction.Call(_tritonFunction);
     }
 }

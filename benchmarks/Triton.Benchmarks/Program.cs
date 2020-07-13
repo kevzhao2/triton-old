@@ -26,9 +26,22 @@ namespace Triton.Benchmarks
 {
     internal class Program
     {
-        private static void Main(string[] args)
+        private static void Main()
         {
-            BenchmarkRunner.Run<FunctionCall>();
+            Console.WriteLine("Enter the benchmark to run:");
+            Console.WriteLine("\tfc = FunctionCall");
+            Console.WriteLine("\ttsg = TableSetGet");
+
+            var option = Console.ReadLine();
+
+            var type = option switch
+            {
+                "fc" => typeof(FunctionCall),
+                "tsg" => typeof(TableSetGet),
+                _ => throw new InvalidOperationException(),
+            };
+
+            BenchmarkRunner.Run(type);
             Console.ReadKey(true);
         }
     }
