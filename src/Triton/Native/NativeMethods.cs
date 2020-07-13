@@ -18,6 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Security;
@@ -171,6 +172,8 @@ namespace Triton.Native
         {
             if (n != 0)
             {
+                Debug.Assert(lua_gettop(L) >= n);
+
                 lua_settop(L, -n - 1);
             }
         }

@@ -40,8 +40,10 @@ namespace Triton
         /// <returns>The function results.</returns>
         /// <exception cref="LuaExecutionException">A Lua error occurred during execution.</exception>
         /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public object?[] Call()
         {
+            _environment.ThrowIfDisposed();
             _environment.ThrowIfNotEnoughLuaStack(_state, 1);
 
             var stackDelta = 0;
@@ -50,13 +52,14 @@ namespace Triton
             {
                 lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
                 ++stackDelta;
-
-                return CallInternal(0);
             }
-            finally
+            catch
             {
                 lua_pop(_state, stackDelta);
+                throw;
             }
+
+            return CallInternal(0);
         }
 
         /// <summary>
@@ -67,8 +70,10 @@ namespace Triton
         /// <returns>The function results.</returns>
         /// <exception cref="LuaExecutionException">A Lua error occurred during execution.</exception>
         /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public object?[] Call<T>(T arg)
         {
+            _environment.ThrowIfDisposed();
             _environment.ThrowIfNotEnoughLuaStack(_state, 2);
 
             var stackDelta = 0;
@@ -80,13 +85,14 @@ namespace Triton
 
                 _environment.Push(_state, arg);
                 ++stackDelta;
-
-                return CallInternal(1);
             }
-            finally
+            catch
             {
                 lua_pop(_state, stackDelta);
+                throw;
             }
+
+            return CallInternal(1);
         }
 
         /// <summary>
@@ -99,8 +105,10 @@ namespace Triton
         /// <returns>The function results.</returns>
         /// <exception cref="LuaExecutionException">A Lua error occurred during execution.</exception>
         /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public object?[] Call<T1, T2>(T1 arg1, T2 arg2)
         {
+            _environment.ThrowIfDisposed();
             _environment.ThrowIfNotEnoughLuaStack(_state, 3);
 
             var stackDelta = 0;
@@ -115,13 +123,14 @@ namespace Triton
 
                 _environment.Push(_state, arg2);
                 ++stackDelta;
-
-                return CallInternal(2);
             }
-            finally
+            catch
             {
                 lua_pop(_state, stackDelta);
+                throw;
             }
+
+            return CallInternal(2);
         }
 
         /// <summary>
@@ -136,8 +145,10 @@ namespace Triton
         /// <returns>The function results.</returns>
         /// <exception cref="LuaExecutionException">A Lua error occurred during execution.</exception>
         /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public object?[] Call<T1, T2, T3>(T1 arg1, T2 arg2, T3 arg3)
         {
+            _environment.ThrowIfDisposed();
             _environment.ThrowIfNotEnoughLuaStack(_state, 4);
 
             var stackDelta = 0;
@@ -155,13 +166,49 @@ namespace Triton
 
                 _environment.Push(_state, arg3);
                 ++stackDelta;
-
-                return CallInternal(3);
             }
-            finally
+            catch
             {
                 lua_pop(_state, stackDelta);
+                throw;
             }
+
+            return CallInternal(3);
+        }
+
+        /// <summary>
+        /// Calls the function with the specified arguments.
+        /// </summary>
+        /// <param name="args">The arguments.</param>
+        /// <returns>The function results.</returns>
+        /// <exception cref="LuaExecutionException">A Lua error occurred during execution.</exception>
+        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
+        public object?[] Call(params object?[] args)
+        {
+            _environment.ThrowIfDisposed();
+            _environment.ThrowIfNotEnoughLuaStack(_state, 1 + args.Length);
+
+            var stackDelta = 0;
+
+            try
+            {
+                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+                ++stackDelta;
+
+                foreach (var arg in args)
+                {
+                    _environment.PushObject(_state, arg);
+                    ++stackDelta;
+                }
+            }
+            catch
+            {
+                lua_pop(_state, stackDelta);
+                throw;
+            }
+
+            return CallInternal(args.Length);
         }
 
         private object?[] CallInternal(int numArgs)
@@ -191,13 +238,20 @@ namespace Triton
 
             _environment.ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required (due to LuaObject)
 
-            var results = new object?[numResults];
-            for (var i = 0; i < numResults; ++i)
+            try
             {
-                results[i] = _environment.ToObject(_state, oldTop + i + 1);
-            }
+                var results = new object?[numResults];
+                for (var i = 0; i < numResults; ++i)
+                {
+                    results[i] = _environment.ToObject(_state, oldTop + i + 1);
+                }
 
-            return results;
+                return results;
+            }
+            finally
+            {
+                lua_pop(_state, numResults);
+            }
         }
     }
 }
