@@ -100,33 +100,22 @@ namespace Triton
                 }
 
                 ThrowIfDisposed();
+                ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required
 
-                // We require 1 stack slot since the value of the global is pushed onto the stack.
-                ThrowIfNotEnoughLuaStack(_state, 1);
-#if DEBUG
-                var oldTop = lua_gettop(_state);
-#endif
-
-                // May throw an exception
-                var buffer = MarshalString(s, out _, out var wasAllocated, isNullTerminated: true);
-
-                var type = lua_getglobal(_state, buffer);
-
-                if (wasAllocated)
-                {
-                    Marshal.FreeHGlobal((IntPtr)buffer);
-                }
-
+                var stackDelta = 0;
+                
                 try
                 {
-                    return ToObject(_state, -1, typeHint: type);  // May throw an exception
+                    using var buffer = CreateStringBuffer(s, isNullTerminated: true);
+                    var type = lua_getglobal(_state, buffer.Pointer);
+                    ++stackDelta;
+
+                    return ToObject(_state, -1, typeHint: type);
+
                 }
                 finally
                 {
-                    lua_pop(_state, 1);  // Pop the value of the global off of the stack
-#if DEBUG
-                    Debug.Assert(lua_gettop(_state) == oldTop);
-#endif
+                    lua_pop(_state, stackDelta);
                 }
             }
 
@@ -138,38 +127,23 @@ namespace Triton
                 }
 
                 ThrowIfDisposed();
+                ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot requierd
 
-                // We require 1 stack slot since the new value of the global is pushed onto the stack.
-                ThrowIfNotEnoughLuaStack(_state, 1);
-#if DEBUG
-                var oldTop = lua_gettop(_state);
-#endif
-
-                // Push the value onto the stack first, as it may involve using the string buffer.
-                PushObject(_state, value);  // May throw an exception
+                var stackDelta = 0;
 
                 try
                 {
-                    var buffer = MarshalString(s, out _, out var wasAllocated, isNullTerminated: true);
+                    PushObject(_state, value);
+                    ++stackDelta;
 
-                    lua_setglobal(_state, buffer);
-
-                    if (wasAllocated)
-                    {
-                        Marshal.FreeHGlobal((IntPtr)buffer);
-                    }
+                    using var buffer = CreateStringBuffer(s, isNullTerminated: true);
+                    lua_setglobal(_state, buffer.Pointer);
+                    --stackDelta;
                 }
-                catch (EncoderFallbackException)
-                {
-                    lua_pop(_state, 1);  // Pop the value of the global off of the stack
-                    throw;
-                }
-#if DEBUG
                 finally
                 {
-                    Debug.Assert(lua_gettop(_state) == oldTop);
+                    lua_pop(_state, stackDelta);
                 }
-#endif
             }
         }
 
@@ -217,30 +191,31 @@ namespace Triton
                 throw new ArgumentOutOfRangeException(
                     nameof(nonSequentialCapacity), "Non-sequential capacity is negative");
             }
-#if DEBUG
-            var oldTop = lua_gettop(_state);
+
+            var stackDelta = 0;
 
             try
             {
-#endif
                 lua_createtable(_state, sequentialCapacity, nonSequentialCapacity);
+                ++stackDelta;
 
                 // Because we just created a table, it is guaranteed to be a unique table. So we can just construct a
                 // new `LuaTable` instance without checking if it is cached.
+
                 var ptr = (IntPtr)lua_topointer(_state, -1);
                 var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
+                --stackDelta;
+
                 var table = new LuaTable(this, reference, _state);
 
                 _references[ptr] = reference;
                 _luaObjects[ptr] = new WeakReference<LuaObject>(table);
                 return table;
-#if DEBUG
             }
             finally
             {
-                Debug.Assert(lua_gettop(_state) == oldTop);
+                lua_pop(_state, stackDelta);
             }
-#endif
         }
 
         /// <summary>
@@ -259,30 +234,31 @@ namespace Triton
             }
 
             ThrowIfDisposed();
-#if DEBUG
-            var oldTop = lua_gettop(_state);
+
+            var stackDelta = 0;
 
             try
             {
-#endif
                 LoadString(s);
+                ++stackDelta;
 
                 // Because we just created a function, it is guaranteed to be a unique function. So we can just
                 // construct a new `LuaFunction` instance without checking if it is cached.
+
                 var ptr = (IntPtr)lua_topointer(_state, -1);
                 var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
+                --stackDelta;
+
                 var function = new LuaFunction(this, reference, _state);
 
                 _references[ptr] = reference;
                 _luaObjects[ptr] = new WeakReference<LuaObject>(function);
                 return function;
-#if DEBUG
             }
             finally
             {
-                Debug.Assert(lua_gettop(_state) == oldTop);
+                lua_pop(_state, stackDelta);
             }
-#endif
         }
 
         #region Stack manipulation helpers
@@ -467,19 +443,8 @@ namespace Triton
         {
             Debug.Assert(lua_checkstack(state, 1));
 
-            var buffer = MarshalString(s, out var len, out var wasAllocated, isNullTerminated: false);
-
-            try
-            {
-                _ = lua_pushlstring(state, buffer, len);
-            }
-            finally
-            {
-                if (wasAllocated)
-                {
-                    Marshal.FreeHGlobal((IntPtr)buffer);
-                }
-            }
+            using var buffer = CreateStringBuffer(s, isNullTerminated: false);
+            _ = lua_pushlstring(_state, buffer.Pointer, buffer.Length);
         }
 
         // Pushes a Lua object onto the stack. Throws an `InvalidOperationException` if the Lua object does not belong
@@ -567,20 +532,20 @@ namespace Triton
             {
                 return luaObject;
             }
-#if DEBUG
-            var oldTop = lua_gettop(_state);
+
+            var stackDelta = 0;
 
             try
             {
-#endif
                 Debug.Assert(lua_checkstack(state, 1));
 
                 // Construct the Lua object by storing a reference to it inside of the Lua registry. This prevents Lua
                 // from garbage collecting the object.
                 lua_pushvalue(state, index);
-                var reference = luaL_ref(state, LUA_REGISTRYINDEX);
+                ++stackDelta;
 
-                Debug.Assert(reference != LUA_REFNIL);
+                var reference = luaL_ref(state, LUA_REGISTRYINDEX);
+                --stackDelta;
 
                 luaObject = (typeHint ?? lua_type(state, index)) switch
                 {
@@ -604,93 +569,16 @@ namespace Triton
                 // a garbage collection.
                 _references[ptr] = reference;
                 return luaObject;
-#if DEBUG
             }
             finally
             {
-                Debug.Assert(lua_gettop(_state) == oldTop);
+                lua_pop(_state, stackDelta);
             }
-#endif
         }
 
         #endregion
 
-        // Marshals a string to a string buffer using the Lua environment's encoding.
-        internal StringBuffer MarshalString(string s, bool isNullTerminated)
-        {
-            Debug.Assert(s != null);
-
-            var maxByteLength = Encoding.GetMaxByteCount(s.Length) + (isNullTerminated ? 1 : 0);
-
-            // If the maximum byte length is small enough, then we can use `_stringBuffer`. Otherwise, we'll have to
-            // perform an allocation.
-            var isAllocated = maxByteLength > StringBufferSize;
-
-            byte* pointer = isAllocated ? (byte*)Marshal.AllocHGlobal(maxByteLength) : _stringBuffer;
-
-            try
-            {
-                UIntPtr length;
-                fixed (char* sPtr = s)
-                {
-                    length = (UIntPtr)Encoding.GetBytes(sPtr, s.Length, pointer, maxByteLength);  // May throw
-                }
-
-                if (isNullTerminated)
-                {
-                    pointer[(int)length] = 0;
-                }
-
-                return new StringBuffer(pointer, length, isAllocated);
-            }
-            catch (EncoderFallbackException)
-            {
-                if (isAllocated)
-                {
-                    Marshal.FreeHGlobal((IntPtr)pointer);
-                }
-
-                throw;
-            }
-        }
-
-        // Marshals a string to a byte pointer using the Lua environment's encoding.
-        internal byte* MarshalString(string s, out UIntPtr len, out bool wasAllocated, bool isNullTerminated)
-        {
-            Debug.Assert(s != null);
-
-            var maxByteLength = Encoding.GetMaxByteCount(s.Length) + (isNullTerminated ? 1 : 0);
-
-            // If the maximum byte length is small enough, then we'll use the string buffer. Otherwise, we'll have to
-            // perform an allocation.
-            wasAllocated = maxByteLength > StringBufferSize;
-
-            byte* buffer = wasAllocated ? (byte*)Marshal.AllocHGlobal(maxByteLength) : _stringBuffer;
-
-            try
-            {
-                fixed (char* sPtr = s)
-                {
-                    len = (UIntPtr)Encoding.GetBytes(sPtr, s.Length, buffer, maxByteLength);  // May throw an exception
-                }
-
-                if (isNullTerminated)
-                {
-                    buffer[(int)len] = 0;
-                }
-
-                return buffer;
-            }
-            catch
-            {
-                if (wasAllocated)
-                {
-                    Marshal.FreeHGlobal((IntPtr)buffer);
-                }
-
-                throw;
-            }
-        }
+        #region Throw helpers
 
         // Throws an `ObjectDisposedException` if the Lua environment is disposed.
         internal void ThrowIfDisposed()
@@ -712,35 +600,25 @@ namespace Triton
             }
         }
 
+        #endregion
+
         // Loads a string as a function and pushes it on top of the stack.
         private void LoadString(string s)
         {
-            if (LoadString(s) != LuaStatus.Ok)
+            using var buffer = CreateStringBuffer(s, isNullTerminated: true);
+            var status = luaL_loadstring(_state, buffer.Pointer);
+
+            if (status != LuaStatus.Ok)
             {
                 try
                 {
-                    var errorMessage = ToString(_state, -1);  // May throw an exception
+                    var errorMessage = ToString(_state, -1);
                     throw new LuaLoadException(errorMessage);
                 }
                 finally
                 {
                     lua_pop(_state, 1);
                 }
-            }
-
-            LuaStatus LoadString(string s)
-            {
-                // May throw an exception
-                var buffer = MarshalString(s, out _, out var wasAllocated, isNullTerminated: true);
-
-                var status = luaL_loadstring(_state, buffer);
-
-                if (wasAllocated)
-                {
-                    Marshal.FreeHGlobal((IntPtr)buffer);
-                }
-
-                return status;
             }
         }
 

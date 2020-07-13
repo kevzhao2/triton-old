@@ -44,7 +44,7 @@ namespace Triton
         public object?[] Call()
         {
             _environment.ThrowIfDisposed();
-            _environment.ThrowIfNotEnoughLuaStack(_state, 1);
+            _environment.ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required
 
             var stackDelta = 0;
 
@@ -74,7 +74,7 @@ namespace Triton
         public object?[] Call<T>(T arg)
         {
             _environment.ThrowIfDisposed();
-            _environment.ThrowIfNotEnoughLuaStack(_state, 2);
+            _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
 
             var stackDelta = 0;
 
@@ -109,7 +109,7 @@ namespace Triton
         public object?[] Call<T1, T2>(T1 arg1, T2 arg2)
         {
             _environment.ThrowIfDisposed();
-            _environment.ThrowIfNotEnoughLuaStack(_state, 3);
+            _environment.ThrowIfNotEnoughLuaStack(_state, 3);  // 3 stack slots required
 
             var stackDelta = 0;
 
@@ -149,7 +149,7 @@ namespace Triton
         public object?[] Call<T1, T2, T3>(T1 arg1, T2 arg2, T3 arg3)
         {
             _environment.ThrowIfDisposed();
-            _environment.ThrowIfNotEnoughLuaStack(_state, 4);
+            _environment.ThrowIfNotEnoughLuaStack(_state, 4);  // 4 stack slots required
 
             var stackDelta = 0;
 
@@ -187,7 +187,7 @@ namespace Triton
         public object?[] Call(params object?[] args)
         {
             _environment.ThrowIfDisposed();
-            _environment.ThrowIfNotEnoughLuaStack(_state, 1 + args.Length);
+            _environment.ThrowIfNotEnoughLuaStack(_state, 1 + args.Length);  // (1 + numArgs) stack slots required
 
             var stackDelta = 0;
 

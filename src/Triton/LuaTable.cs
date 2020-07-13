@@ -60,7 +60,7 @@ namespace Triton
                     lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
                     ++stackDelta;
 
-                    using var buffer = _environment.MarshalString(s, isNullTerminated: true);
+                    using var buffer = _environment.CreateStringBuffer(s, isNullTerminated: true);
                     var type = lua_getfield(_state, -1, buffer.Pointer);
                     ++stackDelta;
 
@@ -92,7 +92,7 @@ namespace Triton
                     _environment.PushObject(_state, value);
                     ++stackDelta;
 
-                    using var buffer = _environment.MarshalString(s, isNullTerminated: true);
+                    using var buffer = _environment.CreateStringBuffer(s, isNullTerminated: true);
                     lua_setfield(_state, -2, buffer.Pointer);
                     --stackDelta;
                 }

@@ -121,10 +121,8 @@ namespace Triton
                 end
                 return result");
 
-            var results = function.Call(1, 2, 3);
-
-            /*Assert.Collection(function.Call(1, 2, 3),
-                value => Assert.Equal(6L, value));*/
+            Assert.Collection(function.Call(1, 2, 3),
+                value => Assert.Equal(6L, value));
         }
 
         [Fact]

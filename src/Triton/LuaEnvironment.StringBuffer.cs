@@ -21,11 +21,51 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace Triton
 {
     public unsafe partial class LuaEnvironment
     {
+        // Marshals a string to a string buffer using the Lua environment's encoding.
+        internal StringBuffer CreateStringBuffer(string s, bool isNullTerminated)
+        {
+            Debug.Assert(s != null);
+
+            var maxByteLength = Encoding.GetMaxByteCount(s.Length) + (isNullTerminated ? 1 : 0);
+
+            // If the maximum byte length is small enough, then we can use `_stringBuffer`. Otherwise, we'll have to
+            // perform an allocation.
+            var isAllocated = maxByteLength > StringBufferSize;
+
+            byte* pointer = isAllocated ? (byte*)Marshal.AllocHGlobal(maxByteLength) : _stringBuffer;
+
+            try
+            {
+                UIntPtr length;
+                fixed (char* sPtr = s)
+                {
+                    length = (UIntPtr)Encoding.GetBytes(sPtr, s.Length, pointer, maxByteLength);  // May throw
+                }
+
+                if (isNullTerminated)
+                {
+                    pointer[(int)length] = 0;
+                }
+
+                return new StringBuffer(pointer, length, isAllocated);
+            }
+            catch (EncoderFallbackException)
+            {
+                if (isAllocated)
+                {
+                    Marshal.FreeHGlobal((IntPtr)pointer);
+                }
+
+                throw;
+            }
+        }
+
         internal ref struct StringBuffer
         {
             private readonly bool _isAllocated;
