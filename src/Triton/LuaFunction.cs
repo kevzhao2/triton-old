@@ -38,14 +38,25 @@ namespace Triton
         /// Calls the function with no arguments.
         /// </summary>
         /// <returns>The function results.</returns>
-        /// <exception cref="LuaException">A Lua error occurred.</exception>
+        /// <exception cref="LuaExecutionException">A Lua error occurred during execution.</exception>
+        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
         public object?[] Call()
         {
             _environment.ThrowIfNotEnoughLuaStack(_state, 1);
 
-            lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+            var stackDelta = 0;
 
-            return CallInternal(0);
+            try
+            {
+                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+                ++stackDelta;
+
+                return CallInternal(0);
+            }
+            finally
+            {
+                lua_pop(_state, stackDelta);
+            }
         }
 
         /// <summary>
@@ -54,15 +65,28 @@ namespace Triton
         /// <typeparam name="T">The type of the argument.</typeparam>
         /// <param name="arg">The argument.</param>
         /// <returns>The function results.</returns>
-        /// <exception cref="LuaException">A Lua error occurred.</exception>
+        /// <exception cref="LuaExecutionException">A Lua error occurred during execution.</exception>
+        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
         public object?[] Call<T>(T arg)
         {
             _environment.ThrowIfNotEnoughLuaStack(_state, 2);
 
-            lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-            _environment.Push(_state, arg);
+            var stackDelta = 0;
 
-            return CallInternal(1);
+            try
+            {
+                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+                ++stackDelta;
+
+                _environment.Push(_state, arg);
+                ++stackDelta;
+
+                return CallInternal(1);
+            }
+            finally
+            {
+                lua_pop(_state, stackDelta);
+            }
         }
 
         /// <summary>
@@ -73,16 +97,31 @@ namespace Triton
         /// <param name="arg1">The first argument.</param>
         /// <param name="arg2">The second argument.</param>
         /// <returns>The function results.</returns>
-        /// <exception cref="LuaException">A Lua error occurred.</exception>
+        /// <exception cref="LuaExecutionException">A Lua error occurred during execution.</exception>
+        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
         public object?[] Call<T1, T2>(T1 arg1, T2 arg2)
         {
             _environment.ThrowIfNotEnoughLuaStack(_state, 3);
 
-            lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-            _environment.Push(_state, arg1);
-            _environment.Push(_state, arg2);
+            var stackDelta = 0;
 
-            return CallInternal(2);
+            try
+            {
+                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+                ++stackDelta;
+
+                _environment.Push(_state, arg1);
+                ++stackDelta;
+
+                _environment.Push(_state, arg2);
+                ++stackDelta;
+
+                return CallInternal(2);
+            }
+            finally
+            {
+                lua_pop(_state, stackDelta);
+            }
         }
 
         /// <summary>
@@ -95,46 +134,67 @@ namespace Triton
         /// <param name="arg2">The second argument.</param>
         /// <param name="arg3">The third argument.</param>
         /// <returns>The function results.</returns>
-        /// <exception cref="LuaException">A Lua error occurred.</exception>
+        /// <exception cref="LuaExecutionException">A Lua error occurred during execution.</exception>
+        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
         public object?[] Call<T1, T2, T3>(T1 arg1, T2 arg2, T3 arg3)
         {
             _environment.ThrowIfNotEnoughLuaStack(_state, 4);
 
-            lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-            _environment.Push(_state, arg1);
-            _environment.Push(_state, arg2);
-            _environment.Push(_state, arg3);
+            var stackDelta = 0;
 
-            return CallInternal(3);
+            try
+            {
+                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+                ++stackDelta;
+
+                _environment.Push(_state, arg1);
+                ++stackDelta;
+
+                _environment.Push(_state, arg2);
+                ++stackDelta;
+
+                _environment.Push(_state, arg3);
+                ++stackDelta;
+
+                return CallInternal(3);
+            }
+            finally
+            {
+                lua_pop(_state, stackDelta);
+            }
         }
 
         private object?[] CallInternal(int numArgs)
         {
             Debug.Assert(numArgs >= 0);
 
-            var top = lua_gettop(_state) - numArgs - 1;
+            var oldTop = lua_gettop(_state) - numArgs - 1;
             var status = lua_pcall(_state, numArgs, -1, 0);
             if (status != Native.LuaStatus.Ok)
             {
-                var errorMessage = _environment.ToString(_state, -1);
-                lua_pop(_state, 1);
-                throw new LuaException(errorMessage);
+                try
+                {
+                    var errorMessage = _environment.ToString(_state, -1);
+                    throw new LuaExecutionException(errorMessage);
+                }
+                finally
+                {
+                    lua_pop(_state, 1);
+                }
             }
 
-            var numResults = lua_gettop(_state) - top;
+            var numResults = lua_gettop(_state) - oldTop;
             if (numResults == 0)
             {
                 return Array.Empty<object?>();
             }
 
-            // We potentially need one extra slot on the stack, in case one of the results is a Lua object and it needs
-            // to be pushed in order for `luaL_ref` to be called on it.
-            _environment.ThrowIfNotEnoughLuaStack(_state, 1);
+            _environment.ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required (due to LuaObject)
 
             var results = new object?[numResults];
             for (var i = 0; i < numResults; ++i)
             {
-                results[i] = _environment.ToObject(_state, top + i + 1);
+                results[i] = _environment.ToObject(_state, oldTop + i + 1);
             }
 
             return results;
