@@ -175,10 +175,12 @@ namespace Triton
         /// <exception cref="ArgumentOutOfRangeException">
         /// <paramref name="sequentialCapacity"/> or <paramref name="nonSequentialCapacity"/> are negative.
         /// </exception>
+        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
         /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaTable CreateTable(int sequentialCapacity = 0, int nonSequentialCapacity = 0)
         {
             ThrowIfDisposed();
+            ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required
 
             if (sequentialCapacity < 0)
             {
@@ -234,6 +236,7 @@ namespace Triton
             }
 
             ThrowIfDisposed();
+            ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required
 
             var stackDelta = 0;
 
