@@ -18,33 +18,34 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using System;
-using BenchmarkDotNet.Running;
-using Triton.Benchmarks.Micro;
+using BenchmarkDotNet.Attributes;
 
-namespace Triton.Benchmarks
+namespace Triton.Benchmarks.Micro
 {
-    internal class Program
+    [MemoryDiagnoser]
+    public class Eval
     {
-        private static void Main()
+        private NLua.Lua _nlua;
+        private LuaEnvironment _triton;
+
+        [GlobalSetup]
+        public void Setup()
         {
-            Console.WriteLine("Enter the benchmark to run:");
-            Console.WriteLine("\teval = Eval");
-            Console.WriteLine("\tfunctioncall = FunctionCall");
-            Console.WriteLine("\ttablesetget = TableSetGet");
-
-            var option = Console.ReadLine();
-
-            var type = option switch
-            {
-                "eval" => typeof(Eval),
-                "functioncall" => typeof(FunctionCall),
-                "tablesetget" => typeof(TableSetGet),
-                _ => throw new InvalidOperationException(),
-            };
-
-            BenchmarkRunner.Run(type);
-            Console.ReadKey(true);
+            _nlua = new NLua.Lua();
+            _triton = new LuaEnvironment();
         }
+
+        [GlobalCleanup]
+        public void Cleanup()
+        {
+            _nlua.Dispose();
+            _triton.Dispose();
+        }
+
+        [Benchmark]
+        public void NLua() => _nlua.DoString("return 0");
+
+        [Benchmark]
+        public void Triton() => _triton.Eval("return 0");
     }
 }
