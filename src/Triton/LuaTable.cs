@@ -97,13 +97,13 @@ namespace Triton
         }
 
         /// <summary>
-        /// Gets or sets the value with index <paramref name="n"/>.
+        /// Gets or sets the value with the given <paramref name="index"/>.
         /// </summary>
-        /// <param name="n">The number.</param>
-        /// <returns>The value with index <paramref name="n"/>.</returns>
+        /// <param name="index">The index.</param>
+        /// <returns>The value with the given <paramref name="index"/>.</returns>
         /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
         /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
-        public object? this[long n]
+        public object? this[long index]
         {
             get
             {
@@ -112,7 +112,7 @@ namespace Triton
 
                 lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
 
-                var type = lua_geti(_state, -1, n);
+                var type = lua_geti(_state, -1, index);
 
                 try
                 { 
@@ -135,7 +135,7 @@ namespace Triton
                 {
                     _environment.PushObject(_state, value);
 
-                    lua_seti(_state, -2, n);
+                    lua_seti(_state, -2, index);
                 }
                 finally
                 {

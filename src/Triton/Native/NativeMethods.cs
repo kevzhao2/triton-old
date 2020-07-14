@@ -158,7 +158,9 @@ namespace Triton.Native
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void* lua_newuserdatauv(lua_State* L, size_t size, int nuvalue);
 
-        // TODO: lua_next
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern bool lua_next(lua_State* L, int index);
+
         // TODO: lua_numbertointeger
 
         public static LuaStatus lua_pcall(lua_State* L, int nargs, int nresults, int msgh) =>
