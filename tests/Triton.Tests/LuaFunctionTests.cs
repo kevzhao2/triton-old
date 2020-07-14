@@ -188,12 +188,12 @@ namespace Triton
         }
 
         [Fact]
-        public void Call_LuaError_ThrowsLuaEvaluationException()
+        public void Call_LuaError_ThrowsLuaEvalException()
         {
             using var environment = new LuaEnvironment();
             var function = environment.CreateFunction("error('test')");
 
-            Assert.Throws<LuaEvaluationException>(() => function.Call());
+            Assert.Throws<LuaEvalException>(() => function.Call());
         }
     }
 }

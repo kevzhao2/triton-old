@@ -127,13 +127,13 @@ namespace Triton
         }
 
         [Fact]
-        public void Start_LuaError_ThrowsLuaEvaluationException()
+        public void Start_LuaError_ThrowsLuaEvalException()
         {
             using var environment = new LuaEnvironment();
             var function = environment.CreateFunction("error('test')");
             var thread = environment.CreateThread();
 
-            Assert.Throws<LuaEvaluationException>(() => thread.Start(function));
+            Assert.Throws<LuaEvalException>(() => thread.Start(function));
         }
 
         [Fact]
@@ -191,7 +191,7 @@ namespace Triton
         }
 
         [Fact]
-        public void Resume_LuaError_ThrowsLuaEvaluationException()
+        public void Resume_LuaError_ThrowsLuaEvalException()
         {
             using var environment = new LuaEnvironment();
             var function = environment.CreateFunction(@"
@@ -200,7 +200,7 @@ namespace Triton
             var thread = environment.CreateThread();
             _ = thread.Start(function);
 
-            Assert.Throws<LuaEvaluationException>(() => thread.Resume());
+            Assert.Throws<LuaEvalException>(() => thread.Resume());
         }
 
         [Fact]

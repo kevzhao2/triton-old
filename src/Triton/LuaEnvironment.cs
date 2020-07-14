@@ -235,7 +235,7 @@ namespace Triton
         /// <param name="chunk">The Lua chunk to evaluate.</param>
         /// <returns>The results.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="chunk"/> is <see langword="null"/>.</exception>
-        /// <exception cref="LuaEvaluationException">A Lua error occurred when evaluating the chunk.</exception>
+        /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the chunk.</exception>
         /// <exception cref="LuaLoadException">A Lua error occurred when loading the chunk.</exception>
         /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
         /// <exception cref="ObjectDisposedException">The environment is disposed.</exception>
@@ -247,7 +247,7 @@ namespace Triton
             var status = lua_pcall(_state, 0, -1, 0);
             if (status != LuaStatus.Ok)
             {
-                throw CreateExceptionFromLuaStack<LuaEvaluationException>(_state);
+                throw CreateExceptionFromLuaStack<LuaEvalException>(_state);
             }
 
             var numResults = lua_gettop(_state) - oldTop;

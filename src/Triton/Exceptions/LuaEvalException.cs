@@ -29,41 +29,41 @@ namespace Triton
     /// </summary>
     [ExcludeFromCodeCoverage]
     [Serializable]
-    public class LuaEvaluationException : LuaException
+    public class LuaEvalException : LuaException
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="LuaEvaluationException"/> class.
+        /// Initializes a new instance of the <see cref="LuaEvalException"/> class.
         /// </summary>
-        public LuaEvaluationException()
+        public LuaEvalException()
         {
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="LuaEvaluationException"/> class with the specified
+        /// Initializes a new instance of the <see cref="LuaEvalException"/> class with the specified
         /// <paramref name="message"/>.
         /// </summary>
         /// <param name="message">The message.</param>
-        public LuaEvaluationException(string message) : base(message)
+        public LuaEvalException(string message) : base(message)
         {
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="LuaEvaluationException"/> class with the specified
+        /// Initializes a new instance of the <see cref="LuaEvalException"/> class with the specified
         /// <paramref name="message"/> and <paramref name="inner"/> exception.
         /// </summary>
         /// <param name="message">The message.</param>
         /// <param name="inner">The inner exception.</param>
-        public LuaEvaluationException(string message, Exception inner) : base(message, inner)
+        public LuaEvalException(string message, Exception inner) : base(message, inner)
         {
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="LuaEvaluationException"/> class with the specified
+        /// Initializes a new instance of the <see cref="LuaEvalException"/> class with the specified
         /// serialization <paramref name="info"/> and <paramref name="context"/>.
         /// </summary>
         /// <param name="info">The serialization information.</param>
         /// <param name="context">The serialization context.</param>
-        protected LuaEvaluationException(SerializationInfo info, StreamingContext context) : base(info, context)
+        protected LuaEvalException(SerializationInfo info, StreamingContext context) : base(info, context)
         {
         }
     }

@@ -73,7 +73,7 @@ namespace Triton
         /// <returns>The results.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="args"/> is <see langword="null"/>.</exception>
         /// <exception cref="InvalidOperationException">The thread cannot be started.</exception>
-        /// <exception cref="LuaEvaluationException">A Lua error occurred when starting the thread.</exception>
+        /// <exception cref="LuaEvalException">A Lua error occurred when starting the thread.</exception>
         /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
         /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public object?[] Start(LuaFunction function, params object[] args)
@@ -119,7 +119,7 @@ namespace Triton
         /// <returns>The results.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="args"/> is <see langword="null"/>.</exception>
         /// <exception cref="InvalidOperationException">The thread cannot be resumed.</exception>
-        /// <exception cref="LuaEvaluationException">A Lua error occurred when evaluating the thread.</exception>
+        /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the thread.</exception>
         /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
         /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public object?[] Resume(params object[] args)
@@ -160,7 +160,7 @@ namespace Triton
             var status = lua_resume(_state, null, numArgs, &numResults);
             if (status != LuaStatus.Ok && status != LuaStatus.Yield)
             {
-                throw _environment.CreateExceptionFromLuaStack<LuaEvaluationException>(_state);
+                throw _environment.CreateExceptionFromLuaStack<LuaEvalException>(_state);
             }
 
             return _environment.MarshalResults(_state, numResults);

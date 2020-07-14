@@ -263,11 +263,11 @@ namespace Triton
         }
 
         [Fact]
-        public void Eval_LuaError_ThrowsLuaEvaluationException()
+        public void Eval_LuaError_ThrowsLuaEvalException()
         {
             using var environment = new LuaEnvironment();
 
-            Assert.Throws<LuaLoadException>(() => environment.Eval("error('test')"));
+            Assert.Throws<LuaEvalException>(() => environment.Eval("error('test')"));
         }
 
         [Fact]

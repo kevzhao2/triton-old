@@ -43,7 +43,7 @@ namespace Triton
         /// <param name="args">The arguments.</param>
         /// <returns>The function results.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="args"/> is <see langword="null"/>.</exception>
-        /// <exception cref="LuaEvaluationException">A Lua error occurred when evaluating the function.</exception>
+        /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
         /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
         /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public object?[] Call(params object?[] args)
@@ -85,7 +85,7 @@ namespace Triton
             var status = lua_pcall(_state, numArgs, -1, 0);
             if (status != LuaStatus.Ok)
             {
-                throw _environment.CreateExceptionFromLuaStack<LuaEvaluationException>(_state);
+                throw _environment.CreateExceptionFromLuaStack<LuaEvalException>(_state);
             }
 
             var numResults = lua_gettop(_state) - oldTop;
