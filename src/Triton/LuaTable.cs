@@ -19,6 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Dynamic;
 using static Triton.Native.NativeMethods;
 
 namespace Triton
@@ -208,6 +209,20 @@ namespace Triton
                     lua_pop(_state, stackDelta);  // Pop the table (and key, if applicable) off the stack
                 }
             }
+        }
+
+        /// <inheritdoc/>
+        public override bool TryGetMember(GetMemberBinder binder, out object result)
+        {
+            result = this[binder.Name]!;
+            return true;
+        }
+
+        /// <inheritdoc/>
+        public override bool TrySetMember(SetMemberBinder binder, object value)
+        {
+            this[binder.Name] = value;
+            return true;
         }
     }
 }

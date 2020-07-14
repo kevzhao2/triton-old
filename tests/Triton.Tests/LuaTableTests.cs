@@ -26,6 +26,17 @@ namespace Triton
     public class LuaTableTests
     {
         [Fact]
+        public void Set_Get_Dynamic()
+        {
+            using var environment = new LuaEnvironment();
+            dynamic table = environment.CreateTable();
+
+            table.test = 123;
+
+            Assert.Equal(123L, table.test);
+        }
+
+        [Fact]
         public void Item_String_Get_NullField_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();
