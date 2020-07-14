@@ -231,5 +231,33 @@ namespace Triton
 
             Assert.Equal(1234L, table[true]);
         }
+
+        [Fact]
+        public void Metatable_Get()
+        {
+            using var environment = new LuaEnvironment();
+            var table = (LuaTable)environment.Eval(@"
+                t = {}
+                setmetatable(t, {})
+                return t")[0]!;
+
+            var metatable = table.Metatable;
+
+            Assert.NotNull(metatable);
+        }
+
+        [Fact]
+        public void Metatable_Set()
+        {
+            using var environment = new LuaEnvironment();
+            var metatable = environment.CreateTable();
+            var table = (LuaTable)environment.Eval(@"
+                t = {}
+                return t")[0]!;
+
+            table.Metatable = metatable;
+
+            Assert.Same(metatable, environment.Eval("return getmetatable(t)")[0]);
+        }
     }
 }

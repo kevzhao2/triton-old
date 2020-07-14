@@ -20,6 +20,7 @@
 
 using System;
 using System.Dynamic;
+using Triton.Native;
 using static Triton.Native.NativeMethods;
 
 namespace Triton
@@ -150,6 +151,7 @@ namespace Triton
         /// <returns>The value corresponding to the given <paramref name="key"/>.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is <see langword="null"/>.</exception>
         /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public object? this[object key]
         {
             get
@@ -207,6 +209,64 @@ namespace Triton
                 finally
                 {
                     lua_pop(_state, stackDelta);  // Pop the table (and key, if applicable) off the stack
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the table's metatable.
+        /// </summary>
+        /// <value>The metatable, or <see langword="null"/> if there is none.</value>
+        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
+        public LuaTable? Metatable
+        {
+            get
+            {
+                _environment.ThrowIfDisposed();
+                _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
+
+                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+
+                if (!lua_getmetatable(_state, -1))
+                {
+                    lua_pop(_state, 1);  // Pop the table off the stack
+                    return null;
+                }
+
+                try
+                {
+                    return (LuaTable)_environment.ToObject(_state, -1, typeHint: LuaType.Table)!;
+                }
+                finally
+                {
+                    lua_pop(_state, 2);  // Pop the table and metatable off the stack
+                }
+            }
+
+            set
+            {
+                _environment.ThrowIfDisposed();
+                _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
+
+                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+
+                try
+                {
+                    if (value is null)
+                    {
+                        lua_pushnil(_state);
+                    }
+                    else
+                    {
+                        _environment.PushObject(_state, value);
+                    }
+
+                    lua_setmetatable(_state, -2);
+                }
+                finally
+                {
+                    lua_pop(_state, 1);  // Pop the table off the stack
                 }
             }
         }
