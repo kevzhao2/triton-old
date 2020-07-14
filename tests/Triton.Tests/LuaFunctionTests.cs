@@ -26,6 +26,15 @@ namespace Triton
     public class LuaFunctionTests
     {
         [Fact]
+        public void Call_NullArgs_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+            var function = environment.CreateFunction("return 1234");
+
+            Assert.Throws<ArgumentNullException>(() => function.Call(null!));
+        }
+
+        [Fact]
         public void Call_NoArgs_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
             var environment = new LuaEnvironment();

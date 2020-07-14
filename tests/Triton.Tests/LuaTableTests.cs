@@ -19,7 +19,6 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Text;
 using Xunit;
 
 namespace Triton
@@ -27,7 +26,7 @@ namespace Triton
     public class LuaTableTests
     {
         [Fact]
-        public void Item_String_Get_NullS_ThrowsArgumentNullException()
+        public void Item_String_Get_NullField_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();
             var table = environment.CreateTable();
@@ -46,18 +45,7 @@ namespace Triton
         }
 
         [Fact]
-        public void Item_String_Get_EncoderFallbackExceptionThrown()
-        {
-            var encoding = Encoding.GetEncoding(
-                "us-ascii", new EncoderExceptionFallback(), new DecoderExceptionFallback());
-            using var environment = new LuaEnvironment(encoding);
-            var table = environment.CreateTable();
-
-            Assert.Throws<EncoderFallbackException>(() => table["tést"]);
-        }
-
-        [Fact]
-        public void Item_String_Set_NullS_ThrowsArgumentNullException()
+        public void Item_String_Set_NullField_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();
             var table = environment.CreateTable();
@@ -73,17 +61,6 @@ namespace Triton
             environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => table["test"] = 1234);
-        }
-
-        [Fact]
-        public void Item_String_Set_EncoderFallbackExceptionThrown()
-        {
-            var encoding = Encoding.GetEncoding(
-                "us-ascii", new EncoderExceptionFallback(), new DecoderExceptionFallback());
-            using var environment = new LuaEnvironment(encoding);
-            var table = environment.CreateTable();
-
-            Assert.Throws<EncoderFallbackException>(() => table["tést"] = 1234);
         }
 
         [Fact]
@@ -196,6 +173,15 @@ namespace Triton
         }
 
         [Fact]
+        public void Item_Object_Get_NullField_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+
+            Assert.Throws<ArgumentNullException>(() => table[(object)null!]);
+        }
+
+        [Fact]
         public void Item_Object_Get_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
             var environment = new LuaEnvironment();
@@ -203,6 +189,15 @@ namespace Triton
             environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => table[true]);
+        }
+
+        [Fact]
+        public void Item_Object_Set_NullField_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+
+            Assert.Throws<ArgumentNullException>(() => table[(object)null!] = 1234);
         }
 
         [Fact]

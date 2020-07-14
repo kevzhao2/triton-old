@@ -19,7 +19,6 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Text;
 using Xunit;
 
 namespace Triton
@@ -27,21 +26,7 @@ namespace Triton
     public unsafe class LuaEnvironmentTests
     {
         [Fact]
-        public void Ctor()
-        {
-            using var environment = new LuaEnvironment();
-
-            Assert.Same(Encoding.ASCII, environment.Encoding);
-        }
-
-        [Fact]
-        public void Ctor_NullEncoding_ThrowsArgumentNullException()
-        {
-            Assert.Throws<ArgumentNullException>(() => new LuaEnvironment(null!));
-        }
-
-        [Fact]
-        public void Item_Get_NullS_ThrowsArgumentNullException()
+        public void Item_Get_NullGlobal_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();
 
@@ -58,17 +43,7 @@ namespace Triton
         }
 
         [Fact]
-        public void Item_Get_EncoderFallbackExceptionThrown()
-        {
-            var encoding = Encoding.GetEncoding(
-                "us-ascii", new EncoderExceptionFallback(), new DecoderExceptionFallback());
-            using var environment = new LuaEnvironment(encoding);
-
-            Assert.Throws<EncoderFallbackException>(() => environment["tést"]);
-        }
-
-        [Fact]
-        public void Item_Set_NullS_ThrowsArgumentNullException()
+        public void Item_Set_NullGlobal_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();
 
@@ -82,16 +57,6 @@ namespace Triton
             environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => environment["test"]);
-        }
-
-        [Fact]
-        public void Item_Set_EncoderFallbackExceptionThrown()
-        {
-            var encoding = Encoding.GetEncoding(
-                "us-ascii", new EncoderExceptionFallback(), new DecoderExceptionFallback());
-            using var environment = new LuaEnvironment(encoding);
-
-            Assert.Throws<EncoderFallbackException>(() => environment["tést"] = 1234);
         }
 
         [Fact]
@@ -164,24 +129,6 @@ namespace Triton
             environment["test"] = function;
 
             Assert.Same(function, environment["test"]);
-        }
-
-        [Fact]
-        public void Encoding_Get()
-        {
-            using var environment = new LuaEnvironment(Encoding.UTF8);
-
-            Assert.Same(Encoding.UTF8, environment.Encoding);
-        }
-
-        [Fact]
-        public void Globals_Get()
-        {
-            using var environment = new LuaEnvironment(Encoding.UTF8);
-
-            var globals = environment.Globals;
-
-            // TODO: finish this test
         }
 
         [Fact]

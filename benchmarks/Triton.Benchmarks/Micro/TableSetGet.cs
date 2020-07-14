@@ -18,7 +18,6 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using System.Text;
 using BenchmarkDotNet.Attributes;
 
 namespace Triton.Benchmarks.Micro
@@ -39,7 +38,7 @@ namespace Triton.Benchmarks.Micro
         public void Setup()
         {
             _nlua = new NLua.Lua();
-            _triton = new LuaEnvironment(Encoding.ASCII);
+            _triton = new LuaEnvironment();
 
             _nluaFunction = _nlua.LoadString("return", "test");
             _tritonFunction = _triton.CreateFunction("return");

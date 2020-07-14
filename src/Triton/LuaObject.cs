@@ -31,6 +31,7 @@ namespace Triton
     {
         internal readonly LuaEnvironment _environment;
         internal readonly int _reference;
+
         private protected readonly lua_State* _state;
 
         private protected LuaObject(LuaEnvironment environment, int reference, lua_State* state)

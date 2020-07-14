@@ -27,60 +27,52 @@ namespace Triton
 {
     public unsafe partial class LuaEnvironment
     {
-        // Marshals a string to a string buffer using the Lua environment's encoding.
-        internal StringBuffer CreateStringBuffer(string s, bool isNullTerminated)
+        private const int StringBufferSize = 1 << 16;
+
+        private readonly byte* _stringBuffer;
+
+        /// <summary>
+        /// Creates a <see cref="StringBuffer"/> instance from the given string <paramref name="s"/>.
+        /// </summary>
+        /// <param name="s">The string.</param>
+        /// <returns>The resulting <see cref="StringBuffer"/> instance.</returns>
+        internal StringBuffer CreateStringBuffer(string s)
         {
             Debug.Assert(s != null);
 
-            var maxByteLength = Encoding.GetMaxByteCount(s.Length) + (isNullTerminated ? 1 : 0);
-
             // If the maximum byte length is small enough, then we can use `_stringBuffer`. Otherwise, we'll have to
             // perform an allocation.
+
+            var maxByteLength = Encoding.UTF8.GetMaxByteCount(s.Length) + 1;  // Include space for null terminator
             var isAllocated = maxByteLength > StringBufferSize;
+            var ptr = isAllocated ? (byte*)Marshal.AllocHGlobal(maxByteLength) : _stringBuffer;
 
-            byte* pointer = isAllocated ? (byte*)Marshal.AllocHGlobal(maxByteLength) : _stringBuffer;
-
-            try
+            fixed (char* sPtr = s)
             {
-                UIntPtr length;
-                fixed (char* sPtr = s)
-                {
-                    length = (UIntPtr)Encoding.GetBytes(sPtr, s.Length, pointer, maxByteLength);  // May throw
-                }
+                var length = Encoding.UTF8.GetBytes(sPtr, s.Length, ptr, maxByteLength);
+                ptr[length] = 0;  // Null terminator
 
-                if (isNullTerminated)
-                {
-                    pointer[(int)length] = 0;
-                }
-
-                return new StringBuffer(pointer, length, isAllocated);
-            }
-            catch (EncoderFallbackException)
-            {
-                if (isAllocated)
-                {
-                    Marshal.FreeHGlobal((IntPtr)pointer);
-                }
-
-                throw;
+                return new StringBuffer(ptr, (UIntPtr)length, isAllocated);
             }
         }
 
+        /// <summary>
+        /// Represents a string buffer (either located in the Lua environment's string buffer or on the heap).
+        /// </summary>
         internal ref struct StringBuffer
         {
+            private readonly byte* _ptr;
             private readonly bool _isAllocated;
 
-            public StringBuffer(byte* pointer, UIntPtr length, bool isAllocated)
+            public StringBuffer(byte* ptr, UIntPtr length, bool isAllocated)
             {
-                Debug.Assert(pointer != null);
+                Debug.Assert(ptr != null);
                 Debug.Assert((int)length >= 0);
 
-                Pointer = pointer;
+                _ptr = ptr;
                 Length = length;
                 _isAllocated = isAllocated;
             }
-
-            public byte* Pointer { get; }
 
             public UIntPtr Length { get; }
 
@@ -88,9 +80,11 @@ namespace Triton
             {
                 if (_isAllocated)
                 {
-                    Marshal.FreeHGlobal((IntPtr)Pointer);
+                    Marshal.FreeHGlobal((IntPtr)_ptr);
                 }
             }
+
+            public static implicit operator byte*(StringBuffer buffer) => buffer._ptr;
         }
     }
 }

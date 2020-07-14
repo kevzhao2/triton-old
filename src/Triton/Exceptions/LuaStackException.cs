@@ -43,9 +43,6 @@ namespace Triton
         /// <paramref name="requestedSlots"/>.
         /// </summary>
         /// <param name="requestedSlots">The number of requested slots.</param>
-        [SuppressMessage(
-            "Performance", "HAA0601:Value type to reference type conversion causing boxing allocation",
-            Justification = "Insignificant")]
         public LuaStackException(int requestedSlots) :
             base($"Lua stack space is insufficient. Requested slots: {requestedSlots}")
         {

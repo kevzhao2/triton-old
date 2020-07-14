@@ -20,6 +20,7 @@
 
 using System;
 using System.Diagnostics;
+using Triton.Native;
 using static Triton.Native.NativeMethods;
 
 namespace Triton
@@ -35,166 +36,29 @@ namespace Triton
         }
 
         /// <summary>
-        /// Calls the function with no arguments.
-        /// </summary>
-        /// <returns>The function results.</returns>
-        /// <exception cref="LuaExecutionException">A Lua error occurred during execution.</exception>
-        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
-        public object?[] Call()
-        {
-            _environment.ThrowIfDisposed();
-            _environment.ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required
-
-            var stackDelta = 0;
-
-            try
-            {
-                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-                ++stackDelta;
-            }
-            catch
-            {
-                lua_pop(_state, stackDelta);
-                throw;
-            }
-
-            return CallInternal(0);
-        }
-
-        /// <summary>
-        /// Calls the function with the specified argument.
-        /// </summary>
-        /// <typeparam name="T">The type of the argument.</typeparam>
-        /// <param name="arg">The argument.</param>
-        /// <returns>The function results.</returns>
-        /// <exception cref="LuaExecutionException">A Lua error occurred during execution.</exception>
-        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
-        public object?[] Call<T>(T arg)
-        {
-            _environment.ThrowIfDisposed();
-            _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
-
-            var stackDelta = 0;
-
-            try
-            {
-                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-                ++stackDelta;
-
-                _environment.Push(_state, arg);
-                ++stackDelta;
-            }
-            catch
-            {
-                lua_pop(_state, stackDelta);
-                throw;
-            }
-
-            return CallInternal(1);
-        }
-
-        /// <summary>
-        /// Calls the function with the specified arguments.
-        /// </summary>
-        /// <typeparam name="T1">The type of the first argument.</typeparam>
-        /// <typeparam name="T2">The type of the second argument.</typeparam>
-        /// <param name="arg1">The first argument.</param>
-        /// <param name="arg2">The second argument.</param>
-        /// <returns>The function results.</returns>
-        /// <exception cref="LuaExecutionException">A Lua error occurred during execution.</exception>
-        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
-        public object?[] Call<T1, T2>(T1 arg1, T2 arg2)
-        {
-            _environment.ThrowIfDisposed();
-            _environment.ThrowIfNotEnoughLuaStack(_state, 3);  // 3 stack slots required
-
-            var stackDelta = 0;
-
-            try
-            {
-                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-                ++stackDelta;
-
-                _environment.Push(_state, arg1);
-                ++stackDelta;
-
-                _environment.Push(_state, arg2);
-                ++stackDelta;
-            }
-            catch
-            {
-                lua_pop(_state, stackDelta);
-                throw;
-            }
-
-            return CallInternal(2);
-        }
-
-        /// <summary>
-        /// Calls the function with the specified arguments.
-        /// </summary>
-        /// <typeparam name="T1">The type of the first argument.</typeparam>
-        /// <typeparam name="T2">The type of the second argument.</typeparam>
-        /// <typeparam name="T3">The type of the third argument.</typeparam>
-        /// <param name="arg1">The first argument.</param>
-        /// <param name="arg2">The second argument.</param>
-        /// <param name="arg3">The third argument.</param>
-        /// <returns>The function results.</returns>
-        /// <exception cref="LuaExecutionException">A Lua error occurred during execution.</exception>
-        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
-        public object?[] Call<T1, T2, T3>(T1 arg1, T2 arg2, T3 arg3)
-        {
-            _environment.ThrowIfDisposed();
-            _environment.ThrowIfNotEnoughLuaStack(_state, 4);  // 4 stack slots required
-
-            var stackDelta = 0;
-
-            try
-            {
-                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-                ++stackDelta;
-
-                _environment.Push(_state, arg1);
-                ++stackDelta;
-
-                _environment.Push(_state, arg2);
-                ++stackDelta;
-
-                _environment.Push(_state, arg3);
-                ++stackDelta;
-            }
-            catch
-            {
-                lua_pop(_state, stackDelta);
-                throw;
-            }
-
-            return CallInternal(3);
-        }
-
-        /// <summary>
         /// Calls the function with the specified arguments.
         /// </summary>
         /// <param name="args">The arguments.</param>
         /// <returns>The function results.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="args"/> is <see langword="null"/>.</exception>
         /// <exception cref="LuaExecutionException">A Lua error occurred during execution.</exception>
         /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
         /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public object?[] Call(params object?[] args)
         {
+            if (args is null)
+            {
+                throw new ArgumentNullException(nameof(args));
+            }
+
             _environment.ThrowIfDisposed();
             _environment.ThrowIfNotEnoughLuaStack(_state, 1 + args.Length);  // (1 + numArgs) stack slots required
 
-            var stackDelta = 0;
+            lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+            var stackDelta = 1;
 
             try
             {
-                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-                ++stackDelta;
 
                 foreach (var arg in args)
                 {
@@ -217,17 +81,9 @@ namespace Triton
 
             var oldTop = lua_gettop(_state) - numArgs - 1;
             var status = lua_pcall(_state, numArgs, -1, 0);
-            if (status != Native.LuaStatus.Ok)
+            if (status != LuaStatus.Ok)
             {
-                try
-                {
-                    var errorMessage = _environment.ToString(_state, -1);
-                    throw new LuaExecutionException(errorMessage);
-                }
-                finally
-                {
-                    lua_pop(_state, 1);
-                }
+                _environment.ThrowUsingLuaStack<LuaExecutionException>(_state);
             }
 
             var numResults = lua_gettop(_state) - oldTop;
@@ -236,10 +92,10 @@ namespace Triton
                 return Array.Empty<object?>();
             }
 
-            _environment.ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required (due to LuaObject)
-
             try
             {
+                _environment.ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required (due to LuaObject)
+
                 var results = new object?[numResults];
                 for (var i = 0; i < numResults; ++i)
                 {
