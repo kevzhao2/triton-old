@@ -25,45 +25,45 @@ using System.Runtime.Serialization;
 namespace Triton
 {
     /// <summary>
-    /// The exception that is thrown when a Lua error occurs during execution.
+    /// The exception that is thrown when a Lua error occurs during evaluation.
     /// </summary>
     [ExcludeFromCodeCoverage]
     [Serializable]
-    public class LuaExecutionException : LuaException
+    public class LuaEvaluationException : LuaException
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="LuaExecutionException"/> class.
+        /// Initializes a new instance of the <see cref="LuaEvaluationException"/> class.
         /// </summary>
-        public LuaExecutionException()
+        public LuaEvaluationException()
         {
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="LuaExecutionException"/> class with the specified
+        /// Initializes a new instance of the <see cref="LuaEvaluationException"/> class with the specified
         /// <paramref name="message"/>.
         /// </summary>
         /// <param name="message">The message.</param>
-        public LuaExecutionException(string message) : base(message)
+        public LuaEvaluationException(string message) : base(message)
         {
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="LuaExecutionException"/> class with the specified
+        /// Initializes a new instance of the <see cref="LuaEvaluationException"/> class with the specified
         /// <paramref name="message"/> and <paramref name="inner"/> exception.
         /// </summary>
         /// <param name="message">The message.</param>
         /// <param name="inner">The inner exception.</param>
-        public LuaExecutionException(string message, Exception inner) : base(message, inner)
+        public LuaEvaluationException(string message, Exception inner) : base(message, inner)
         {
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="LuaExecutionException"/> class with the specified serialization
-        /// <paramref name="info"/> and <paramref name="context"/>.
+        /// Initializes a new instance of the <see cref="LuaEvaluationException"/> class with the specified
+        /// serialization <paramref name="info"/> and <paramref name="context"/>.
         /// </summary>
         /// <param name="info">The serialization information.</param>
         /// <param name="context">The serialization context.</param>
-        protected LuaExecutionException(SerializationInfo info, StreamingContext context) : base(info, context)
+        protected LuaEvaluationException(SerializationInfo info, StreamingContext context) : base(info, context)
         {
         }
     }

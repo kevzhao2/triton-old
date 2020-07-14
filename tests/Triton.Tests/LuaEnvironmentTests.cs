@@ -157,7 +157,7 @@ namespace Triton
         }
 
         [Fact]
-        public void CreateFunction_NullS_ThrowsArgumentNullException()
+        public void CreateFunction_NullChunk_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();
 
@@ -174,7 +174,7 @@ namespace Triton
         }
 
         [Fact]
-        public void CreateFunction_InvalidLuaCode_ThrowsLuaLoadException()
+        public void CreateFunction_InvalidLua_ThrowsLuaLoadException()
         {
             using var environment = new LuaEnvironment();
 
@@ -187,6 +187,40 @@ namespace Triton
             using var environment = new LuaEnvironment();
 
             var function = environment.CreateFunction("return 0");
+        }
+
+        [Fact]
+        public void Eval_NullChunk_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<ArgumentNullException>(() => environment.Eval(null!));
+        }
+
+        [Fact]
+        public void Eval_EnvironmentDisposed_ThrowsObjectDisposedException()
+        {
+            var environment = new LuaEnvironment();
+            environment.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => environment.Eval("return 0"));
+        }
+
+        [Fact]
+        public void Eval_InvalidLua_ThrowsLuaLoadException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<LuaLoadException>(() => environment.Eval("retur 0"));
+        }
+
+        [Fact]
+        public void Eval()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Collection(environment.Eval("return 0"),
+                value => Assert.Equal(0L, value));
         }
     }
 }

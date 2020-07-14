@@ -176,23 +176,7 @@ namespace Triton
         /// <exception cref="ObjectDisposedException">The environment is disposed.</exception>
         public LuaFunction CreateFunction(string chunk)
         {
-            if (chunk is null)
-            {
-                throw new ArgumentNullException(nameof(chunk));
-            }
-
-            ThrowIfDisposed();
-            ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required
-
-            {
-                using var buffer = CreateStringBuffer(chunk);
-                var status = luaL_loadstring(_state, buffer);
-
-                if (status != LuaStatus.Ok)
-                {
-                    ThrowUsingLuaStack<LuaLoadException>(_state);
-                }
-            }
+            LoadStringInternal(chunk);
 
             // Because we just created a function, it is guaranteed to be a unique function. So we can just
             // construct a new `LuaFunction` instance without checking if it is cached.
@@ -203,6 +187,23 @@ namespace Triton
 
             _luaObjects[ptr] = (reference, new WeakReference<LuaObject>(function));
             return function;
+        }
+
+        /// <summary>
+        /// Evaluates the given Lua <paramref name="chunk"/>.
+        /// </summary>
+        /// <param name="chunk">The Lua chunk to evaluate.</param>
+        /// <returns>The results.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="chunk"/> is <see langword="null"/>.</exception>
+        /// <exception cref="LuaEvaluationException">A Lua error occurred when evaluating the chunk.</exception>
+        /// <exception cref="LuaLoadException">A Lua error occurred when loading the chunk.</exception>
+        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
+        /// <exception cref="ObjectDisposedException">The environment is disposed.</exception>
+        public object?[] Eval(string chunk)
+        {
+            LoadStringInternal(chunk);
+
+            return Call(0);
         }
 
         /// <summary>
@@ -375,6 +376,46 @@ namespace Triton
         }
 
         /// <summary>
+        /// Performs a function call with <paramref name="numArgs"/> arguments.
+        /// </summary>
+        /// <param name="numArgs">The number of arguments.</param>
+        /// <returns>The results.</returns>
+        internal object?[] Call(int numArgs)
+        {
+            Debug.Assert(numArgs >= 0);
+
+            var oldTop = lua_gettop(_state) - numArgs - 1;
+            var status = lua_pcall(_state, numArgs, -1, 0);
+            if (status != LuaStatus.Ok)
+            {
+                ThrowUsingLuaStack<LuaEvaluationException>(_state);
+            }
+
+            var numResults = lua_gettop(_state) - oldTop;
+            if (numResults == 0)
+            {
+                return Array.Empty<object?>();
+            }
+
+            try
+            {
+                ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required (due to LuaObject)
+
+                var results = new object?[numResults];
+                for (var i = 0; i < numResults; ++i)
+                {
+                    results[i] = ToObject(_state, oldTop + i + 1);
+                }
+
+                return results;
+            }
+            finally
+            {
+                lua_pop(_state, numResults);
+            }
+        }
+
+        /// <summary>
         /// Throws an <see cref="ObjectDisposedException"/> if the Lua environment is disposed.
         /// </summary>
         internal void ThrowIfDisposed()
@@ -420,6 +461,26 @@ namespace Triton
             finally
             {
                 lua_pop(_state, 1);
+            }
+        }
+
+        // Loads a string as a chunk onto the stack.
+        private void LoadStringInternal(string chunk)
+        {
+            if (chunk is null)
+            {
+                throw new ArgumentNullException(nameof(chunk));
+            }
+
+            ThrowIfDisposed();
+            ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required
+
+            using var buffer = CreateStringBuffer(chunk);
+            var status = luaL_loadstring(_state, buffer);
+
+            if (status != LuaStatus.Ok)
+            {
+                ThrowUsingLuaStack<LuaLoadException>(_state);
             }
         }
 
