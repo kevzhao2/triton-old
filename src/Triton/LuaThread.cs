@@ -30,12 +30,9 @@ namespace Triton
     /// </summary>
     public sealed unsafe class LuaThread : LuaObject
     {
-        private readonly lua_State* _mainState;
-
-        internal LuaThread(LuaEnvironment environment, int reference, lua_State* state, lua_State* mainState) :
+        internal LuaThread(LuaEnvironment environment, int reference, lua_State* state) :
             base(environment, reference, state)
         {
-            _mainState = mainState;
         }
 
         /// <summary>
@@ -66,6 +63,8 @@ namespace Triton
             }
         }
 
+        // TODO: consider optimization by adding generic overloads
+
         /// <summary>
         /// Starts the thread with the given <paramref name="function"/> and <paramref name="args"/>.
         /// </summary>
@@ -90,8 +89,8 @@ namespace Triton
             }
 
             _environment.ThrowIfDisposed();
-            ThrowIfCannotStart();
             _environment.ThrowIfNotEnoughLuaStack(_state, 1 + args.Length);  // (1 + numArgs) stack slots required
+            ThrowIfCannotStart();
 
             _environment.PushObject(_state, function);
             var stackDelta = 1;
@@ -131,8 +130,8 @@ namespace Triton
             }
 
             _environment.ThrowIfDisposed();
-            ThrowIfCannotResume();
             _environment.ThrowIfNotEnoughLuaStack(_state, args.Length);  // numArgs stack slots required
+            ThrowIfCannotResume();
 
             var stackDelta = 0;
 
@@ -158,7 +157,7 @@ namespace Triton
             Debug.Assert(numArgs >= 0);
 
             int numResults;
-            var status = lua_resume(_state, _mainState, numArgs, &numResults);
+            var status = lua_resume(_state, null, numArgs, &numResults);
             if (status != LuaStatus.Ok && status != LuaStatus.Yield)
             {
                 _environment.ThrowUsingLuaStack<LuaEvaluationException>(_state);

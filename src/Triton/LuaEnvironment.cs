@@ -207,7 +207,7 @@ namespace Triton
             
             var ptr = (IntPtr)lua_topointer(_state, -1);
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
-            var thread = new LuaThread(this, reference, threadState, _state);
+            var thread = new LuaThread(this, reference, threadState);
 
             _luaObjects[ptr] = (reference, new WeakReference<LuaObject>(thread));
             return thread;
@@ -387,7 +387,7 @@ namespace Triton
                 {
                     LuaType.Table => new LuaTable(this, reference, state),
                     LuaType.Function => new LuaFunction(this, reference, state),
-                    LuaType.Thread => new LuaThread(this, reference, (lua_State*)ptr, state),
+                    LuaType.Thread => new LuaThread(this, reference, (lua_State*)ptr),  // Special case for threads
                     _ => throw new InvalidOperationException()
                 };
 

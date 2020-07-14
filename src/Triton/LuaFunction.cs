@@ -35,6 +35,8 @@ namespace Triton
         {
         }
 
+        // TODO: consider optimization by adding generic overloads
+
         /// <summary>
         /// Calls the function with the specified arguments.
         /// </summary>

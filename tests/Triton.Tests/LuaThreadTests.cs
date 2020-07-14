@@ -19,9 +19,6 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Collections.Generic;
-using System.Reflection.PortableExecutable;
-using System.Text;
 using Xunit;
 
 namespace Triton
