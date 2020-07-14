@@ -190,6 +190,23 @@ namespace Triton
         }
 
         [Fact]
+        public void CreateThread_EnvironmentDisposed_ThrowsObjectDisposedException()
+        {
+            var environment = new LuaEnvironment();
+            environment.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => environment.CreateThread());
+        }
+
+        [Fact]
+        public void CreateThread()
+        {
+            using var environment = new LuaEnvironment();
+
+            var thread = environment.CreateThread();
+        }
+
+        [Fact]
         public void Eval_NullChunk_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();

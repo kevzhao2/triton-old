@@ -137,9 +137,6 @@ namespace Triton
         /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaTable CreateTable(int sequentialCapacity = 0, int nonSequentialCapacity = 0)
         {
-            ThrowIfDisposed();
-            ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required
-
             if (sequentialCapacity < 0)
             {
                 throw new ArgumentOutOfRangeException(
@@ -152,10 +149,13 @@ namespace Triton
                     nameof(nonSequentialCapacity), "Non-sequential capacity is negative");
             }
 
+            ThrowIfDisposed();
+            ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required
+
             lua_createtable(_state, sequentialCapacity, nonSequentialCapacity);
 
-            // Because we just created a table, it is guaranteed to be a unique table. So we can just construct a
-            // new `LuaTable` instance without checking if it is cached.
+            // Because we just created a table, it is guaranteed to be a unique table. So we can just construct a new
+            // `LuaTable` instance without checking if it is cached.
 
             var ptr = (IntPtr)lua_topointer(_state, -1);
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
@@ -178,8 +178,8 @@ namespace Triton
         {
             LoadStringInternal(chunk);
 
-            // Because we just created a function, it is guaranteed to be a unique function. So we can just
-            // construct a new `LuaFunction` instance without checking if it is cached.
+            // Because we just created a function, it is guaranteed to be a unique function. So we can just construct
+            // a new `LuaFunction` instance without checking if it is cached.
 
             var ptr = (IntPtr)lua_topointer(_state, -1);
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
@@ -187,6 +187,30 @@ namespace Triton
 
             _luaObjects[ptr] = (reference, new WeakReference<LuaObject>(function));
             return function;
+        }
+
+        /// <summary>
+        /// Creates a Lua thread.
+        /// </summary>
+        /// <returns>The resulting Lua thread.</returns>
+        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
+        /// <exception cref="ObjectDisposedException">The environment is disposed.</exception>
+        public LuaThread CreateThread()
+        {
+            ThrowIfDisposed();
+            ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required
+
+            var threadState = lua_newthread(_state);
+
+            // Because we just created a thread, it is guaranteed to be a unique thread. So we can just construct
+            // a new `LuaThread` instance without checking if it is cached.
+            
+            var ptr = (IntPtr)lua_topointer(_state, -1);
+            var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
+            var thread = new LuaThread(this, reference, threadState, _state);
+
+            _luaObjects[ptr] = (reference, new WeakReference<LuaObject>(thread));
+            return thread;
         }
 
         /// <summary>
@@ -203,7 +227,15 @@ namespace Triton
         {
             LoadStringInternal(chunk);
 
-            return Call(0);
+            var oldTop = lua_gettop(_state) - 1;
+            var status = lua_pcall(_state, 0, -1, 0);
+            if (status != LuaStatus.Ok)
+            {
+                ThrowUsingLuaStack<LuaEvaluationException>(_state);
+            }
+
+            var numResults = lua_gettop(_state) - oldTop;
+            return MarshalResults(_state, numResults);
         }
 
         /// <summary>
@@ -353,9 +385,9 @@ namespace Triton
 
                 luaObject = typeHint switch
                 {
-                    LuaType.Table => new LuaTable(this, reference, _state),
-                    LuaType.Function => new LuaFunction(this, reference, _state),
-                    LuaType.Thread => new LuaThread(this, reference, (lua_State*)ptr),  // Special case for threads
+                    LuaType.Table => new LuaTable(this, reference, state),
+                    LuaType.Function => new LuaFunction(this, reference, state),
+                    LuaType.Thread => new LuaThread(this, reference, (lua_State*)ptr, state),
                     _ => throw new InvalidOperationException()
                 };
 
@@ -376,22 +408,13 @@ namespace Triton
         }
 
         /// <summary>
-        /// Performs a function call with <paramref name="numArgs"/> arguments.
+        /// Marshals <paramref name="numResults"/> results on the stack to an object array.
         /// </summary>
-        /// <param name="numArgs">The number of arguments.</param>
+        /// <param name="state">The Lua state.</param>
+        /// <param name="numResults">The old stack top.</param>
         /// <returns>The results.</returns>
-        internal object?[] Call(int numArgs)
+        internal object?[] MarshalResults(lua_State* state, int numResults)
         {
-            Debug.Assert(numArgs >= 0);
-
-            var oldTop = lua_gettop(_state) - numArgs - 1;
-            var status = lua_pcall(_state, numArgs, -1, 0);
-            if (status != LuaStatus.Ok)
-            {
-                ThrowUsingLuaStack<LuaEvaluationException>(_state);
-            }
-
-            var numResults = lua_gettop(_state) - oldTop;
             if (numResults == 0)
             {
                 return Array.Empty<object?>();
@@ -399,19 +422,19 @@ namespace Triton
 
             try
             {
-                ThrowIfNotEnoughLuaStack(_state, 1);  // 1 stack slot required (due to LuaObject)
+                ThrowIfNotEnoughLuaStack(state, 1);  // 1 stack slot required (due to LuaObject)
 
                 var results = new object?[numResults];
                 for (var i = 0; i < numResults; ++i)
                 {
-                    results[i] = ToObject(_state, oldTop + i + 1);
+                    results[i] = ToObject(state, i - numResults);
                 }
 
                 return results;
             }
             finally
             {
-                lua_pop(_state, numResults);
+                lua_pop(state, numResults);
             }
         }
 
@@ -435,9 +458,9 @@ namespace Triton
         internal void ThrowIfNotEnoughLuaStack(lua_State* state, int requestedSlots)
         {
             Debug.Assert(state != null);
-            Debug.Assert(requestedSlots >= 1);
+            Debug.Assert(requestedSlots >= 0);
 
-            if (!lua_checkstack(state, requestedSlots))
+            if (requestedSlots > 0 && !lua_checkstack(state, requestedSlots))
             {
                 throw new LuaStackException(requestedSlots);
             }
@@ -460,11 +483,11 @@ namespace Triton
             }
             finally
             {
-                lua_pop(_state, 1);
+                lua_pop(state, 1);
             }
         }
 
-        // Loads a string as a chunk onto the stack.
+        // Loads a Lua chunk onto the stack as a function.
         private void LoadStringInternal(string chunk)
         {
             if (chunk is null)

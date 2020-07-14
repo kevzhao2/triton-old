@@ -19,6 +19,8 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Diagnostics;
+using Triton.Native;
 using static Triton.Native.NativeMethods;
 
 namespace Triton
@@ -70,7 +72,22 @@ namespace Triton
                 throw;
             }
 
-            return _environment.Call(args.Length);
+            return CallInternal(args.Length);
+        }
+
+        private object?[] CallInternal(int numArgs)
+        {
+            Debug.Assert(numArgs >= 0);
+
+            var oldTop = lua_gettop(_state) - numArgs - 1;
+            var status = lua_pcall(_state, numArgs, -1, 0);
+            if (status != LuaStatus.Ok)
+            {
+                _environment.ThrowUsingLuaStack<LuaEvaluationException>(_state);
+            }
+
+            var numResults = lua_gettop(_state) - oldTop;
+            return _environment.MarshalResults(_state, numResults);
         }
     }
 }

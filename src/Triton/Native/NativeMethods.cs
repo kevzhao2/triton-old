@@ -233,7 +233,10 @@ namespace Triton.Native
         // TODO: lua_remove
         // TODO: lua_replace
         // TODO: lua_resetthread
-        // TODO: lua_resume
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern LuaStatus lua_resume(lua_State* L, lua_State* from, int nargs, int* nresults);
+
         // TODO: lua_rotate
         // TODO: lua_setallocf
 
