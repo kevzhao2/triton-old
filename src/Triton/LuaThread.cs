@@ -160,7 +160,7 @@ namespace Triton
             var status = lua_resume(_state, null, numArgs, &numResults);
             if (status != LuaStatus.Ok && status != LuaStatus.Yield)
             {
-                _environment.ThrowUsingLuaStack<LuaEvaluationException>(_state);
+                throw _environment.CreateExceptionFromLuaStack<LuaEvaluationException>(_state);
             }
 
             return _environment.MarshalResults(_state, numResults);

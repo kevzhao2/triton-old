@@ -21,6 +21,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Dynamic;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -57,6 +58,7 @@ namespace Triton
         /// <summary>
         /// Finalizes the <see cref="LuaEnvironment"/> instance.
         /// </summary>
+        [ExcludeFromCodeCoverage]
         ~LuaEnvironment()
         {
             DisposeUnmanaged();
@@ -245,7 +247,7 @@ namespace Triton
             var status = lua_pcall(_state, 0, -1, 0);
             if (status != LuaStatus.Ok)
             {
-                ThrowUsingLuaStack<LuaEvaluationException>(_state);
+                throw CreateExceptionFromLuaStack<LuaEvaluationException>(_state);
             }
 
             var numResults = lua_gettop(_state) - oldTop;
@@ -481,11 +483,11 @@ namespace Triton
         }
 
         /// <summary>
-        /// Throws a <typeparamref name="TException"/> constructed from the top of the Lua stack.
+        /// Creates a <typeparamref name="TException"/> instance from the top of the Lua stack.
         /// </summary>
         /// <typeparam name="TException">The type of exception.</typeparam>
         /// <param name="state">The Lua state.</param>
-        internal void ThrowUsingLuaStack<TException>(lua_State* state) where TException : LuaException
+        internal TException CreateExceptionFromLuaStack<TException>(lua_State* state) where TException : LuaException
         {
             Debug.Assert(state != null);
             Debug.Assert(lua_type(state, -1) == LuaType.String);
@@ -493,7 +495,7 @@ namespace Triton
             try
             {
                 var message = (string)ToObject(state, -1, typeHint: LuaType.String)!;
-                throw (TException)Activator.CreateInstance(typeof(TException), message);
+                return (TException)Activator.CreateInstance(typeof(TException), message);
             }
             finally
             {
@@ -517,7 +519,7 @@ namespace Triton
 
             if (status != LuaStatus.Ok)
             {
-                ThrowUsingLuaStack<LuaLoadException>(_state);
+                throw CreateExceptionFromLuaStack<LuaLoadException>(_state);
             }
         }
 

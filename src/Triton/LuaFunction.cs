@@ -85,7 +85,7 @@ namespace Triton
             var status = lua_pcall(_state, numArgs, -1, 0);
             if (status != LuaStatus.Ok)
             {
-                _environment.ThrowUsingLuaStack<LuaEvaluationException>(_state);
+                throw _environment.CreateExceptionFromLuaStack<LuaEvaluationException>(_state);
             }
 
             var numResults = lua_gettop(_state) - oldTop;
