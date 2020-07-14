@@ -113,6 +113,20 @@ namespace Triton
         }
 
         /// <inheritdoc/>
+        public override bool TryGetMember(GetMemberBinder binder, out object result)
+        {
+            result = this[binder.Name]!;
+            return true;
+        }
+
+        /// <inheritdoc/>
+        public override bool TrySetMember(SetMemberBinder binder, object value)
+        {
+            this[binder.Name] = value;
+            return true;
+        }
+
+        /// <inheritdoc/>
         public void Dispose()
         {
             if (!_isDisposed)

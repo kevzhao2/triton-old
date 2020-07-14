@@ -26,6 +26,16 @@ namespace Triton
     public unsafe class LuaEnvironmentTests
     {
         [Fact]
+        public void Set_Get_Dynamic()
+        {
+            using dynamic environment = new LuaEnvironment();
+
+            environment.test = 123;
+
+            Assert.Equal(123L, environment.test);
+        }
+
+        [Fact]
         public void Item_Get_NullGlobal_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();
@@ -57,6 +67,16 @@ namespace Triton
             environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => environment["test"]);
+        }
+
+        [Fact]
+        public void Item_Set_WrongEnvironment_ThrowsInvalidOperationException()
+        {
+            using var environment = new LuaEnvironment();
+            using var environment2 = new LuaEnvironment();
+            var table = environment.CreateTable();
+
+            Assert.Throws<InvalidOperationException>(() => environment2["test"] = table);
         }
 
         [Fact]
@@ -129,6 +149,17 @@ namespace Triton
             environment["test"] = function;
 
             Assert.Same(function, environment["test"]);
+        }
+
+        [Fact]
+        public void Item_Set_Get_Thread()
+        {
+            using var environment = new LuaEnvironment();
+            var thread = environment.CreateThread();
+
+            environment["test"] = thread;
+
+            Assert.Same(thread, environment["test"]);
         }
 
         [Fact]
