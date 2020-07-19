@@ -102,6 +102,14 @@ namespace Triton
         {
             if (!_isDisposed)
             {
+                foreach (var (_, (_, weakReference)) in _luaObjects)
+                {
+                    if (weakReference.TryGetTarget(out var obj))
+                    {
+                        obj.Dispose();
+                    }
+                }
+
                 lua_close(_state);
                 GC.SuppressFinalize(this);
 
@@ -258,10 +266,12 @@ namespace Triton
 
             LuaObject ToLuaObject(IntPtr state, int index, LuaType type)
             {
+                LuaObject obj;
+
                 var ptr = lua_topointer(state, index);
                 if (_luaObjects.TryGetValue(ptr, out var tuple))
                 {
-                    if (tuple.weakReference.TryGetTarget(out var obj))
+                    if (tuple.weakReference.TryGetTarget(out obj))
                     {
                         return obj;
                     }
@@ -273,16 +283,16 @@ namespace Triton
                     tuple.reference = luaL_ref(state, LUA_REGISTRYINDEX);
                 }
 
-                LuaObject luaObject = type switch  // Cannot use `var` here since type inference fails
+                obj = type switch  // Cannot use `var` here since type inference fails
                 {
                     LuaType.Table => new LuaTable(this, tuple.reference, state),
                     LuaType.Function => new LuaFunction(this, tuple.reference, state),
                     _ => new LuaThread(this, tuple.reference, ptr)  // Special case for threads
                 };
 
-                tuple.weakReference = new WeakReference<LuaObject>(luaObject);
+                tuple.weakReference = new WeakReference<LuaObject>(obj);
                 _luaObjects[ptr] = tuple;
-                return luaObject;
+                return obj;
             }
         }
 
