@@ -71,26 +71,13 @@ namespace Triton
         public static unsafe LuaType lua_getfield(IntPtr L, int index, string k)
         {
             var maxLength = Encoding.UTF8.GetMaxByteCount(k.Length) + 1;
-            if (maxLength <= 1024)
-            {
-                var buffer = stackalloc byte[1024];
-                fixed (char* kPtr = k)
-                {
-                    var length = Encoding.UTF8.GetBytes(kPtr, k.Length, buffer, maxLength);
-                    buffer[length] = 0;
-                }
 
-                return lua_getfield(L, index, (IntPtr)buffer);
-            }
-            else
-            {
-                var buffer = (byte*)Marshal.AllocHGlobal(maxLength);
-                fixed (char* kPtr = k)
-                {
-                    var length = Encoding.UTF8.GetBytes(kPtr, k.Length, buffer, maxLength);
-                    buffer[length] = 0;
-                }
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(k, span);
+            span[length] = 0;  // Null terminator
 
+            fixed (byte* buffer = span)
+            {
                 return lua_getfield(L, index, (IntPtr)buffer);
             }
         }
@@ -98,26 +85,13 @@ namespace Triton
         public static unsafe LuaType lua_getglobal(IntPtr L, string name)
         {
             var maxLength = Encoding.UTF8.GetMaxByteCount(name.Length) + 1;
-            if (maxLength <= 1024)
-            {
-                var buffer = stackalloc byte[1024];
-                fixed (char* namePtr = name)
-                {
-                    var length = Encoding.UTF8.GetBytes(namePtr, name.Length, buffer, maxLength);
-                    buffer[length] = 0;
-                }
 
-                return lua_getglobal(L, (IntPtr)buffer);
-            }
-            else
-            {
-                var buffer = (byte*)Marshal.AllocHGlobal(maxLength);
-                fixed (char* namePtr = name)
-                {
-                    var length = Encoding.UTF8.GetBytes(namePtr, name.Length, buffer, maxLength);
-                    buffer[length] = 0;
-                }
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(name, span);
+            span[length] = 0;  // Null terminator
 
+            fixed (byte* buffer = span)
+            {
                 return lua_getglobal(L, (IntPtr)buffer);
             }
         }
@@ -183,23 +157,13 @@ namespace Triton
         public static unsafe IntPtr lua_pushstring(IntPtr L, string s)
         {
             var maxLength = Encoding.UTF8.GetMaxByteCount(s.Length);
-            if (maxLength <= 1024)
+
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(s, span);
+
+            fixed (byte* buffer = span)
             {
-                var buffer = stackalloc byte[1024];
-                fixed (char* sPtr = s)
-                {
-                    var length = Encoding.UTF8.GetBytes(sPtr, s.Length, buffer, maxLength);
-                    return lua_pushlstring(L, (IntPtr)buffer, (UIntPtr)length);
-                }
-            }
-            else
-            {
-                var buffer = (byte*)Marshal.AllocHGlobal(maxLength);
-                fixed (char* sPtr = s)
-                {
-                    var length = Encoding.UTF8.GetBytes(sPtr, s.Length, buffer, maxLength);
-                    return lua_pushlstring(L, (IntPtr)buffer, (UIntPtr)length);
-                }
+                return lua_pushlstring(L, (IntPtr)buffer, (UIntPtr)length);
             }
         }
 
@@ -221,26 +185,13 @@ namespace Triton
         public static unsafe void lua_setfield(IntPtr L, int index, string k)
         {
             var maxLength = Encoding.UTF8.GetMaxByteCount(k.Length) + 1;
-            if (maxLength <= 1024)
-            {
-                var buffer = stackalloc byte[1024];
-                fixed (char* kPtr = k)
-                {
-                    var length = Encoding.UTF8.GetBytes(kPtr, k.Length, buffer, maxLength);
-                    buffer[length] = 0;
-                }
 
-                lua_setfield(L, index, (IntPtr)buffer);
-            }
-            else
-            {
-                var buffer = (byte*)Marshal.AllocHGlobal(maxLength);
-                fixed (char* kPtr = k)
-                {
-                    var length = Encoding.UTF8.GetBytes(kPtr, k.Length, buffer, maxLength);
-                    buffer[length] = 0;
-                }
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(k, span);
+            span[length] = 0;  // Null terminator
 
+            fixed (byte* buffer = span)
+            {
                 lua_setfield(L, index, (IntPtr)buffer);
             }
         }
@@ -248,26 +199,13 @@ namespace Triton
         public static unsafe void lua_setglobal(IntPtr L, string name)
         {
             var maxLength = Encoding.UTF8.GetMaxByteCount(name.Length) + 1;
-            if (maxLength <= 1024)
-            {
-                var buffer = stackalloc byte[1024];
-                fixed (char* namePtr = name)
-                {
-                    var length = Encoding.UTF8.GetBytes(namePtr, name.Length, buffer, maxLength);
-                    buffer[length] = 0;
-                }
 
-                lua_setglobal(L, (IntPtr)buffer);
-            }
-            else
-            {
-                var buffer = (byte*)Marshal.AllocHGlobal(maxLength);
-                fixed (char* namePtr = name)
-                {
-                    var length = Encoding.UTF8.GetBytes(namePtr, name.Length, buffer, maxLength);
-                    buffer[length] = 0;
-                }
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(name, span);
+            span[length] = 0;  // Null terminator
 
+            fixed (byte* buffer = span)
+            {
                 lua_setglobal(L, (IntPtr)buffer);
             }
         }
@@ -350,27 +288,42 @@ namespace Triton
         public static unsafe LuaStatus luaL_loadstring(IntPtr L, string s)
         {
             var maxLength = Encoding.UTF8.GetMaxByteCount(s.Length) + 1;
-            if (maxLength <= 1024)
-            {
-                var buffer = stackalloc byte[1024];
-                fixed (char* sPtr = s)
-                {
-                    var length = Encoding.UTF8.GetBytes(sPtr, s.Length, buffer, maxLength);
-                    buffer[length] = 0;
-                }
 
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(s, span);
+            span[length] = 0;  // Null terminator
+
+            fixed (byte* buffer = span)
+            {
                 return luaL_loadstring(L, (IntPtr)buffer);
             }
-            else
-            {
-                var buffer = (byte*)Marshal.AllocHGlobal(maxLength);
-                fixed (char* sPtr = s)
-                {
-                    var length = Encoding.UTF8.GetBytes(sPtr, s.Length, buffer, maxLength);
-                    buffer[length] = 0;
-                }
+        }
 
-                return luaL_loadstring(L, (IntPtr)buffer);
+        public static unsafe bool luaL_newmetatable(IntPtr L, string tname)
+        {
+            var maxLength = Encoding.UTF8.GetMaxByteCount(tname.Length) + 1;
+
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(tname, span);
+            span[length] = 0;  // Null terminator
+
+            fixed (byte* buffer = span)
+            {
+                return luaL_newmetatable(L, (IntPtr)buffer);
+            }
+        }
+
+        public static unsafe void luaL_setmetatable(IntPtr L, string tname)
+        {
+            var maxLength = Encoding.UTF8.GetMaxByteCount(tname.Length) + 1;
+
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(tname, span);
+            span[length] = 0;  // Null terminator
+
+            fixed (byte* buffer = span)
+            {
+                luaL_setmetatable(L, (IntPtr)buffer);
             }
         }
 
@@ -385,6 +338,12 @@ namespace Triton
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void luaL_unref(IntPtr L, int t, int @ref);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        private static extern bool luaL_newmetatable(IntPtr L, IntPtr tname);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        private static extern void luaL_setmetatable(IntPtr L, IntPtr tname);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         private static extern LuaStatus luaL_loadstring(IntPtr L, IntPtr s);

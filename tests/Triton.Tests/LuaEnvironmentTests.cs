@@ -288,5 +288,24 @@ namespace Triton
             Assert.True(result2.IsNil);
             Assert.True(result3.IsNil);
         }
+
+        [Theory]
+        [InlineData(10000)]
+        public void DeadReferencesGetGarbageCollected(int loops)
+        {
+            using var environment = new LuaEnvironment();
+
+            for (var i = 0; i < loops; ++i)
+            {
+                _ = environment.CreateTable();
+                _ = environment.CreateFunction("return");
+                _ = environment.CreateThread();
+
+                for (var j = 0; j < 100; ++j)
+                {
+                    environment.Eval("t = {}");
+                }
+            }
+        }
     }
 }

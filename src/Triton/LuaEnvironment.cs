@@ -31,7 +31,10 @@ namespace Triton
     /// </summary>
     public class LuaEnvironment : IDisposable
     {
+        private const string GcHelperMetatable = "<>__gcHelper";
+
         internal readonly IntPtr _state;  // The Lua state
+        private readonly lua_CFunction _gcCallback;
 
         private readonly Dictionary<IntPtr, (int reference, WeakReference<LuaObject> weakReference)> _luaObjects =
             new Dictionary<IntPtr, (int, WeakReference<LuaObject>)>();
@@ -45,6 +48,16 @@ namespace Triton
         {
             _state = luaL_newstate();
             luaL_openlibs(_state);  // Open all standard libraries by default for convenience
+
+            // Set up a helper metatable which calls `GcCallback` when the associated object is garbage collected. This
+            // allows us to run code whenever garbage collection occurs in Lua.
+            luaL_newmetatable(_state, GcHelperMetatable);
+            lua_pushstring(_state, "__gc");
+            lua_pushcfunction(_state, _gcCallback = GcCallback);
+            lua_settable(_state, -3);
+            lua_pop(_state, 1);
+
+            SetupGcCallback();
         }
 
         /// <summary>
@@ -310,6 +323,35 @@ namespace Triton
 
             var message = lua_tostring(state, -1);
             return (TException)Activator.CreateInstance(typeof(TException), message);
+        }
+
+        private int GcCallback(IntPtr state)
+        {
+            // Clean up any dead `LuaObject` references.
+            var deadPtrs = new List<IntPtr>(_luaObjects.Count);
+            foreach (var (ptr, (reference, weakReference)) in _luaObjects)
+            {
+                if (!weakReference.TryGetTarget(out _))
+                {
+                    luaL_unref(_state, LUA_REGISTRYINDEX, reference);
+                    deadPtrs.Add(ptr);
+                }
+            }
+
+            foreach (var deadPtr in deadPtrs)
+            {
+                _luaObjects.Remove(deadPtr);
+            }
+
+            SetupGcCallback();
+            return 0;
+        }
+
+        private void SetupGcCallback()
+        {
+            lua_newtable(_state);
+            luaL_setmetatable(_state, GcHelperMetatable);
+            lua_pop(_state, 1);
         }
 
         private void LoadString(string chunk)
