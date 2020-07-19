@@ -23,18 +23,8 @@ using Xunit;
 
 namespace Triton
 {
-    public unsafe class LuaEnvironmentTests
+    public class LuaEnvironmentTests
     {
-        [Fact]
-        public void Set_Get_Dynamic()
-        {
-            using dynamic environment = new LuaEnvironment();
-
-            environment.test = 123;
-
-            Assert.Equal(123L, environment.test);
-        }
-
         [Fact]
         public void Item_Get_NullGlobal_ThrowsArgumentNullException()
         {
@@ -61,22 +51,12 @@ namespace Triton
         }
 
         [Fact]
-        public void Item_Set_EnvironmentDisposed_ThrowsArgumentNullException()
+        public void Item_Set_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
             var environment = new LuaEnvironment();
             environment.Dispose();
 
-            Assert.Throws<ObjectDisposedException>(() => environment["test"]);
-        }
-
-        [Fact]
-        public void Item_Set_WrongEnvironment_ThrowsInvalidOperationException()
-        {
-            using var environment = new LuaEnvironment();
-            using var environment2 = new LuaEnvironment();
-            var table = environment.CreateTable();
-
-            Assert.Throws<InvalidOperationException>(() => environment2["test"] = table);
+            Assert.Throws<ObjectDisposedException>(() => environment["test"] = 1234);
         }
 
         [Fact]
@@ -84,9 +64,9 @@ namespace Triton
         {
             using var environment = new LuaEnvironment();
 
-            environment["test"] = null;
+            environment["test"] = LuaVariant.Nil;
 
-            Assert.Null(environment["test"]);
+            Assert.True(environment["test"].IsNil);
         }
 
         [Fact]
@@ -96,7 +76,7 @@ namespace Triton
 
             environment["test"] = true;
 
-            Assert.Equal(true, environment["test"]);
+            Assert.True((bool)environment["test"]);
         }
 
         [Fact]
@@ -106,7 +86,7 @@ namespace Triton
 
             environment["test"] = 1234;
 
-            Assert.Equal(1234L, environment["test"]);
+            Assert.Equal(1234, (long)environment["test"]);
         }
 
         [Fact]
@@ -116,7 +96,7 @@ namespace Triton
 
             environment["test"] = 1.234;
 
-            Assert.Equal(1.234, environment["test"]);
+            Assert.Equal(1.234, (double)environment["test"]);
         }
 
         [Fact]
@@ -126,42 +106,9 @@ namespace Triton
 
             environment["test"] = "This is a test string!";
 
-            Assert.Equal("This is a test string!", environment["test"]);
+            Assert.Equal("This is a test string!", (string?)environment["test"]);
         }
-
-        [Fact]
-        public void Item_Set_Get_Table()
-        {
-            using var environment = new LuaEnvironment();
-            var table = environment.CreateTable();
-
-            environment["test"] = table;
-
-            Assert.Same(table, environment["test"]);
-        }
-
-        [Fact]
-        public void Item_Set_Get_Function()
-        {
-            using var environment = new LuaEnvironment();
-            var function = environment.CreateFunction("return 0");
-
-            environment["test"] = function;
-
-            Assert.Same(function, environment["test"]);
-        }
-
-        [Fact]
-        public void Item_Set_Get_Thread()
-        {
-            using var environment = new LuaEnvironment();
-            var thread = environment.CreateThread();
-
-            environment["test"] = thread;
-
-            Assert.Same(thread, environment["test"]);
-        }
-
+        
         [Fact]
         public void CreateTable_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
@@ -186,7 +133,7 @@ namespace Triton
 
             Assert.Throws<ArgumentOutOfRangeException>(() => environment.CreateTable(nonSequentialCapacity: -1));
         }
-
+        
         [Fact]
         public void CreateFunction_NullChunk_ThrowsArgumentNullException()
         {
@@ -213,28 +160,12 @@ namespace Triton
         }
 
         [Fact]
-        public void CreateFunction()
-        {
-            using var environment = new LuaEnvironment();
-
-            var function = environment.CreateFunction("return 0");
-        }
-
-        [Fact]
         public void CreateThread_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
             var environment = new LuaEnvironment();
             environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => environment.CreateThread());
-        }
-
-        [Fact]
-        public void CreateThread()
-        {
-            using var environment = new LuaEnvironment();
-
-            var thread = environment.CreateThread();
         }
 
         [Fact]
@@ -251,7 +182,7 @@ namespace Triton
             var environment = new LuaEnvironment();
             environment.Dispose();
 
-            Assert.Throws<ObjectDisposedException>(() => environment.Eval("return 0"));
+            Assert.Throws<ObjectDisposedException>(() => environment.Eval("return"));
         }
 
         [Fact]
@@ -271,12 +202,48 @@ namespace Triton
         }
 
         [Fact]
-        public void Eval()
+        public void Eval_OneResult()
         {
             using var environment = new LuaEnvironment();
 
-            Assert.Collection(environment.Eval("return 0"),
-                value => Assert.Equal(0L, value));
+            var (result, _) = environment.Eval("return 0");
+
+            Assert.Equal(0, (long)result);
+        }
+
+        [Fact]
+        public void Eval_TwoResults()
+        {
+            using var environment = new LuaEnvironment();
+
+            var (result, result2, _) = environment.Eval("return 0, 'test'");
+
+            Assert.Equal(0, (long)result);
+            Assert.Equal("test", (string?)result2);
+        }
+
+        [Fact]
+        public void Eval_ThreeResults()
+        {
+            using var environment = new LuaEnvironment();
+
+            var (result, result2, result3, _) = environment.Eval("return 0, 'test', 1.234");
+
+            Assert.Equal(0, (long)result);
+            Assert.Equal("test", (string?)result2);
+            Assert.Equal(1.234, (double)result3);
+        }
+
+        [Fact]
+        public void Eval_ExtraResults_AreNil()
+        {
+            using var environment = new LuaEnvironment();
+
+            var (result, result2, result3, _) = environment.Eval("return 0");
+
+            Assert.Equal(0, (long)result);
+            Assert.True(result2.IsNil);
+            Assert.True(result3.IsNil);
         }
     }
 }

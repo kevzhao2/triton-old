@@ -20,76 +20,123 @@
 
 using System;
 using System.Diagnostics;
-using Triton.Native;
-using static Triton.Native.NativeMethods;
+using static Triton.NativeMethods;
 
 namespace Triton
 {
     /// <summary>
     /// Represents a Lua function.
     /// </summary>
-    public sealed unsafe class LuaFunction : LuaObject
+    public sealed class LuaFunction : LuaObject
     {
-        internal LuaFunction(LuaEnvironment environment, int reference, lua_State* state) :
+        internal LuaFunction(LuaEnvironment environment, int reference, IntPtr state) :
             base(environment, reference, state)
         {
         }
 
-        // TODO: consider optimization by adding generic overloads
+        /// <summary>
+        /// Calls the function with no arguments.
+        /// </summary>
+        /// <returns>The results.</returns>
+        /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua function is disposed.</exception>
+        public LuaResults Call()
+        {
+            CallPrologue();  // Performs validation
+            return CallShared(0);
+        }
+
+        /// <summary>
+        /// Calls the function with a single argument.
+        /// </summary>
+        /// <param name="arg">The argument.</param>
+        /// <returns>The results.</returns>
+        /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua function is disposed.</exception>
+        public LuaResults Call(in LuaVariant arg)
+        {
+            CallPrologue();  // Performs validation.
+            arg.Push(_state);
+            return CallShared(1);
+        }
+
+        /// <summary>
+        /// Calls the function with two arguments.
+        /// </summary>
+        /// <param name="arg">The first argument.</param>
+        /// <param name="arg2">The second argument.</param>
+        /// <returns>The results.</returns>
+        /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua function is disposed.</exception>
+        public LuaResults Call(in LuaVariant arg, in LuaVariant arg2)
+        {
+            CallPrologue();  // Performs validation
+            arg.Push(_state);
+            arg2.Push(_state);
+            return CallShared(2);
+        }
+
+        /// <summary>
+        /// Calls the function with three arguments.
+        /// </summary>
+        /// <param name="arg">The first argument.</param>
+        /// <param name="arg2">The second argument.</param>
+        /// <param name="arg3">The third argument.</param>
+        /// <returns>The results.</returns>
+        /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua function is disposed.</exception>
+        public LuaResults Call(in LuaVariant arg, in LuaVariant arg2, in LuaVariant arg3)
+        {
+            CallPrologue();  // Performs validation
+            arg.Push(_state);
+            arg2.Push(_state);
+            arg3.Push(_state);
+            return CallShared(3);
+        }
 
         /// <summary>
         /// Calls the function with the specified arguments.
         /// </summary>
         /// <param name="args">The arguments.</param>
-        /// <returns>The function results.</returns>
+        /// <returns>The results.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="args"/> is <see langword="null"/>.</exception>
         /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
-        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
-        public object?[] Call(params object?[] args)
+        /// <exception cref="ObjectDisposedException">The Lua function is disposed.</exception>
+        public LuaResults Call(params LuaVariant[] args)
         {
             if (args is null)
             {
                 throw new ArgumentNullException(nameof(args));
             }
 
-            _environment.ThrowIfDisposed();
-            _environment.ThrowIfNotEnoughLuaStack(_state, 1 + args.Length);  // (1 + numArgs) stack slots required
-
-            lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-            var stackDelta = 1;
-
-            try
+            CallPrologue();  // Performs validation
+            for (var i = 0; i < args.Length; ++i)
             {
-
-                foreach (var arg in args)
-                {
-                    _environment.PushObject(_state, arg);
-                    ++stackDelta;
-                }
+                args[i].Push(_state);
             }
-            catch
-            {
-                lua_pop(_state, stackDelta);
-                throw;
-            }
-
-            return CallInternal(args.Length);
+            return CallShared(args.Length);
         }
 
-        private object?[] CallInternal(int numArgs)
+        private void CallPrologue()
+        {
+            ThrowIfDisposed();
+
+            lua_settop(_state, 0);  // Reset stack
+
+            lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+        }
+
+        private LuaResults CallShared(int numArgs)
         {
             Debug.Assert(numArgs >= 0);
 
-            var oldTop = lua_gettop(_state) - numArgs - 1;
             var status = lua_pcall(_state, numArgs, -1, 0);
             if (status != LuaStatus.Ok)
             {
-                throw _environment.CreateExceptionFromLuaStack<LuaEvalException>(_state);
+                throw _environment.CreateExceptionFromStack<LuaEvalException>(_state);
             }
 
-            var numResults = lua_gettop(_state) - oldTop;
-            return _environment.MarshalResults(_state, numResults);
+            return new LuaResults(_environment, _state);
         }
     }
 }

@@ -19,18 +19,16 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Dynamic;
-using Triton.Native;
-using static Triton.Native.NativeMethods;
+using static Triton.NativeMethods;
 
 namespace Triton
 {
     /// <summary>
     /// Represents a Lua table.
     /// </summary>
-    public sealed unsafe class LuaTable : LuaObject
+    public sealed class LuaTable : LuaObject
     {
-        internal LuaTable(LuaEnvironment environment, int reference, lua_State* state) :
+        internal LuaTable(LuaEnvironment environment, int reference, IntPtr state) :
             base(environment, reference, state)
         {
         }
@@ -41,9 +39,8 @@ namespace Triton
         /// <param name="field">The field.</param>
         /// <returns>The value of the given <paramref name="field"/>.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="field"/> is <see langword="null"/>.</exception>
-        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
-        public object? this[string field]
+        /// <exception cref="ObjectDisposedException">The Lua table is disposed.</exception>
+        public LuaVariant this[string field]
         {
             get
             {
@@ -52,22 +49,9 @@ namespace Triton
                     throw new ArgumentNullException(nameof(field));
                 }
 
-                _environment.ThrowIfDisposed();
-                _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
-
-                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-
-                using var buffer = _environment.CreateStringBuffer(field);
-                var type = lua_getfield(_state, -1, buffer);
-
-                try
-                {
-                    return _environment.ToObject(_state, -1, typeHint: type);
-                }
-                finally
-                {
-                    lua_pop(_state, 2);  // Pop the table and value off the stack
-                }
+                IndexerPrologue();  // Performs validation
+                var type = lua_getfield(_state, -1, field);
+                return GetterShared(type);
             }
 
             set
@@ -77,212 +61,73 @@ namespace Triton
                     throw new ArgumentNullException(nameof(field));
                 }
 
-                _environment.ThrowIfDisposed();
-                _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
-
-                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-
-                try
-                {
-                    _environment.PushObject(_state, value);
-
-                    using var buffer = _environment.CreateStringBuffer(field);
-                    lua_setfield(_state, -2, buffer);
-                }
-                finally
-                {
-                    lua_pop(_state, 1);  // Pop the table off the stack
-                }
+                IndexerPrologue();  // Performs validation
+                value.Push(_state);
+                lua_setfield(_state, -2, field);
             }
         }
 
         /// <summary>
-        /// Gets or sets the value with the given <paramref name="index"/>.
+        /// Gets or sets the value of the given <paramref name="index"/>.
         /// </summary>
         /// <param name="index">The index.</param>
-        /// <returns>The value with the given <paramref name="index"/>.</returns>
-        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
-        public object? this[long index]
+        /// <returns>The value of the given <paramref name="index"/>.</returns>
+        /// <exception cref="ObjectDisposedException">The Lua table is disposed.</exception>
+        public LuaVariant this[long index]
         {
             get
             {
-                _environment.ThrowIfDisposed();
-                _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
-
-                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-
+                IndexerPrologue();  // Performs validation
                 var type = lua_geti(_state, -1, index);
-
-                try
-                { 
-                    return _environment.ToObject(_state, -1, typeHint: type);
-                }
-                finally
-                {
-                    lua_pop(_state, 2);  // Pop the table and value off the stack
-                }
+                return GetterShared(type);
             }
 
             set
             {
-                _environment.ThrowIfDisposed();
-                _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
-
-                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-
-                try
-                {
-                    _environment.PushObject(_state, value);
-
-                    lua_seti(_state, -2, index);
-                }
-                finally
-                {
-                    lua_pop(_state, 1);  // Pop the table off the stack
-                }
+                IndexerPrologue();  // Performs validation
+                value.Push(_state);
+                lua_seti(_state, -2, index);
             }
         }
- 
+
         /// <summary>
-        /// Gets or sets the value corresponding to the given <paramref name="key"/>.
+        /// Gets or sets the value of the given <paramref name="key"/>.
         /// </summary>
         /// <param name="key">The key.</param>
-        /// <returns>The value corresponding to the given <paramref name="key"/>.</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="key"/> is <see langword="null"/>.</exception>
-        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
-        public object? this[object key]
+        /// <returns>The value of the given <paramref name="key"/>.</returns>
+        /// <exception cref="ObjectDisposedException">The Lua table is disposed.</exception>
+        public LuaVariant this[LuaVariant key]
         {
             get
             {
-                if (key is null)
-                {
-                    throw new ArgumentNullException(nameof(key));
-                }
-
-                _environment.ThrowIfDisposed();
-                _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
-
-                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-                var stackDelta = 1;
-
-                try
-                {
-                    _environment.PushObject(_state, key);
-                    ++stackDelta;
-
-                    var type = lua_gettable(_state, -2);
-                    return _environment.ToObject(_state, -1, typeHint: type);
-                }
-                finally
-                {
-                    lua_pop(_state, stackDelta);  // Pop the table (and value, if applicable) off the stack
-                }
+                IndexerPrologue();  // Performs validation
+                key.Push(_state);
+                var type = lua_gettable(_state, -2);
+                return GetterShared(type);
             }
 
             set
             {
-                if (key is null)
-                {
-                    throw new ArgumentNullException(nameof(key));
-                }
-
-                _environment.ThrowIfDisposed();
-                _environment.ThrowIfNotEnoughLuaStack(_state, 3);  // 3 stack slots required
-
-                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-                var stackDelta = 1;
-
-                try
-                {
-                    _environment.PushObject(_state, key);
-                    ++stackDelta;
-
-                    _environment.PushObject(_state, value);
-                    // ++stackDelta;
-
-                    lua_settable(_state, -3);
-                    // stackDelta -= 2;
-                    --stackDelta;
-                }
-                finally
-                {
-                    lua_pop(_state, stackDelta);  // Pop the table (and key, if applicable) off the stack
-                }
+                IndexerPrologue();  // Performs validation
+                key.Push(_state);
+                value.Push(_state);
+                lua_settable(_state, -3);
             }
         }
 
-        /// <summary>
-        /// Gets or sets the table's metatable.
-        /// </summary>
-        /// <value>The metatable, or <see langword="null"/> if there is none.</value>
-        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
-        public LuaTable? Metatable
+        private void IndexerPrologue()
         {
-            get
-            {
-                _environment.ThrowIfDisposed();
-                _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
+            ThrowIfDisposed();
 
-                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
+            lua_settop(_state, 0);  // Reset stack
 
-                if (!lua_getmetatable(_state, -1))
-                {
-                    lua_pop(_state, 1);  // Pop the table off the stack
-                    return null;
-                }
-
-                try
-                {
-                    return (LuaTable)_environment.ToObject(_state, -1, typeHint: LuaType.Table)!;
-                }
-                finally
-                {
-                    lua_pop(_state, 2);  // Pop the table and metatable off the stack
-                }
-            }
-
-            set
-            {
-                _environment.ThrowIfDisposed();
-                _environment.ThrowIfNotEnoughLuaStack(_state, 2);  // 2 stack slots required
-
-                lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-
-                try
-                {
-                    if (value is null)
-                    {
-                        lua_pushnil(_state);
-                    }
-                    else
-                    {
-                        _environment.PushObject(_state, value);
-                    }
-
-                    lua_setmetatable(_state, -2);
-                }
-                finally
-                {
-                    lua_pop(_state, 1);  // Pop the table off the stack
-                }
-            }
+            lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
         }
 
-        /// <inheritdoc/>
-        public override bool TryGetMember(GetMemberBinder binder, out object result)
+        private LuaVariant GetterShared(LuaType type)
         {
-            result = this[binder.Name]!;
-            return true;
-        }
-
-        /// <inheritdoc/>
-        public override bool TrySetMember(SetMemberBinder binder, object value)
-        {
-            this[binder.Name] = value;
-            return true;
+            _environment.ToVariant(_state, -1, out var variant, type);
+            return variant;
         }
     }
 }

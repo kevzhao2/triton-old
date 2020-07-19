@@ -20,17 +20,16 @@
 
 using System;
 using System.Diagnostics;
-using Triton.Native;
-using static Triton.Native.NativeMethods;
+using static Triton.NativeMethods;
 
 namespace Triton
 {
     /// <summary>
     /// Represents a Lua thread.
     /// </summary>
-    public sealed unsafe class LuaThread : LuaObject
+    public sealed class LuaThread : LuaObject
     {
-        internal LuaThread(LuaEnvironment environment, int reference, lua_State* state) :
+        internal LuaThread(LuaEnvironment environment, int reference, IntPtr state) :
             base(environment, reference, state)
         {
         }
@@ -39,12 +38,12 @@ namespace Triton
         /// Gets a value indicating whether the thread can be started.
         /// </summary>
         /// <value><see langword="true"/> if the thread can be started; otherwise, <see langword="false"/>.</value>
-        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
         public bool CanStart
         {
             get
             {
-                _environment.ThrowIfDisposed();
+                ThrowIfDisposed();
                 return lua_status(_state) == LuaStatus.Ok;
             }
         }
@@ -53,63 +52,176 @@ namespace Triton
         /// Gets a value indicating whether the thread can be resumed.
         /// </summary>
         /// <value><see langword="true"/> if the thread can be resumed; otherwise, <see langword="false"/>.</value>
-        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
         public bool CanResume
         {
             get
             {
-                _environment.ThrowIfDisposed();
+                ThrowIfDisposed();
                 return lua_status(_state) == LuaStatus.Yield;
             }
         }
 
-        // TODO: consider optimization by adding generic overloads
+        /// <summary>
+        /// Starts the thread, running the given <paramref name="function"/> with no arguments.
+        /// </summary>
+        /// <param name="function">The function to run on the thread.</param>
+        /// <returns>The results.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="function"/> is <see langword="null"/>.</exception>
+        /// <exception cref="InvalidOperationException">The Lua thread cannot be started.</exception>
+        /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        public LuaResults Start(LuaFunction function)
+        {
+            StartPrologue(function);  // Performs validation
+            return StartOrResumeShared(0);
+        }
 
         /// <summary>
-        /// Starts the thread with the given <paramref name="function"/> and <paramref name="args"/>.
+        /// Starts the thread, running the given <paramref name="function"/> with a single argument.
         /// </summary>
-        /// <param name="function">The function.</param>
+        /// <param name="function">The function to run on the thread.</param>
+        /// <param name="arg">The argument.</param>
+        /// <returns>The results.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="function"/> is <see langword="null"/>.</exception>
+        /// <exception cref="InvalidOperationException">The Lua thread cannot be started.</exception>
+        /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        public LuaResults Start(LuaFunction function, in LuaVariant arg)
+        {
+            StartPrologue(function);  // Performs validation
+            arg.Push(_state);
+            return StartOrResumeShared(1);
+        }
+
+        /// <summary>
+        /// Starts the thread, running the given <paramref name="function"/> with two arguments.
+        /// </summary>
+        /// <param name="function">The function to run on the thread.</param>
+        /// <param name="arg">The first argument.</param>
+        /// <param name="arg2">The second argument.</param>
+        /// <returns>The results.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="function"/> is <see langword="null"/>.</exception>
+        /// <exception cref="InvalidOperationException">The Lua thread cannot be started.</exception>
+        /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        public LuaResults Start(LuaFunction function, in LuaVariant arg, in LuaVariant arg2)
+        {
+            StartPrologue(function);  // Performs validation
+            arg.Push(_state);
+            arg2.Push(_state);
+            return StartOrResumeShared(2);
+        }
+
+        /// <summary>
+        /// Starts the thread, running the given <paramref name="function"/> with three arguments.
+        /// </summary>
+        /// <param name="function">The function to run on the thread.</param>
+        /// <param name="arg">The first argument.</param>
+        /// <param name="arg2">The second argument.</param>
+        /// <param name="arg3">The third argument.</param>
+        /// <returns>The results.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="function"/> is <see langword="null"/>.</exception>
+        /// <exception cref="InvalidOperationException">The Lua thread cannot be started.</exception>
+        /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        public LuaResults Start(LuaFunction function, in LuaVariant arg, in LuaVariant arg2, in LuaVariant arg3)
+        {
+            StartPrologue(function);  // Performs validation
+            arg.Push(_state);
+            arg2.Push(_state);
+            arg3.Push(_state);
+            return StartOrResumeShared(3);
+        }
+
+        /// <summary>
+        /// Starts the thread, running the given <paramref name="function"/> with the given <paramref name="args"/>.
+        /// </summary>
+        /// <param name="function">The function to run on the thread.</param>
         /// <param name="args">The arguments.</param>
         /// <returns>The results.</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="args"/> is <see langword="null"/>.</exception>
-        /// <exception cref="InvalidOperationException">The thread cannot be started.</exception>
-        /// <exception cref="LuaEvalException">A Lua error occurred when starting the thread.</exception>
-        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
-        public object?[] Start(LuaFunction function, params object[] args)
+        /// <exception cref="ArgumentNullException">
+        /// <paramref name="function"/> or <paramref name="args"/> are <see langword="null"/>.
+        /// </exception>
+        /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        public LuaResults Start(LuaFunction function, params LuaVariant[] args)
         {
-            if (function is null)
-            {
-                throw new ArgumentNullException(nameof(function));
-            }
-
             if (args is null)
             {
                 throw new ArgumentNullException(nameof(args));
             }
 
-            _environment.ThrowIfDisposed();
-            _environment.ThrowIfNotEnoughLuaStack(_state, 1 + args.Length);  // (1 + numArgs) stack slots required
-            ThrowIfCannotStart();
-
-            _environment.PushObject(_state, function);
-            var stackDelta = 1;
-
-            try
+            StartPrologue(function);  // Performs validation
+            for (var i = 0; i < args.Length; ++i)
             {
-                foreach (var arg in args)
-                {
-                    _environment.PushObject(_state, arg);
-                    ++stackDelta;
-                }
+                args[i].Push(_state);
             }
-            catch
-            {
-                lua_pop(_state, stackDelta);
-                throw;
-            }
+            return StartOrResumeShared(args.Length);
+        }
 
-            return ResumeInternal(args.Length);
+        /// <summary>
+        /// Resumes the thread with no arguments.
+        /// </summary>
+        /// <returns>The results.</returns>
+        /// <exception cref="InvalidOperationException">The Lua thread cannot be resumed.</exception>
+        /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        public LuaResults Resume()
+        {
+            ResumePrologue();  // Performs validation
+            return StartOrResumeShared(0);
+        }
+
+        /// <summary>
+        /// Resumes the thread with a single argument.
+        /// </summary>
+        /// <param name="arg">The argument.</param>
+        /// <returns>The results.</returns>
+        /// <exception cref="InvalidOperationException">The Lua thread cannot be resumed.</exception>
+        /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        public LuaResults Resume(in LuaVariant arg)
+        {
+            ResumePrologue();  // Performs validation
+            arg.Push(_state);
+            return StartOrResumeShared(1);
+        }
+
+        /// <summary>
+        /// Resumes the thread with two arguments.
+        /// </summary>
+        /// <param name="arg">The first argument.</param>
+        /// <param name="arg2">The second argument.</param>
+        /// <returns>The results.</returns>
+        /// <exception cref="InvalidOperationException">The Lua thread cannot be resumed.</exception>
+        /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        public LuaResults Resume(in LuaVariant arg, in LuaVariant arg2)
+        {
+            ResumePrologue();  // Performs validation
+            arg.Push(_state);
+            arg2.Push(_state);
+            return StartOrResumeShared(2);
+        }
+
+        /// <summary>
+        /// Resumes the thread with three arguments.
+        /// </summary>
+        /// <param name="arg">The first argument.</param>
+        /// <param name="arg2">The second argument.</param>
+        /// <param name="arg3">The third argument.</param>
+        /// <returns>The results.</returns>
+        /// <exception cref="InvalidOperationException">The Lua thread cannot be resumed.</exception>
+        /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        public LuaResults Resume(in LuaVariant arg, in LuaVariant arg2, in LuaVariant arg3)
+        {
+            ResumePrologue();  // Performs validation
+            arg.Push(_state);
+            arg2.Push(_state);
+            arg3.Push(_state);
+            return StartOrResumeShared(3);
         }
 
         /// <summary>
@@ -118,70 +230,62 @@ namespace Triton
         /// <param name="args">The arguments.</param>
         /// <returns>The results.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="args"/> is <see langword="null"/>.</exception>
-        /// <exception cref="InvalidOperationException">The thread cannot be resumed.</exception>
-        /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the thread.</exception>
-        /// <exception cref="LuaStackException">The Lua stack space is insufficient.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
-        public object?[] Resume(params object[] args)
+        /// <exception cref="InvalidOperationException">The Lua thread cannot be resumed.</exception>
+        /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        public LuaResults Resume(params LuaVariant[] args)
         {
             if (args is null)
             {
                 throw new ArgumentNullException(nameof(args));
             }
 
-            _environment.ThrowIfDisposed();
-            _environment.ThrowIfNotEnoughLuaStack(_state, args.Length);  // numArgs stack slots required
-            ThrowIfCannotResume();
-
-            var stackDelta = 0;
-
-            try
+            ResumePrologue();  // Performs validation
+            for (var i = 0; i < args.Length; ++i)
             {
-                foreach (var arg in args)
-                {
-                    _environment.PushObject(_state, arg);
-                    ++stackDelta;
-                }
+                args[i].Push(_state);
             }
-            catch
-            {
-                lua_pop(_state, stackDelta);
-                throw;
-            }
-
-            return ResumeInternal(args.Length);
+            return StartOrResumeShared(args.Length);
         }
 
-        private object?[] ResumeInternal(int numArgs)
+        private void StartPrologue(LuaFunction function)
         {
-            Debug.Assert(numArgs >= 0);
-
-            int numResults;
-            var status = lua_resume(_state, null, numArgs, &numResults);
-            if (status != LuaStatus.Ok && status != LuaStatus.Yield)
+            if (function is null)
             {
-                throw _environment.CreateExceptionFromLuaStack<LuaEvalException>(_state);
+                throw new ArgumentNullException(nameof(function));
             }
 
-            return _environment.MarshalResults(_state, numResults);
-        }
-
-        // Throws an `InvalidOperationException` if the thread cannot be started.
-        private void ThrowIfCannotStart()
-        {
-            if (!CanStart)
+            if (!CanStart)  // Checks for disposed
             {
                 throw new InvalidOperationException("Lua thread cannot be started");
             }
+
+            lua_settop(_state, 0);  // Reset stack
+
+            function.Push(_state);
         }
 
-        // Throws an `InvalidOperationException` if the thread cannot be resumed.
-        private void ThrowIfCannotResume()
+        private void ResumePrologue()
         {
-            if (!CanResume)
+            if (!CanResume)  // Checks for disposed
             {
                 throw new InvalidOperationException("Lua thread cannot be resumed");
             }
+
+            lua_settop(_state, 0);  // Reset stack
+        }
+
+        private LuaResults StartOrResumeShared(int numArgs)
+        {
+            Debug.Assert(numArgs >= 0);
+
+            var status = lua_resume(_state, IntPtr.Zero, numArgs, out _);
+            if (status != LuaStatus.Ok && status != LuaStatus.Yield)
+            {
+                throw _environment.CreateExceptionFromStack<LuaEvalException>(_state);
+            }
+
+            return new LuaResults(_environment, _state);
         }
     }
 }

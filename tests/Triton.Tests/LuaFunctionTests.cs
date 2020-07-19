@@ -26,174 +26,111 @@ namespace Triton
     public class LuaFunctionTests
     {
         [Fact]
-        public void Call_NullArgs_ThrowsArgumentNullException()
-        {
-            using var environment = new LuaEnvironment();
-            var function = environment.CreateFunction("return 1234");
-
-            Assert.Throws<ArgumentNullException>(() => function.Call(null!));
-        }
-
-        [Fact]
-        public void Call_NoArgs_EnvironmentDisposed_ThrowsObjectDisposedException()
-        {
-            var environment = new LuaEnvironment();
-            var function = environment.CreateFunction("return 1234");
-            environment.Dispose();
-
-            Assert.Throws<ObjectDisposedException>(() => function.Call());
-        }
-
-        [Fact]
-        public void Call_NoArgs_OneResult()
-        {
-            using var environment = new LuaEnvironment();
-            var function = environment.CreateFunction("return 1234");
-
-            Assert.Collection(function.Call(),
-                value => Assert.Equal(1234L, value));
-        }
-
-        [Fact]
-        public void Call_OneArg_EnvironmentDisposed_ThrowsObjectDisposedException()
-        {
-            var environment = new LuaEnvironment();
-            var function = environment.CreateFunction("return ...");
-            environment.Dispose();
-
-            Assert.Throws<ObjectDisposedException>(() => function.Call(5678));
-        }
-
-        [Fact]
-        public void Call_OneArg_OneResult()
-        {
-            using var environment = new LuaEnvironment();
-            var function = environment.CreateFunction("return ...");
-
-            Assert.Collection(function.Call(5678),
-                value => Assert.Equal(5678L, value));
-        }
-
-        [Fact]
-        public void Call_TwoArgs_EnvironmentDisposed_ThrowsObjectDisposedException()
-        {
-            var environment = new LuaEnvironment();
-            var function = environment.CreateFunction(@"
-                result = 0
-                for _, val in ipairs({...}) do
-                    result = result + val
-                end
-                return result");
-            environment.Dispose();
-
-            Assert.Throws<ObjectDisposedException>(() => function.Call(1234, 5678));
-        }
-
-        [Fact]
-        public void Call_TwoArgs_OneResult()
-        {
-            using var environment = new LuaEnvironment();
-            var function = environment.CreateFunction(@"
-                result = 0
-                for _, val in ipairs({...}) do
-                    result = result + val
-                end
-                return result");
-
-            Assert.Collection(function.Call(1234, 5678),
-                value => Assert.Equal(6912L, value));
-        }
-
-        [Fact]
-        public void Call_ThreeArgs_EnvironmentDisposed_ThrowsObjectDisposedException()
-        {
-            var environment = new LuaEnvironment();
-            var function = environment.CreateFunction(@"
-                result = 0
-                for _, val in ipairs({...}) do
-                    result = result + val
-                end
-                return result");
-            environment.Dispose();
-
-            Assert.Throws<ObjectDisposedException>(() => function.Call(1, 2, 3));
-        }
-
-        [Fact]
-        public void Call_ThreeArgs_OneResult()
-        {
-            using var environment = new LuaEnvironment();
-            var function = environment.CreateFunction(@"
-                result = 0
-                for _, val in ipairs({...}) do
-                    result = result + val
-                end
-                return result");
-
-            Assert.Collection(function.Call(1, 2, 3),
-                value => Assert.Equal(6L, value));
-        }
-
-        [Fact]
-        public void Call_ManyArgs_EnvironmentDisposed_ThrowsObjectDisposedException()
-        {
-            var environment = new LuaEnvironment();
-            var function = environment.CreateFunction(@"
-                result = 0
-                for _, val in ipairs({...}) do
-                    result = result + val
-                end
-                return result");
-            environment.Dispose();
-
-            Assert.Throws<ObjectDisposedException>(() => function.Call(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
-        }
-
-        [Fact]
-        public void Call_ManyArgs_OneResult()
-        {
-            using var environment = new LuaEnvironment();
-            var function = environment.CreateFunction(@"
-                result = 0
-                for _, val in ipairs({...}) do
-                    result = result + val
-                end
-                return result");
-
-            Assert.Collection(function.Call(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
-                value => Assert.Equal(55L, value));
-        }
-
-        [Fact]
-        public void Call_NoArgs_TwoResults()
-        {
-            using var environment = new LuaEnvironment();
-            var function = environment.CreateFunction("return 1234, 5678");
-
-            Assert.Collection(function.Call(),
-                value => Assert.Equal(1234L, value),
-                value => Assert.Equal(5678L, value));
-        }
-
-        [Fact]
-        public void Call_NoArgs_ThreeResults()
-        {
-            using var environment = new LuaEnvironment();
-            var function = environment.CreateFunction("return 1, 2, 3");
-
-            Assert.Collection(function.Call(),
-                value => Assert.Equal(1L, value),
-                value => Assert.Equal(2L, value),
-                value => Assert.Equal(3L, value));
-        }
-
-        [Fact]
         public void Call_LuaError_ThrowsLuaEvalException()
         {
             using var environment = new LuaEnvironment();
             var function = environment.CreateFunction("error('test')");
 
             Assert.Throws<LuaEvalException>(() => function.Call());
+        }
+
+        [Fact]
+        public void Call_FunctionDisposed_ThrowsObjectDisposedException()
+        {
+            using var environment = new LuaEnvironment();
+            var function = environment.CreateFunction("return 0");
+            function.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => function.Call());
+        }
+
+        [Fact]
+        public void Call_NoArgs()
+        {
+            using var environment = new LuaEnvironment();
+            var function = environment.CreateFunction("return 0");
+
+            var (result, _) = function.Call();
+
+            Assert.Equal(0, (long)result);
+        }
+
+        [Fact]
+        public void Call_OneArg()
+        {
+            using var environment = new LuaEnvironment();
+            var function = environment.CreateFunction(@"
+                result = 0
+                for _, val in ipairs({...}) do
+                    result = result + val
+                end
+                return result");
+
+            var (result, _) = function.Call(1);
+
+            Assert.Equal(1, (long)result);
+        }
+
+        [Fact]
+        public void Call_TwoArgs()
+        {
+            using var environment = new LuaEnvironment();
+            var function = environment.CreateFunction(@"
+                result = 0
+                for _, val in ipairs({...}) do
+                    result = result + val
+                end
+                return result");
+
+            var (result, _) = function.Call(1, 2);
+
+            Assert.Equal(3, (long)result);
+        }
+
+        [Fact]
+        public void Call_ThreeArgs()
+        {
+            using var environment = new LuaEnvironment();
+            var function = environment.CreateFunction(@"
+                result = 0
+                for _, val in ipairs({...}) do
+                    result = result + val
+                end
+                return result");
+
+            var (result, _) = function.Call(1, 2, 3);
+
+            Assert.Equal(6, (long)result);
+        }
+
+        [Fact]
+        public void Call_ManyArgs_NullArgs_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+            var function = environment.CreateFunction(@"
+                result = 0
+                for _, val in ipairs({...}) do
+                    result = result + val
+                end
+                return result");
+
+            Assert.Throws<ArgumentNullException>(() => function.Call(null!));
+        }
+
+        [Fact]
+        public void Call_ManyArgs()
+        {
+            using var environment = new LuaEnvironment();
+            var function = environment.CreateFunction(@"
+                result = 0
+                for _, val in ipairs({...}) do
+                    result = result + val
+                end
+                return result");
+
+            var (result, _) = function.Call(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+
+            Assert.Equal(55, (long)result);
         }
     }
 }

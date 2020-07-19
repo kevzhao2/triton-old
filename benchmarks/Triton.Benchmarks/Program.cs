@@ -24,26 +24,11 @@ using Triton.Benchmarks.Micro;
 
 namespace Triton.Benchmarks
 {
-    internal class Program
+    class Program
     {
-        private static void Main()
+        static void Main()
         {
-            Console.WriteLine("Enter the benchmark to run:");
-            Console.WriteLine("\teval = Eval");
-            Console.WriteLine("\tfunctioncall = FunctionCall");
-            Console.WriteLine("\ttablesetget = TableSetGet");
-
-            var option = Console.ReadLine();
-
-            var type = option switch
-            {
-                "eval" => typeof(Eval),
-                "functioncall" => typeof(FunctionCall),
-                "tablesetget" => typeof(TableSetGet),
-                _ => throw new InvalidOperationException(),
-            };
-
-            BenchmarkRunner.Run(type);
+            BenchmarkRunner.Run<GlobalSetGet>();
             Console.ReadKey(true);
         }
     }

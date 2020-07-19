@@ -26,17 +26,6 @@ namespace Triton
     public class LuaTableTests
     {
         [Fact]
-        public void Set_Get_Dynamic()
-        {
-            using var environment = new LuaEnvironment();
-            dynamic table = environment.CreateTable();
-
-            table.test = 123;
-
-            Assert.Equal(123L, table.test);
-        }
-
-        [Fact]
         public void Item_String_Get_NullField_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();
@@ -46,11 +35,11 @@ namespace Triton
         }
 
         [Fact]
-        public void Item_String_Get_EnvironmentDisposed_ThrowsObjectDisposedException()
+        public void Item_String_Get_TableDisposed_ThrowsObjectDisposedException()
         {
-            var environment = new LuaEnvironment();
+            using var environment = new LuaEnvironment();
             var table = environment.CreateTable();
-            environment.Dispose();
+            table.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => table["test"]);
         }
@@ -65,109 +54,42 @@ namespace Triton
         }
 
         [Fact]
-        public void Item_String_Set_EnvironmentDisposed_ThrowsObjectDisposedException()
+        public void Item_String_Set_TableDisposed_ThrowsObjectDisposedException()
         {
-            var environment = new LuaEnvironment();
+            using var environment = new LuaEnvironment();
             var table = environment.CreateTable();
-            environment.Dispose();
+            table.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => table["test"] = 1234);
         }
 
         [Fact]
-        public void Item_String_Set_Get_Nil()
-        {
-            using var environment = new LuaEnvironment();
-            var table = environment.CreateTable();
-
-            table["test"] = null;
-
-            Assert.Null(table["test"]);
-        }
-
-        [Fact]
-        public void Item_String_Set_Get_Boolean()
-        {
-            using var environment = new LuaEnvironment();
-            var table = environment.CreateTable();
-
-            table["test"] = true;
-
-            Assert.Equal(true, table["test"]);
-        }
-
-        [Fact]
-        public void Item_String_Set_Get_Integer()
+        public void Item_String_Set_Get()
         {
             using var environment = new LuaEnvironment();
             var table = environment.CreateTable();
 
             table["test"] = 1234;
 
-            Assert.Equal(1234L, table["test"]);
+            Assert.Equal(1234, (long)table["test"]);
         }
 
         [Fact]
-        public void Item_String_Set_Get_Number()
+        public void Item_Long_Get_TableDisposed_ThrowsObjectDisposedException()
         {
             using var environment = new LuaEnvironment();
             var table = environment.CreateTable();
-
-            table["test"] = 1.234;
-
-            Assert.Equal(1.234, table["test"]);
-        }
-
-        [Fact]
-        public void Item_String_Set_Get_String()
-        {
-            using var environment = new LuaEnvironment();
-            var table = environment.CreateTable();
-
-            table["test"] = "This is a test string!";
-
-            Assert.Equal("This is a test string!", table["test"]);
-        }
-
-        [Fact]
-        public void Item_String_Set_Get_Table()
-        {
-            using var environment = new LuaEnvironment();
-            var table = environment.CreateTable();
-
-            table["test"] = table;
-
-            Assert.Same(table, table["test"]);
-        }
-
-        [Fact]
-        public void Item_String_Set_Get_Function()
-        {
-            using var environment = new LuaEnvironment();
-            var table = environment.CreateTable();
-            var function = environment.CreateFunction("return 0");
-
-            table["test"] = function;
-
-            Assert.Same(function, table["test"]);
-        }
-
-        [Fact]
-        public void Item_Long_Get_EnvironmentDisposed_ThrowsObjectDisposedException()
-        {
-            var environment = new LuaEnvironment();
-            var table = environment.CreateTable();
-            environment.Dispose();
+            table.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => table[1]);
         }
 
         [Fact]
-        public void Item_Long_Set_EnvironmentDisposed_ThrowsObjectDisposedException()
+        public void Item_Long_Set_TableDisposed_ThrowsObjectDisposedException()
         {
-            var environment = new LuaEnvironment();
+            using var environment = new LuaEnvironment();
             var table = environment.CreateTable();
-            environment.Dispose();
+            table.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => table[1] = 1234);
         }
@@ -180,94 +102,38 @@ namespace Triton
 
             table[1] = 1234;
 
-            Assert.Equal(1234L, table[1]);
+            Assert.Equal(1234, (long)table[1]);
         }
 
         [Fact]
-        public void Item_Object_Get_NullField_ThrowsArgumentNullException()
+        public void Item_LuaVariant_Get_TableDisposed_ThrowsObjectDisposedException()
         {
             using var environment = new LuaEnvironment();
             var table = environment.CreateTable();
-
-            Assert.Throws<ArgumentNullException>(() => table[(object)null!]);
-        }
-
-        [Fact]
-        public void Item_Object_Get_EnvironmentDisposed_ThrowsObjectDisposedException()
-        {
-            var environment = new LuaEnvironment();
-            var table = environment.CreateTable();
-            environment.Dispose();
+            table.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => table[true]);
         }
 
         [Fact]
-        public void Item_Object_Set_NullField_ThrowsArgumentNullException()
+        public void Item_LuaVariant_Set_TableDisposed_ThrowsObjectDisposedException()
         {
             using var environment = new LuaEnvironment();
             var table = environment.CreateTable();
-
-            Assert.Throws<ArgumentNullException>(() => table[(object)null!] = 1234);
-        }
-
-        [Fact]
-        public void Item_Object_Set_EnvironmentDisposed_ThrowsObjectDisposedException()
-        {
-            var environment = new LuaEnvironment();
-            var table = environment.CreateTable();
-            environment.Dispose();
+            table.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => table[true] = 1234);
         }
 
         [Fact]
-        public void Item_Object_Set_Get()
+        public void Item_LuaVariant_Set_Get()
         {
             using var environment = new LuaEnvironment();
             var table = environment.CreateTable();
 
             table[true] = 1234;
 
-            Assert.Equal(1234L, table[true]);
-        }
-
-        [Fact]
-        public void Metatable_Get_ReturnsNull()
-        {
-            using var environment = new LuaEnvironment();
-            var table = environment.CreateTable();
-
-            Assert.Null(table.Metatable);
-        }
-
-        [Fact]
-        public void Metatable_Get()
-        {
-            using var environment = new LuaEnvironment();
-            var metatable = (LuaTable)environment.Eval(@"
-                mt = {}
-                return mt")[0]!;
-            var table = (LuaTable)environment.Eval(@"
-                t = {}
-                setmetatable(t, mt)
-                return t")[0]!;
-
-            Assert.Same(metatable, table.Metatable);
-        }
-
-        [Fact]
-        public void Metatable_Set()
-        {
-            using var environment = new LuaEnvironment();
-            var metatable = environment.CreateTable();
-            var table = (LuaTable)environment.Eval(@"
-                t = {}
-                return t")[0]!;
-
-            table.Metatable = metatable;
-
-            Assert.Same(metatable, environment.Eval("return getmetatable(t)")[0]);
+            Assert.Equal(1234, (long)table[true]);
         }
     }
 }
