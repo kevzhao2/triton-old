@@ -68,17 +68,12 @@ namespace Triton
             if (state != _state)
             {
                 lua_rawgeti(state, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
+                var mainState = lua_topointer(state, -1);
+                lua_pop(state, 1);
 
-                try
+                if (mainState != _environment._state)
                 {
-                    if (lua_topointer(state, -1) != _state)
-                    {
-                        throw new InvalidOperationException("Lua object cannot be pushed onto the given state");
-                    }
-                }
-                finally
-                {
-                    lua_pop(state, 1);
+                    throw new InvalidOperationException("Lua object cannot be pushed onto the given state");
                 }
             }
 

@@ -118,6 +118,39 @@ namespace Triton
 
             Assert.Equal("This is a test string!", (string?)environment["test"]);
         }
+
+        [Fact]
+        public void Item_Set_Get_Table()
+        {
+            using var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+
+            environment["test"] = table;
+
+            Assert.Same(table, (LuaTable?)environment["test"]);
+        }
+
+        [Fact]
+        public void Item_Set_Get_Function()
+        {
+            using var environment = new LuaEnvironment();
+            var function = environment.CreateFunction("return");
+
+            environment["test"] = function;
+
+            Assert.Same(function, (LuaFunction?)environment["test"]);
+        }
+
+        [Fact]
+        public void Item_Set_Get_Thread()
+        {
+            using var environment = new LuaEnvironment();
+            var thread = environment.CreateThread();
+
+            environment["test"] = thread;
+
+            Assert.Same(thread, (LuaThread?)environment["test"]);
+        }
         
         [Fact]
         public void CreateTable_EnvironmentDisposed_ThrowsObjectDisposedException()

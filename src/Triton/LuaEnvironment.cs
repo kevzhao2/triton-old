@@ -31,7 +31,7 @@ namespace Triton
     /// </summary>
     public class LuaEnvironment : IDisposable
     {
-        private readonly IntPtr _state;  // The Lua state
+        internal readonly IntPtr _state;  // The Lua state
 
         private readonly Dictionary<IntPtr, (int reference, WeakReference<LuaObject> weakReference)> _luaObjects =
             new Dictionary<IntPtr, (int, WeakReference<LuaObject>)>();

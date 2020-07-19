@@ -308,7 +308,7 @@ namespace Triton
             var table = environment.CreateTable();
             var variant = LuaVariant.FromLuaObject(table);
 
-            Assert.Same(table, (LuaObject?)table);
+            Assert.Same(table, (LuaObject?)variant);
         }
     }
 }
