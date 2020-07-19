@@ -20,6 +20,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using static Triton.NativeMethods;
 
 namespace Triton
@@ -63,18 +64,11 @@ namespace Triton
         internal void Push(IntPtr state)
         {
             Debug.Assert(state != IntPtr.Zero);
-            Debug.Assert(lua_checkstack(state, 1));
 
-            if (state != _state)
+            // Check if the environments match.
+            if (Marshal.ReadIntPtr(lua_getextraspace(state)) != Marshal.ReadIntPtr(lua_getextraspace(_state)))
             {
-                lua_rawgeti(state, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
-                var mainState = lua_topointer(state, -1);
-                lua_pop(state, 1);
-
-                if (mainState != _environment._state)
-                {
-                    throw new InvalidOperationException("Lua object cannot be pushed onto the given state");
-                }
+                throw new InvalidOperationException("Lua object does not belong to the given state's environment");
             }
 
             lua_rawgeti(state, LUA_REGISTRYINDEX, _reference);

@@ -21,7 +21,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 using static Triton.NativeMethods;
 
 namespace Triton
@@ -33,9 +33,18 @@ namespace Triton
     {
         private const string GcHelperMetatable = "<>__gcHelper";
 
-        internal readonly IntPtr _state;  // The Lua state
-        private readonly lua_CFunction _gcCallback;
+        // A callback that is run when a Lua GC occurs. This is done by creating a table with a `__gc` metamethod.
+        private static readonly lua_CFunction _gcCallback = GcCallback;
 
+        // The main Lua state.
+        private readonly IntPtr _state;
+
+        // A handle to the `LuaEnvironment`. By storing the handle in the "extra space" portion of a Lua state, we can
+        // retrieve the `LuaEnvironment` instance that a Lua state is attached to.
+        private readonly GCHandle _selfHandle;
+
+        // A cache of Lua objects. Maps a pointer (retrieved via `lua_topointer`) to the reference in the Lua registry
+        // along with a weak reference to the Lua object. This allows for efficient lookup and cleanup.
         private readonly Dictionary<IntPtr, (int reference, WeakReference<LuaObject> weakReference)> _luaObjects =
             new Dictionary<IntPtr, (int, WeakReference<LuaObject>)>();
 
@@ -49,25 +58,23 @@ namespace Triton
             _state = luaL_newstate();
             luaL_openlibs(_state);  // Open all standard libraries by default for convenience
 
-            // Set up a helper metatable which calls `GcCallback` when the associated object is garbage collected. This
-            // allows us to run code whenever garbage collection occurs in Lua.
+            _selfHandle = GCHandle.Alloc(this, GCHandleType.Weak);
+            Marshal.WriteIntPtr(lua_getextraspace(_state), GCHandle.ToIntPtr(_selfHandle));
+
             luaL_newmetatable(_state, GcHelperMetatable);
             lua_pushstring(_state, "__gc");
-            lua_pushcfunction(_state, _gcCallback = GcCallback);
+            lua_pushcfunction(_state, _gcCallback);
             lua_settable(_state, -3);
             lua_pop(_state, 1);
 
-            SetupGcCallback();
+            SetupGcCallback(_state);
         }
 
-        /// <summary>
-        /// Finalizes the <see cref="LuaEnvironment"/> instance.
-        /// </summary>
-        [ExcludeFromCodeCoverage]  // Not testable
-        ~LuaEnvironment()
-        {
-            lua_close(_state);
-        }
+        // A finalizer is _NOT_ feasible here. If the finalizer calls `lua_close` during an unmanaged -> managed
+        // transition (which is possible since finalizers run on a separate thread), we'll never be able to make the
+        // managed -> unmanaged transition.
+        //
+        // Thus, you must ensure that `LuaEnvironment` instances are properly disposed of!!
 
         /// <summary>
         /// Gets or sets the value of the given <paramref name="global"/>.
@@ -110,6 +117,44 @@ namespace Triton
             }
         }
 
+        private static int GcCallback(IntPtr state)
+        {
+            var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(lua_getextraspace(state)));
+            if (!(handle.Target is LuaEnvironment environment))
+            {
+                return 0;
+            }
+
+            var luaObjects = environment._luaObjects;
+
+            // Scan through the Lua objects, cleaning up any which have been GC'd by the CLR. The objects within Lua
+            // will then be cleaned up on the next Lua GC.
+            var deadPtrs = new List<IntPtr>(luaObjects.Count);
+            foreach (var (ptr, (reference, weakReference)) in luaObjects)
+            {
+                if (!weakReference.TryGetTarget(out _))
+                {
+                    luaL_unref(state, LUA_REGISTRYINDEX, reference);
+                    deadPtrs.Add(ptr);
+                }
+            }
+
+            foreach (var deadPtr in deadPtrs)
+            {
+                luaObjects.Remove(deadPtr);
+            }
+
+            SetupGcCallback(state);
+            return 0;
+        }
+
+        private static void SetupGcCallback(IntPtr state)
+        {
+            lua_newtable(state);
+            luaL_setmetatable(state, GcHelperMetatable);
+            lua_pop(state, 1);
+        }
+
         /// <inheritdoc/>
         public void Dispose()
         {
@@ -124,7 +169,7 @@ namespace Triton
                 }
 
                 lua_close(_state);
-                GC.SuppressFinalize(this);
+                _selfHandle.Free();
 
                 _isDisposed = true;
             }
@@ -160,9 +205,6 @@ namespace Triton
 
             lua_createtable(_state, sequentialCapacity, nonSequentialCapacity);
 
-            // Because we just created a table, it is guaranteed to be a unique table. So we can just construct a new
-            // `LuaTable` instance without checking if it is cached.
-
             var ptr = lua_topointer(_state, -1);
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
             var table = new LuaTable(this, reference, _state);
@@ -182,9 +224,6 @@ namespace Triton
         public LuaFunction CreateFunction(string chunk)
         {
             LoadString(chunk);  // Performs validation
-
-            // Because we just created a function, it is guaranteed to be a unique function. So we can just construct
-            // a new `LuaFunction` instance without checking if it is cached.
 
             var ptr = lua_topointer(_state, -1);
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
@@ -206,9 +245,6 @@ namespace Triton
             lua_settop(_state, 0);  // Reset stack
 
             var threadState = lua_newthread(_state);
-
-            // Because we just created a thread, it is guaranteed to be a unique thread. So we can just construct
-            // a new `LuaThread` instance without checking if it is cached.
 
             var ptr = lua_topointer(_state, -1);
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
@@ -291,12 +327,12 @@ namespace Triton
                 }
                 else
                 {
-                    // No reference to the object, so we need to create it.
+                    // Create a reference to the Lua object in the Lua registry.
                     lua_pushvalue(state, index);
                     tuple.reference = luaL_ref(state, LUA_REGISTRYINDEX);
                 }
 
-                obj = type switch  // Cannot use `var` here since type inference fails
+                obj = type switch
                 {
                     LuaType.Table => new LuaTable(this, tuple.reference, state),
                     LuaType.Function => new LuaFunction(this, tuple.reference, state),
@@ -323,35 +359,6 @@ namespace Triton
 
             var message = lua_tostring(state, -1);
             return (TException)Activator.CreateInstance(typeof(TException), message);
-        }
-
-        private int GcCallback(IntPtr state)
-        {
-            // Clean up any dead `LuaObject` references.
-            var deadPtrs = new List<IntPtr>(_luaObjects.Count);
-            foreach (var (ptr, (reference, weakReference)) in _luaObjects)
-            {
-                if (!weakReference.TryGetTarget(out _))
-                {
-                    luaL_unref(_state, LUA_REGISTRYINDEX, reference);
-                    deadPtrs.Add(ptr);
-                }
-            }
-
-            foreach (var deadPtr in deadPtrs)
-            {
-                _luaObjects.Remove(deadPtr);
-            }
-
-            SetupGcCallback();
-            return 0;
-        }
-
-        private void SetupGcCallback()
-        {
-            lua_newtable(_state);
-            luaL_setmetatable(_state, GcHelperMetatable);
-            lua_pop(_state, 1);
         }
 
         private void LoadString(string chunk)

@@ -123,33 +123,33 @@ namespace Triton
         public void Item_Set_Get_Table()
         {
             using var environment = new LuaEnvironment();
-            var table = environment.CreateTable();
+            var (table, _) = environment.Eval("return {}");
 
             environment["test"] = table;
 
-            Assert.Same(table, (LuaTable?)environment["test"]);
+            Assert.Same((LuaTable?)table, (LuaTable?)environment["test"]);
         }
 
         [Fact]
         public void Item_Set_Get_Function()
         {
             using var environment = new LuaEnvironment();
-            var function = environment.CreateFunction("return");
+            var (function, _) = environment.Eval("return function() end");
 
             environment["test"] = function;
 
-            Assert.Same(function, (LuaFunction?)environment["test"]);
+            Assert.Same((LuaFunction?)function, (LuaFunction?)environment["test"]);
         }
 
         [Fact]
         public void Item_Set_Get_Thread()
         {
             using var environment = new LuaEnvironment();
-            var thread = environment.CreateThread();
+            var (thread, _) = environment.Eval("return coroutine.create(function() end)");
 
             environment["test"] = thread;
 
-            Assert.Same(thread, (LuaThread?)environment["test"]);
+            Assert.Same((LuaThread?)thread, (LuaThread?)environment["test"]);
         }
         
         [Fact]
