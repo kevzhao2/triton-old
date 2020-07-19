@@ -60,6 +60,16 @@ namespace Triton
         }
 
         [Fact]
+        public void Item_Set_WrongEnvironment_ThrowsInvalidOperationException()
+        {
+            using var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+            using var environment2 = new LuaEnvironment();
+
+            Assert.Throws<InvalidOperationException>(() => environment2["test"] = table);
+        }
+
+        [Fact]
         public void Item_Set_Get_Nil()
         {
             using var environment = new LuaEnvironment();
