@@ -54,9 +54,9 @@ namespace Triton
         /// </summary>
         /// <param name="result">The result.</param>
         /// <param name="rest">The rest of the results.</param>
-        public void Deconstruct(out LuaVariant result, out LuaResults rest)
+        public void Deconstruct(out LuaValue result, out LuaResults rest)
         {
-            _environment.ToVariant(_state, ++_index, out result);
+            _environment.ToValue(_state, ++_index, out result);
             rest = this;
         }
 
@@ -66,10 +66,10 @@ namespace Triton
         /// <param name="result">The first result.</param>
         /// <param name="result2">The second result.</param>
         /// <param name="rest">The rest of the results.</param>
-        public void Deconstruct(out LuaVariant result, out LuaVariant result2, out LuaResults rest)
+        public void Deconstruct(out LuaValue result, out LuaValue result2, out LuaResults rest)
         {
-            _environment.ToVariant(_state, ++_index, out result);
-            _environment.ToVariant(_state, ++_index, out result2);
+            _environment.ToValue(_state, ++_index, out result);
+            _environment.ToValue(_state, ++_index, out result2);
             rest = this;
         }
 
@@ -81,11 +81,11 @@ namespace Triton
         /// <param name="result3">The third result.</param>
         /// <param name="rest">The rest of the results.</param>
         public void Deconstruct(
-            out LuaVariant result, out LuaVariant result2, out LuaVariant result3, out LuaResults rest)
+            out LuaValue result, out LuaValue result2, out LuaValue result3, out LuaResults rest)
         {
-            _environment.ToVariant(_state, ++_index, out result);
-            _environment.ToVariant(_state, ++_index, out result2);
-            _environment.ToVariant(_state, ++_index, out result3);
+            _environment.ToValue(_state, ++_index, out result);
+            _environment.ToValue(_state, ++_index, out result2);
+            _environment.ToValue(_state, ++_index, out result3);
             rest = this;
         }
     }

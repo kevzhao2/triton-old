@@ -75,7 +75,7 @@ namespace Triton
         {
             using var environment = new LuaEnvironment();
 
-            environment["test"] = LuaVariant.Nil;
+            environment["test"] = LuaValue.Nil;
 
             Assert.True(environment["test"].IsNil);
         }
@@ -158,7 +158,7 @@ namespace Triton
         {
             using var environment = new LuaEnvironment();
 
-            environment["Type"] = LuaVariant.FromClrType(typeof(Type));
+            environment["Type"] = LuaValue.FromClrType(typeof(Type));
 
             Assert.Same(typeof(Type), environment["Type"].AsClrType());
         }
@@ -169,7 +169,7 @@ namespace Triton
             using var environment = new LuaEnvironment();
             var list = new List<int>();
 
-            environment["test"] = LuaVariant.FromClrObject(list);
+            environment["test"] = LuaValue.FromClrObject(list);
 
             Assert.Same(list, environment["test"].AsClrObject());
         }

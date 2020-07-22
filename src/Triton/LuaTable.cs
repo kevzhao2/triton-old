@@ -40,7 +40,7 @@ namespace Triton
         /// <returns>The value of the given <paramref name="field"/>.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="field"/> is <see langword="null"/>.</exception>
         /// <exception cref="ObjectDisposedException">The Lua table is disposed.</exception>
-        public LuaVariant this[string field]
+        public LuaValue this[string field]
         {
             get
             {
@@ -72,7 +72,7 @@ namespace Triton
         /// <param name="index">The index.</param>
         /// <returns>The value of the given <paramref name="index"/>.</returns>
         /// <exception cref="ObjectDisposedException">The Lua table is disposed.</exception>
-        public LuaVariant this[long index]
+        public LuaValue this[long index]
         {
             get
             {
@@ -94,7 +94,7 @@ namespace Triton
         /// <param name="key">The key.</param>
         /// <returns>The value of the given <paramref name="key"/>.</returns>
         /// <exception cref="ObjectDisposedException">The Lua table is disposed.</exception>
-        public LuaVariant this[LuaVariant key]
+        public LuaValue this[in LuaValue key]
         {
             get
             {
@@ -121,10 +121,10 @@ namespace Triton
             lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
         }
 
-        private LuaVariant GetterShared(LuaType type)
+        private LuaValue GetterShared(LuaType type)
         {
-            _environment.ToVariant(_state, -1, out var variant, type);
-            return variant;
+            _environment.ToValue(_state, -1, out var value, type);
+            return value;
         }
     }
 }

@@ -88,7 +88,7 @@ namespace Triton
         /// <returns>The value of the given <paramref name="global"/>.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="global"/> is <see langword="null"/>.</exception>
         /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
-        public LuaVariant this[string global]
+        public LuaValue this[string global]
         {
             get
             {
@@ -102,8 +102,8 @@ namespace Triton
                 lua_settop(_state, 0);  // Reset stack
 
                 var type = lua_getglobal(_state, global);
-                ToVariant(_state, -1, out var variant, type);
-                return variant;
+                ToValue(_state, -1, out var value, type);
+                return value;
             }
 
             set
@@ -307,27 +307,27 @@ namespace Triton
 
         /// <summary>
         /// Converts the Lua value on the stack of the given Lua <paramref name="state"/> at <paramref name="index"/>
-        /// into a Lua <paramref name="variant"/>.
+        /// into a Lua <paramref name="value"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="index">The index of the Lua value on the stack.</param>
-        /// <param name="variant">The resulting Lua variant.</param>
-        internal void ToVariant(IntPtr state, int index, out LuaVariant variant) =>
-            ToVariant(state, index, out variant, lua_type(state, index));
+        /// <param name="value">The resulting Lua value.</param>
+        internal void ToValue(IntPtr state, int index, out LuaValue value) =>
+            ToValue(state, index, out value, lua_type(state, index));
 
         /// <summary>
         /// Converts the Lua value on the stack of the given Lua <paramref name="state"/> at <paramref name="index"/>
-        /// into a Lua <paramref name="variant"/>.
+        /// into a Lua <paramref name="value"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="index">The index of the Lua value on the stack.</param>
-        /// <param name="variant">The resulting Lua variant.</param>
+        /// <param name="value">The resulting Lua value.</param>
         /// <param name="type">The type of the Lua value.</param>
-        internal void ToVariant(IntPtr state, int index, out LuaVariant variant, LuaType type)
+        internal void ToValue(IntPtr state, int index, out LuaValue value, LuaType type)
         {
             Debug.Assert(state != IntPtr.Zero);
 
-            variant = type switch
+            value = type switch
             {
                 LuaType.None => default,
                 LuaType.Nil => default,
@@ -340,8 +340,8 @@ namespace Triton
                 _ => ToLuaObject(state, index, LuaType.Thread),
             };
 
-            static LuaVariant ToIntegerOrNumber(IntPtr state, int index) =>
-                lua_isinteger(state, index) ? (LuaVariant)lua_tointeger(state, index) : lua_tonumber(state, index);
+            static LuaValue ToIntegerOrNumber(IntPtr state, int index) =>
+                lua_isinteger(state, index) ? (LuaValue)lua_tointeger(state, index) : lua_tonumber(state, index);
 
             LuaObject ToLuaObject(IntPtr state, int index, LuaType type)
             {
@@ -374,7 +374,7 @@ namespace Triton
                 return obj;
             }
 
-            static LuaVariant ToClrTypeOrObject(IntPtr state, int index)
+            static LuaValue ToClrTypeOrObject(IntPtr state, int index)
             {
                 var ptr = lua_touserdata(state, index);
                 var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(ptr));
@@ -383,7 +383,7 @@ namespace Triton
                 var isType = lua_toboolean(state, -1);
                 lua_pop(state, 1);
 
-                return isType ? LuaVariant.FromClrType((Type)handle.Target) : LuaVariant.FromClrObject(handle.Target);
+                return isType ? LuaValue.FromClrType((Type)handle.Target) : LuaValue.FromClrObject(handle.Target);
             }
         }
 

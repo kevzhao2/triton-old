@@ -87,7 +87,7 @@ namespace Triton
         /// <exception cref="InvalidOperationException">The Lua thread cannot be started.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
         /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
-        public LuaResults Start(LuaFunction function, in LuaVariant arg)
+        public LuaResults Start(LuaFunction function, in LuaValue arg)
         {
             StartPrologue(function);  // Performs validation
             arg.Push(_state);
@@ -105,7 +105,7 @@ namespace Triton
         /// <exception cref="InvalidOperationException">The Lua thread cannot be started.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
         /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
-        public LuaResults Start(LuaFunction function, in LuaVariant arg, in LuaVariant arg2)
+        public LuaResults Start(LuaFunction function, in LuaValue arg, in LuaValue arg2)
         {
             StartPrologue(function);  // Performs validation
             arg.Push(_state);
@@ -125,7 +125,7 @@ namespace Triton
         /// <exception cref="InvalidOperationException">The Lua thread cannot be started.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
         /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
-        public LuaResults Start(LuaFunction function, in LuaVariant arg, in LuaVariant arg2, in LuaVariant arg3)
+        public LuaResults Start(LuaFunction function, in LuaValue arg, in LuaValue arg2, in LuaValue arg3)
         {
             StartPrologue(function);  // Performs validation
             arg.Push(_state);
@@ -145,7 +145,7 @@ namespace Triton
         /// </exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
         /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
-        public LuaResults Start(LuaFunction function, params LuaVariant[] args)
+        public LuaResults Start(LuaFunction function, params LuaValue[] args)
         {
             if (args is null)
             {
@@ -181,7 +181,7 @@ namespace Triton
         /// <exception cref="InvalidOperationException">The Lua thread cannot be resumed.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
         /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
-        public LuaResults Resume(in LuaVariant arg)
+        public LuaResults Resume(in LuaValue arg)
         {
             ResumePrologue();  // Performs validation
             arg.Push(_state);
@@ -197,7 +197,7 @@ namespace Triton
         /// <exception cref="InvalidOperationException">The Lua thread cannot be resumed.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
         /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
-        public LuaResults Resume(in LuaVariant arg, in LuaVariant arg2)
+        public LuaResults Resume(in LuaValue arg, in LuaValue arg2)
         {
             ResumePrologue();  // Performs validation
             arg.Push(_state);
@@ -215,7 +215,7 @@ namespace Triton
         /// <exception cref="InvalidOperationException">The Lua thread cannot be resumed.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
         /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
-        public LuaResults Resume(in LuaVariant arg, in LuaVariant arg2, in LuaVariant arg3)
+        public LuaResults Resume(in LuaValue arg, in LuaValue arg2, in LuaValue arg3)
         {
             ResumePrologue();  // Performs validation
             arg.Push(_state);
@@ -233,7 +233,7 @@ namespace Triton
         /// <exception cref="InvalidOperationException">The Lua thread cannot be resumed.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
         /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
-        public LuaResults Resume(params LuaVariant[] args)
+        public LuaResults Resume(params LuaValue[] args)
         {
             if (args is null)
             {

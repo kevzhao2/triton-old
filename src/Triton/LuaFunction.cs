@@ -53,7 +53,7 @@ namespace Triton
         /// <returns>The results.</returns>
         /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
         /// <exception cref="ObjectDisposedException">The Lua function is disposed.</exception>
-        public LuaResults Call(in LuaVariant arg)
+        public LuaResults Call(in LuaValue arg)
         {
             CallPrologue();  // Performs validation.
             arg.Push(_state);
@@ -68,7 +68,7 @@ namespace Triton
         /// <returns>The results.</returns>
         /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
         /// <exception cref="ObjectDisposedException">The Lua function is disposed.</exception>
-        public LuaResults Call(in LuaVariant arg, in LuaVariant arg2)
+        public LuaResults Call(in LuaValue arg, in LuaValue arg2)
         {
             CallPrologue();  // Performs validation
             arg.Push(_state);
@@ -85,7 +85,7 @@ namespace Triton
         /// <returns>The results.</returns>
         /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
         /// <exception cref="ObjectDisposedException">The Lua function is disposed.</exception>
-        public LuaResults Call(in LuaVariant arg, in LuaVariant arg2, in LuaVariant arg3)
+        public LuaResults Call(in LuaValue arg, in LuaValue arg2, in LuaValue arg3)
         {
             CallPrologue();  // Performs validation
             arg.Push(_state);
@@ -102,7 +102,7 @@ namespace Triton
         /// <exception cref="ArgumentNullException"><paramref name="args"/> is <see langword="null"/>.</exception>
         /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
         /// <exception cref="ObjectDisposedException">The Lua function is disposed.</exception>
-        public LuaResults Call(params LuaVariant[] args)
+        public LuaResults Call(params LuaValue[] args)
         {
             if (args is null)
             {

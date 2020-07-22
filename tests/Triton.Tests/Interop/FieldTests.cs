@@ -34,7 +34,7 @@ namespace Triton.Interop
 
             using var environment = new LuaEnvironment();
 
-            environment["Static"] = LuaVariant.FromClrType(typeof(Static));
+            environment["Static"] = LuaValue.FromClrType(typeof(Static));
 
             var (result, _) = environment.Eval("return Static.I32");
 

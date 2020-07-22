@@ -106,7 +106,7 @@ namespace Triton
         }
 
         [Fact]
-        public void Item_LuaVariant_Get_TableDisposed_ThrowsObjectDisposedException()
+        public void Item_LuaValue_Get_TableDisposed_ThrowsObjectDisposedException()
         {
             using var environment = new LuaEnvironment();
             var table = environment.CreateTable();
@@ -116,7 +116,7 @@ namespace Triton
         }
 
         [Fact]
-        public void Item_LuaVariant_Set_TableDisposed_ThrowsObjectDisposedException()
+        public void Item_LuaValue_Set_TableDisposed_ThrowsObjectDisposedException()
         {
             using var environment = new LuaEnvironment();
             var table = environment.CreateTable();
@@ -126,7 +126,7 @@ namespace Triton
         }
 
         [Fact]
-        public void Item_LuaVariant_Set_Get()
+        public void Item_LuaValue_Set_Get()
         {
             using var environment = new LuaEnvironment();
             var table = environment.CreateTable();
