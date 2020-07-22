@@ -22,6 +22,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Triton.Interop;
 using static Triton.NativeMethods;
 
 namespace Triton
@@ -48,6 +49,8 @@ namespace Triton
         private readonly Dictionary<IntPtr, (int reference, WeakReference<LuaObject> weakReference)> _luaObjects =
             new Dictionary<IntPtr, (int, WeakReference<LuaObject>)>();
 
+        private readonly ClrMetatableManager _metatableCache;
+
         private bool _isDisposed;
 
         /// <summary>
@@ -60,6 +63,8 @@ namespace Triton
 
             _selfHandle = GCHandle.Alloc(this, GCHandleType.Weak);
             Marshal.WriteIntPtr(lua_getextraspace(_state), GCHandle.ToIntPtr(_selfHandle));
+
+            _metatableCache = new ClrMetatableManager(_state, this);
 
             luaL_newmetatable(_state, GcHelperMetatable);
             lua_pushstring(_state, "__gc");
@@ -244,11 +249,10 @@ namespace Triton
 
             lua_settop(_state, 0);  // Reset stack
 
-            var threadState = lua_newthread(_state);
+            var ptr = lua_newthread(_state);
 
-            var ptr = lua_topointer(_state, -1);
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
-            var thread = new LuaThread(this, reference, threadState);
+            var thread = new LuaThread(this, reference, ptr);
 
             _luaObjects[ptr] = (reference, new WeakReference<LuaObject>(thread));
             return thread;
@@ -273,6 +277,32 @@ namespace Triton
             }
 
             return new LuaResults(this, _state);
+        }
+
+        /// <summary>
+        /// Pushes a CLR type onto the stack of the given Lua <paramref name="state"/>.
+        /// </summary>
+        /// <param name="state">The Lua state.</param>
+        /// <param name="type">The CLR type.</param>
+        internal void PushClrType(IntPtr state, Type type)
+        {
+            // TODO: can perform caching of types here
+            PushClrTypeOrObject(state, type, isType: true);
+            _metatableCache.PushClrTypeMetatable(state, type);
+            lua_setmetatable(state, -2);
+        }
+
+        /// <summary>
+        /// Pushes a CLR object onto the stack of the given Lua <paramref name="state"/>.
+        /// </summary>
+        /// <param name="state">The Lua state.</param>
+        /// <param name="obj">The CLR object.</param>
+        internal void PushClrObject(IntPtr state, object obj)
+        {
+            // TODO: can perform caching of objects here
+            PushClrTypeOrObject(state, obj, isType: false);
+            _metatableCache.PushClrObjectMetatable(state, obj);
+            lua_setmetatable(state, -2);
         }
 
         /// <summary>
@@ -306,8 +336,8 @@ namespace Triton
                 LuaType.String => lua_tostring(state, index),
                 LuaType.Table => ToLuaObject(state, index, LuaType.Table),
                 LuaType.Function => ToLuaObject(state, index, LuaType.Function),
-                LuaType.Thread => ToLuaObject(state, index, LuaType.Thread),
-                _ => throw new NotImplementedException()
+                LuaType.Userdata => ToClrTypeOrObject(state, index),
+                _ => ToLuaObject(state, index, LuaType.Thread),
             };
 
             static LuaVariant ToIntegerOrNumber(IntPtr state, int index) =>
@@ -336,12 +366,24 @@ namespace Triton
                 {
                     LuaType.Table => new LuaTable(this, tuple.reference, state),
                     LuaType.Function => new LuaFunction(this, tuple.reference, state),
-                    _ => new LuaThread(this, tuple.reference, ptr)  // Special case for threads
+                    _ => new LuaThread(this, tuple.reference, ptr)
                 };
 
                 tuple.weakReference = new WeakReference<LuaObject>(obj);
                 _luaObjects[ptr] = tuple;
                 return obj;
+            }
+
+            static LuaVariant ToClrTypeOrObject(IntPtr state, int index)
+            {
+                var ptr = lua_touserdata(state, index);
+                var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(ptr));
+
+                lua_getiuservalue(state, -1, 1);
+                var isType = lua_toboolean(state, -1);
+                lua_pop(state, 1);
+
+                return isType ? LuaVariant.FromClrType((Type)handle.Target) : LuaVariant.FromClrObject(handle.Target);
             }
         }
 
@@ -359,6 +401,19 @@ namespace Triton
 
             var message = lua_tostring(state, -1);
             return (TException)Activator.CreateInstance(typeof(TException), message);
+        }
+
+        private void PushClrTypeOrObject(IntPtr state, object typeOrObj, bool isType)
+        {
+            Debug.Assert(state != IntPtr.Zero);
+            Debug.Assert(typeOrObj != null);
+
+            var handle = GCHandle.Alloc(typeOrObj);
+            var ptr = lua_newuserdatauv(state, (UIntPtr)IntPtr.Size, 1);
+            Marshal.WriteIntPtr(ptr, GCHandle.ToIntPtr(handle));
+
+            lua_pushboolean(state, isType);
+            lua_setiuservalue(state, -2, 1);
         }
 
         private void LoadString(string chunk)

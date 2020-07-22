@@ -18,6 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using Xunit;
 using static Triton.NativeMethods;
@@ -67,6 +68,22 @@ namespace Triton
         }
 
         [Fact]
+        public void IsString_Get_ReturnsFalse_Nil()
+        {
+            var variant = LuaVariant.FromString(null);
+
+            Assert.False(variant.IsString);
+        }
+
+        [Fact]
+        public void IsString_Get_ReturnsFalse_Integer()
+        {
+            var variant = LuaVariant.FromInteger(0);
+
+            Assert.False(variant.IsString);
+        }
+
+        [Fact]
         public void IsLuaObject_Get_ReturnsTrue()
         {
             using var environment = new LuaEnvironment();
@@ -74,6 +91,89 @@ namespace Triton
             var variant = LuaVariant.FromLuaObject(table);
 
             Assert.True(variant.IsLuaObject);
+        }
+
+        [Fact]
+        public void IsLuaObject_Get_ReturnsFalse_Nil()
+        {
+            var variant = LuaVariant.FromLuaObject(null);
+
+            Assert.False(variant.IsLuaObject);
+        }
+
+        [Fact]
+        public void IsLuaObject_Get_ReturnsFalse_Integer()
+        {
+            var variant = LuaVariant.FromInteger(1);
+
+            Assert.False(variant.IsLuaObject);
+        }
+
+        [Fact]
+        public void IsClrType_Get_ReturnsTrue()
+        {
+            var variant = LuaVariant.FromClrType(typeof(List<int>));
+
+            Assert.True(variant.IsClrType);
+        }
+
+        [Fact]
+        public void IsClrType_Get_ReturnsFalse_Nil()
+        {
+            var variant = LuaVariant.FromClrType(null);
+
+            Assert.False(variant.IsClrType);
+        }
+
+        [Fact]
+        public void IsClrType_Get_ReturnsFalse_Integer()
+        {
+            var variant = LuaVariant.FromInteger(2);
+
+            Assert.False(variant.IsClrType);
+        }
+
+        [Fact]
+        public void IsClrObject_Get_ReturnsTrue()
+        {
+            var list = new List<int>();
+            var variant = LuaVariant.FromClrObject(list);
+
+            Assert.True(variant.IsClrObject);
+        }
+
+        [Fact]
+        public void IsClrObject_Get_ReturnsFalse_Nil()
+        {
+            var variant = LuaVariant.FromClrObject(null);
+
+            Assert.False(variant.IsClrObject);
+        }
+
+        [Fact]
+        public void IsClrObject_Get_ReturnsFalse_Integer()
+        {
+            var variant = LuaVariant.FromInteger(3);
+
+            Assert.False(variant.IsClrObject);
+        }
+
+        [Fact]
+        public void IsClrObject_Get_ReturnsFalse_String()
+        {
+            var variant = LuaVariant.FromString("test");
+
+            Assert.False(variant.IsClrObject);
+        }
+
+        [Fact]
+        public void IsClrObject_Get_ReturnsFalse_LuaObject()
+        {
+            using var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+            var variant = LuaVariant.FromLuaObject(table);
+
+            Assert.False(variant.IsClrObject);
         }
 
         [Fact]
@@ -124,6 +224,15 @@ namespace Triton
             var variant = LuaVariant.FromLuaObject(table);
 
             Assert.Same(table, variant.AsLuaObject());
+        }
+
+        [Fact]
+        public void FromClrObject_AsClrObject()
+        {
+            var list = new List<int>();
+            var variant = LuaVariant.FromClrObject(list);
+
+            Assert.Same(list, variant.AsClrObject());
         }
 
         [Fact]

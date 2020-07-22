@@ -31,16 +31,19 @@ namespace Triton
     [StructLayout(LayoutKind.Explicit, Size = 16)]
     public readonly struct LuaVariant : IDisposable
     {
-        private static readonly object _booleanTag = new object();
-        private static readonly object _integerTag = new object();
-        private static readonly object _numberTag = new object();
+        private static readonly TypeTag _booleanTag = new TypeTag();
+        private static readonly TypeTag _integerTag = new TypeTag();
+        private static readonly TypeTag _numberTag = new TypeTag();
+
+        // `LuaVariant` consists of an 8-byte value followed by an 8-byte object or type tag. Primitives (such as `nil`,
+        // booleans, integers, and numbers) are represented using the value and a specific type tag, and objects are
+        // represented using an object type and the actual object.
 
         [FieldOffset(0)] private readonly bool _boolean;
         [FieldOffset(0)] private readonly long _integer;
         [FieldOffset(0)] private readonly double _number;
+        [FieldOffset(0)] private readonly ObjectType _objectType;
 
-        // Either a reference or a type tag. This allows `LuaVariant` to use only 16 bytes, which means that the
-        // structure can be copied much more efficiently.
         [FieldOffset(8)] private readonly object? _objectOrTag;
 
         // TODO: in .NET 5, use `Unsafe.SkipInit` for a small perf gain in constructor
@@ -63,8 +66,9 @@ namespace Triton
             _objectOrTag = _numberTag;
         }
 
-        private LuaVariant(object? value) : this()  // Shared ctor for all reference types
+        private LuaVariant(ObjectType objectType, object? value) : this()
         {
+            _objectType = objectType;
             _objectOrTag = value;  // No null check here since it will be considered to be `nil`
         }
 
@@ -104,13 +108,25 @@ namespace Triton
         /// Gets a value indicating whether the variant is a string.
         /// </summary>
         /// <value><see langword="true"/> if the variant is a string; otherwise, <see langword="false"/>.</value>
-        public bool IsString => _objectOrTag is string;
+        public bool IsString => _objectType == ObjectType.String && !IsNil && !(_objectOrTag is TypeTag);
 
         /// <summary>
         /// Gets a value indicating whether the variant is a Lua object.
         /// </summary>
         /// <value><see langword="true"/> if the variant is a Lua object; otherwise, <see langword="false"/>.</value>
-        public bool IsLuaObject => _objectOrTag is LuaObject;
+        public bool IsLuaObject => _objectType == ObjectType.LuaObject && !IsNil && !(_objectOrTag is TypeTag);
+
+        /// <summary>
+        /// Gets a value indicating whether the variant is a CLR type.
+        /// </summary>
+        /// <value><see langword="true"/> if the variant is a CLR type; otherwise, <see langword="false"/>.</value>
+        public bool IsClrType => _objectType == ObjectType.ClrType && !IsNil && !(_objectOrTag is TypeTag);
+
+        /// <summary>
+        /// Gets a value indicating whether the variant is a CLR object.
+        /// </summary>
+        /// <value><see langword="true"/> if the variant is a CLR object; otherwise, <see langword="false"/>.</value>
+        public bool IsClrObject => _objectType == ObjectType.ClrObject && !IsNil && !(_objectOrTag is TypeTag);
 
         /// <summary>
         /// Creates a new instance of the <see cref="LuaVariant"/> structure from the given boolean
@@ -142,7 +158,7 @@ namespace Triton
         /// </summary>
         /// <param name="value">The string value.</param>
         /// <returns>A new instance of the <see cref="LuaVariant"/> structure.</returns>
-        public static LuaVariant FromString(string? value) => new LuaVariant(value);
+        public static LuaVariant FromString(string? value) => new LuaVariant(ObjectType.String, value);
 
         /// <summary>
         /// Creates a new instance of the <see cref="LuaVariant"/> structure from the given Lua object
@@ -150,7 +166,23 @@ namespace Triton
         /// </summary>
         /// <param name="value">The Lua object value.</param>
         /// <returns>A new instance of the <see cref="LuaVariant"/> structure.</returns>
-        public static LuaVariant FromLuaObject(LuaObject? value) => new LuaVariant(value);
+        public static LuaVariant FromLuaObject(LuaObject? value) => new LuaVariant(ObjectType.LuaObject, value);
+
+        /// <summary>
+        /// Creates a new instance of the <see cref="LuaVariant"/> structure from the given CLR type
+        /// <paramref name="value"/>.
+        /// </summary>
+        /// <param name="value">The CLR type value.</param>
+        /// <returns>A new instance of the <see cref="LuaVariant"/> structure.</returns>
+        public static LuaVariant FromClrType(Type? value) => new LuaVariant(ObjectType.ClrType, value);
+
+        /// <summary>
+        /// Creates a new instance of the <see cref="LuaVariant"/> structure from the given CLR object
+        /// <paramref name="value"/>.
+        /// </summary>
+        /// <param name="value">The CLR object value.</param>
+        /// <returns>A new instance of the <see cref="LuaVariant"/> structure.</returns>
+        public static LuaVariant FromClrObject(object? value) => new LuaVariant(ObjectType.ClrObject, value);
 
         /// <inheritdoc/>
         public void Dispose()
@@ -167,7 +199,7 @@ namespace Triton
         /// <returns>The variant as a boolean.</returns>
         public bool AsBoolean()
         {
-            Debug.Assert(_objectOrTag == _booleanTag);
+            Debug.Assert(IsBoolean);
 
             return _boolean;
         }
@@ -178,7 +210,7 @@ namespace Triton
         /// <returns>The variant as an integer.</returns>
         public long AsInteger()
         {
-            Debug.Assert(_objectOrTag == _integerTag);
+            Debug.Assert(IsInteger);
 
             return _integer;
         }
@@ -189,7 +221,7 @@ namespace Triton
         /// <returns>The variant as a number.</returns>
         public double AsNumber()
         {
-            Debug.Assert(_objectOrTag == _numberTag);
+            Debug.Assert(IsNumber);
 
             return _number;
         }
@@ -200,7 +232,7 @@ namespace Triton
         /// <returns>The variant as a string.</returns>
         public string? AsString()
         {
-            Debug.Assert(_objectOrTag is null || _objectOrTag is string);
+            Debug.Assert(IsString);
 
             return _objectOrTag as string;
         }
@@ -211,9 +243,31 @@ namespace Triton
         /// <returns>The variant as a Lua object.</returns>
         public LuaObject? AsLuaObject()
         {
-            Debug.Assert(_objectOrTag is null || _objectOrTag is LuaObject);
+            Debug.Assert(IsLuaObject);
 
             return _objectOrTag as LuaObject;
+        }
+
+        /// <summary>
+        /// Converts the variant into a CLR type.
+        /// </summary>
+        /// <returns>The variant as a CLR type.</returns>
+        public Type? AsClrType()
+        {
+            Debug.Assert(IsClrType);
+
+            return _objectOrTag as Type;
+        }
+
+        /// <summary>
+        /// Converts the variant into a CLR object.
+        /// </summary>
+        /// <returns>The variant as a CLR object.</returns>
+        public object? AsClrObject()
+        {
+            Debug.Assert(IsClrObject);
+
+            return _objectOrTag;
         }
 
         /// <summary>
@@ -229,29 +283,51 @@ namespace Triton
             {
                 lua_pushnil(state);
             }
-            else if (_objectOrTag == _booleanTag)
+            else if (_objectOrTag is TypeTag)
             {
-                lua_pushboolean(state, _boolean);
-            }
-            else if (_objectOrTag == _integerTag)
-            {
-                lua_pushinteger(state, _integer);
-            }
-            else if (_objectOrTag == _numberTag)
-            {
-                lua_pushnumber(state, _number);
-            }
-            else if (_objectOrTag is string s)
-            {
-                lua_pushstring(state, s);
-            }
-            else if (_objectOrTag is LuaObject obj)
-            {
-                obj.Push(state);
+                if (_objectOrTag == _booleanTag)
+                {
+                    lua_pushboolean(state, _boolean);
+                }
+                else if (_objectOrTag == _integerTag)
+                {
+                    lua_pushinteger(state, _integer);
+                }
+                else
+                {
+                    lua_pushnumber(state, _number);
+                }
             }
             else
             {
-                throw new NotImplementedException();
+                if (_objectType == ObjectType.String)
+                {
+                    lua_pushstring(state, (string)_objectOrTag);
+                }
+                else if (_objectType == ObjectType.LuaObject)
+                {
+                    ((LuaObject)_objectOrTag).Push(state);
+                }
+                else if (_objectType == ObjectType.ClrType)
+                {
+                    var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(lua_getextraspace(state)));
+                    if (!(handle.Target is LuaEnvironment environment))
+                    {
+                        return;
+                    }
+
+                    environment.PushClrType(state, (Type)_objectOrTag);
+                }
+                else
+                {
+                    var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(lua_getextraspace(state)));
+                    if (!(handle.Target is LuaEnvironment environment))
+                    {
+                        return;
+                    }
+
+                    environment.PushClrObject(state, _objectOrTag);
+                }
             }
         }
 
@@ -277,13 +353,13 @@ namespace Triton
         /// Converts the given string <paramref name="value"/> into a Lua variant.
         /// </summary>
         /// <param name="value">The string value.</param>
-        public static implicit operator LuaVariant(string? value) => new LuaVariant(value);
+        public static implicit operator LuaVariant(string? value) => new LuaVariant(ObjectType.String, value);
 
         /// <summary>
         /// Converts the given Lua object <paramref name="value"/> into a Lua variant.
         /// </summary>
         /// <param name="value">The Lua object value.</param>
-        public static implicit operator LuaVariant(LuaObject? value) => new LuaVariant(value);
+        public static implicit operator LuaVariant(LuaObject? value) => new LuaVariant(ObjectType.LuaObject, value);
 
         /// <summary>
         /// Converts the given Lua <paramref name="variant"/> into a boolean.
@@ -314,5 +390,17 @@ namespace Triton
         /// </summary>
         /// <param name="variant">The Lua variant.</param>
         public static explicit operator LuaObject?(in LuaVariant variant) => variant.AsLuaObject();
+
+        private class TypeTag
+        {
+        }
+
+        private enum ObjectType
+        {
+            String,
+            LuaObject,
+            ClrType,
+            ClrObject
+        }
     }
 }

@@ -18,28 +18,35 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using System;
-using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Running;
-using Triton.Benchmarks.Micro;
+using System.Collections.Generic;
 
-namespace Triton.Benchmarks
+namespace Triton.Interop.Utils
 {
-    public class Benchmark
+    /// <summary>
+    /// Matches a string to an index.
+    /// </summary>
+    internal sealed class StringMatcher
     {
-        [Benchmark]
-        public int Type_GetHashCode() => typeof(string).GetHashCode();
+        private readonly Dictionary<string, int> _indices = new Dictionary<string, int>();
 
-        [Benchmark]
-        public IntPtr Type_Handle() => typeof(string).TypeHandle.Value;
-    }
-
-    class Program
-    {
-        static void Main()
+        /// <summary>
+        /// Initializes a new instance of the <see cref="StringMatcher"/> class with the specified
+        /// <paramref name="strings"/>.
+        /// </summary>
+        /// <param name="strings">The strings.</param>
+        public StringMatcher(IReadOnlyList<string> strings)
         {
-            BenchmarkRunner.Run<Benchmark>();
-            Console.ReadKey(true);
+            for (var i = 0; i < strings.Count; ++i)
+            {
+                _indices.Add(strings[i], i);
+            }
         }
+
+        /// <summary>
+        /// Matches a string <paramref name="s"/>. Returns the string's index, or <c>-1</c> if it does not exist.
+        /// </summary>
+        /// <param name="s">The string.</param>
+        /// <returns>The string's index, or <c>-1</c> if it does not exist.</returns>
+        public int Match(string s) => _indices.TryGetValue(s, out var index) ? index : -1;
     }
 }

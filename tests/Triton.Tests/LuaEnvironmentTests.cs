@@ -19,6 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Collections.Generic;
 using Xunit;
 
 namespace Triton
@@ -150,6 +151,27 @@ namespace Triton
             environment["test"] = thread;
 
             Assert.Same((LuaThread?)thread, (LuaThread?)environment["test"]);
+        }
+
+        [Fact]
+        public void Item_Set_Get_ClrType()
+        {
+            using var environment = new LuaEnvironment();
+
+            environment["Type"] = LuaVariant.FromClrType(typeof(Type));
+
+            Assert.Same(typeof(Type), environment["Type"].AsClrType());
+        }
+
+        [Fact]
+        public void Item_Set_Get_ClrObject()
+        {
+            using var environment = new LuaEnvironment();
+            var list = new List<int>();
+
+            environment["test"] = LuaVariant.FromClrObject(list);
+
+            Assert.Same(list, environment["test"].AsClrObject());
         }
         
         [Fact]

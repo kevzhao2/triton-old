@@ -19,27 +19,33 @@
 // IN THE SOFTWARE.
 
 using System;
-using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Running;
-using Triton.Benchmarks.Micro;
+using System.Collections.Generic;
+using System.Text;
+using Xunit;
 
-namespace Triton.Benchmarks
+namespace Triton.Interop
 {
-    public class Benchmark
+    public class FieldTests
     {
-        [Benchmark]
-        public int Type_GetHashCode() => typeof(string).GetHashCode();
-
-        [Benchmark]
-        public IntPtr Type_Handle() => typeof(string).TypeHandle.Value;
-    }
-
-    class Program
-    {
-        static void Main()
+        [Fact]
+        public void GetStaticInt32()
         {
-            BenchmarkRunner.Run<Benchmark>();
-            Console.ReadKey(true);
+            Static.I32 = 123456789;
+
+            using var environment = new LuaEnvironment();
+
+            environment["Static"] = LuaVariant.FromClrType(typeof(Static));
+
+            var (result, _) = environment.Eval("return Static.I32");
+
+            Assert.Equal(123456789, (long)result);
+        }
+
+        private static class Static
+        {
+            public static int I32;
+            public static uint U32;
+
         }
     }
 }

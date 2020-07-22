@@ -66,6 +66,9 @@ namespace Triton
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_createtable(IntPtr L, int narr, int nrec);
 
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int lua_error(IntPtr L);
+
         public static IntPtr lua_getextraspace(IntPtr L) => L - IntPtr.Size;
 
         public static unsafe LuaType lua_getfield(IntPtr L, int index, string k)
@@ -98,6 +101,9 @@ namespace Triton
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern LuaType lua_geti(IntPtr L, int index, long n);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern LuaType lua_getiuservalue(IntPtr L, int index, int n);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern bool lua_getmetatable(IntPtr L, int index);
@@ -149,6 +155,9 @@ namespace Triton
         public static extern void lua_pushinteger(IntPtr L, long n);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void lua_pushlightuserdata(IntPtr L, IntPtr p);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_pushnil(IntPtr L);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
@@ -175,6 +184,15 @@ namespace Triton
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern LuaType lua_rawgeti(IntPtr L, int index, long n);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void lua_rawset(IntPtr L, int index);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void lua_rawseti(IntPtr L, int index, long n);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void lua_remove(IntPtr L, int index);
 
         public static unsafe LuaStatus lua_resume(IntPtr L, IntPtr from, int nargs, out int nresults)
         {
@@ -212,6 +230,9 @@ namespace Triton
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_seti(IntPtr L, int index, long n);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern bool lua_setiuservalue(IntPtr L, int index, int n);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern bool lua_setmetatable(IntPtr L, int index);
@@ -285,6 +306,20 @@ namespace Triton
         // lauxlib.h functions
         //
 
+        public static unsafe int luaL_error(IntPtr L, string fmt)
+        {
+            var maxLength = Encoding.UTF8.GetMaxByteCount(fmt.Length) + 1;
+
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(fmt, span);
+            span[length] = 0;  // Null terminator
+
+            fixed (byte* buffer = span)
+            {
+                return luaL_error(L, (IntPtr)buffer);
+            }
+        }
+
         public static unsafe LuaStatus luaL_loadstring(IntPtr L, string s)
         {
             var maxLength = Encoding.UTF8.GetMaxByteCount(s.Length) + 1;
@@ -338,6 +373,9 @@ namespace Triton
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void luaL_unref(IntPtr L, int t, int @ref);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        private static extern int luaL_error(IntPtr L, IntPtr fmt);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         private static extern bool luaL_newmetatable(IntPtr L, IntPtr tname);

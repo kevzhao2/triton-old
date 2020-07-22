@@ -50,8 +50,7 @@ namespace Triton
                 }
 
                 IndexerPrologue();  // Performs validation
-                var type = lua_getfield(_state, -1, field);
-                return GetterShared(type);
+                return GetterShared(lua_getfield(_state, -1, field));
             }
 
             set
@@ -78,8 +77,7 @@ namespace Triton
             get
             {
                 IndexerPrologue();  // Performs validation
-                var type = lua_geti(_state, -1, index);
-                return GetterShared(type);
+                return GetterShared(lua_geti(_state, -1, index));
             }
 
             set
@@ -102,8 +100,7 @@ namespace Triton
             {
                 IndexerPrologue();  // Performs validation
                 key.Push(_state);
-                var type = lua_gettable(_state, -2);
-                return GetterShared(type);
+                return GetterShared(lua_gettable(_state, -2));
             }
 
             set
