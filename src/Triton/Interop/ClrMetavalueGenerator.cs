@@ -20,10 +20,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.InteropServices;
-using Triton.Interop.Utils;
+using static System.Reflection.BindingFlags;
 using static System.Reflection.Emit.OpCodes;
 using static Triton.NativeMethods;
 using Debug = System.Diagnostics.Debug;
@@ -35,16 +36,23 @@ namespace Triton.Interop
     /// </summary>
     internal sealed class ClrMetavalueGenerator
     {
+        private static readonly MethodInfo _lua_tostring = typeof(NativeMethods).GetMethod("lua_tostring")!;
+
+        private static readonly MethodInfo _contextMatchMemberName =
+            typeof(MetamethodContext).GetMethod("MatchMemberName", NonPublic | Instance)!;
+
         private static readonly lua_CFunction _gcMetamethod = GcMetamethod;
         private static readonly lua_CFunction _tostringMetamethod = ProtectedCall(ToStringMetamethod);
 
         private readonly LuaEnvironment _environment;
+        private readonly List<lua_CFunction> _generatedCallbacks;
 
         private readonly Dictionary<Type, lua_CFunction> _typeIndex = new Dictionary<Type, lua_CFunction>();
 
-        public ClrMetavalueGenerator(LuaEnvironment environment)
+        internal ClrMetavalueGenerator(LuaEnvironment environment)
         {
             _environment = environment;
+            _generatedCallbacks = new List<lua_CFunction>();
         }
 
         // Creates a wrapper `lua_CFunction` that performs a "protected" call of a `lua_CFunction`, raising uncaught CLR
@@ -83,6 +91,24 @@ namespace Triton.Interop
             return 1;
         }
 
+        private static DynamicMethod CreateMetamethod(string name) =>
+            new DynamicMethod(
+                name, typeof(int), new[] { typeof(MetamethodContext), typeof(IntPtr) }, typeof(MetamethodContext));
+        
+        private static (List<string> memberNames, Dictionary<string, MemberInfo> members) GenerateMemberIndices(
+            IEnumerable<MemberInfo> allMembers)
+        {
+            var memberNames = new List<string>();
+            var members = new Dictionary<string, MemberInfo>();
+            foreach (var member in allMembers)
+            {
+                memberNames.Add(member.Name);
+                members.Add(member.Name, member);
+            }
+
+            return (memberNames, members);
+        }
+
         /// <summary>
         /// Gets the <c>__gc</c> metamethod for CLR types and objects.
         /// </summary>
@@ -103,16 +129,20 @@ namespace Triton.Interop
         /// <param name="type">The CLR type.</param>
         public void PushTypeIndex(IntPtr state, Type type)
         {
-            // The metavalue is a table with entries for `const` fields, events, methods, and nested types. This table
-            // then has an `__index` metamethod which resolves non-`const` fields and properties.
+            // The metavalue is a table with entries for const fields, static events, static methods, and nested
+            // types. This table then has an `__index` metamethod which resolves non-const static fields and
+            // static properties.
             //
             // Essentially, we are caching all cacheable members, which greatly improves performance as there are fewer
             // unmanaged <-> managed transitions.
-
+            //
             lua_newtable(state);
 
             foreach (var constField in type.GetAllConstFields())
             {
+                var value = LuaValue.FromObject(constField.GetValue(null));
+                value.Push(state);
+                lua_setfield(state, -2, constField.Name);
             }
 
             foreach (var nestedType in type.GetAllNestedTypes())
@@ -120,84 +150,88 @@ namespace Triton.Interop
                 _environment.PushClrType(state, nestedType);
                 lua_setfield(state, -2, nestedType.Name);
             }
+
+            lua_newtable(state);
+
+            var indexMetamethod = ProtectedCall(GenerateIndexMetamethod());
+            _generatedCallbacks.Add(indexMetamethod);
+            lua_pushcfunction(state, indexMetamethod);
+            lua_setfield(state, -2, "__index");
+
+            lua_setmetatable(state, -2);
+
+            lua_CFunction GenerateIndexMetamethod()
+            {
+                var staticFields = type.GetAllStaticFields();
+                var staticProperties = type.GetAllStaticProperties();
+                var (memberNames, members) = GenerateMemberIndices(
+                    ((IEnumerable<MemberInfo>)staticFields).Concat(staticProperties));
+
+                var context = new MetamethodContext(_environment, memberNames);
+                var method = CreateMetamethod("__index");
+                var ilg = method.GetILGenerator();
+                var labels = ilg.DefineLabels(memberNames.Count);
+
+                ilg.Emit(Ldarg_0);
+                ilg.Emit(Ldarg_1);
+                ilg.Emit(Ldc_I4_2);
+                ilg.Emit(Call, _lua_tostring);
+                ilg.Emit(Call, _contextMatchMemberName);
+                ilg.Emit(Switch, labels);
+
+                ilg.EmitLuaError("attempt to index invalid member");
+                ilg.Emit(Ret);
+
+                for (var i = 0; i < memberNames.Count; ++i)
+                {
+                    ilg.MarkLabel(labels[i]);
+
+                    var member = members[memberNames[i]];
+                    if (member is FieldInfo field)
+                    {
+                        ilg.Emit(Ldarg_1);
+                        ilg.Emit(Ldsfld, field);
+                        ilg.EmitLuaPush(field.FieldType);
+                        ilg.Emit(Ldc_I4_1);
+                        ilg.Emit(Ret);
+                    }
+                    else if (member is PropertyInfo property)
+                    {
+                        if (!property.CanRead)
+                        {
+                            ilg.EmitLuaError("attempt to index non-readable property");
+                            ilg.Emit(Ret);
+                            continue;
+                        }
+
+                        ilg.Emit(Ldarg_1);
+                        ilg.Emit(Call, property.GetMethod);
+                        ilg.EmitLuaPush(property.PropertyType);
+                        ilg.Emit(Ldc_I4_1);
+                        ilg.Emit(Ret);
+                    }
+                }
+
+                return (lua_CFunction)method.CreateDelegate(typeof(lua_CFunction), context);
+            }
         }
 
         /// <summary>
-        /// Generates the <c>__index</c> metamethod for the given CLR <paramref name="type"/>.
+        /// Pushes the <c>__index</c> metavalue for the given CLR <paramref name="objType"/> onto the stack of the Lua
+        /// <paramref name="state"/>.
         /// </summary>
-        /// <param name="type">The CLR type.</param>
-        /// <returns>The <c>__index</c> metamethod.</returns>
-        public lua_CFunction TypeIndex(Type type)
+        /// <param name="state"></param>
+        /// <param name="objType"></param>
+        public void PushObjectIndex(IntPtr state, Type objType)
         {
-            if (_typeIndex.TryGetValue(type, out var result))
-            {
-                return result;
-            }
+            // The metavalue is a table with entries for instance events and instance methods. This table then has an
+            // `__index` metamethod which resolves instance fields and instance properties.
+            //
+            // Essentially, we are caching all cacheable members, which greatly improves performance as there are fewer
+            // unmanaged <-> managed transitions.
+            //
+            lua_newtable(state);
 
-            var members = new Dictionary<string, MemberInfo>();
-            var memberNames = new List<string>();
-
-            var fields = type.GetFields(BindingFlags.Public | BindingFlags.Static);
-            foreach (var field in fields)
-            {
-                members[field.Name] = field;
-                memberNames.Add(field.Name);
-            }
-
-            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Static);
-            foreach (var property in properties)
-            {
-                members[property.Name] = property;
-                memberNames.Add(property.Name);
-            }
-
-            var matcher = new StringMatcher(memberNames);
-            var method = new DynamicMethod("__index", typeof(int), new[] { typeof(StringMatcher), typeof(IntPtr) });
-
-            var ilg = method.GetILGenerator();
-
-            var labels = new Label[memberNames.Count];
-            for (var i = 0; i < memberNames.Count; ++i)
-            {
-                labels[i] = ilg.DefineLabel();
-            }
-
-            ilg.Emit(Ldarg_0);
-            ilg.Emit(Ldarg_1);
-            ilg.Emit(Ldc_I4_2);
-            ilg.Emit(Call, typeof(NativeMethods).GetMethod("lua_tostring"));
-            ilg.Emit(Call, typeof(StringMatcher).GetMethod("Match"));
-            ilg.Emit(Switch, labels);
-
-            ilg.Emit(Ldarg_1);
-            ilg.Emit(Ldstr, "attempt to index invalid member");
-            ilg.Emit(Call, typeof(NativeMethods).GetMethod("luaL_error"));
-            ilg.Emit(Ret);
-
-            for (var i = 0; i < memberNames.Count; ++i)
-            {
-                ilg.MarkLabel(labels[i]);
-
-                var member = members[memberNames[i]];
-                if (member is FieldInfo field)
-                {
-                    ilg.Emit(Ldarg_1);
-                    ilg.Emit(Ldsfld, field);
-                    ilg.EmitLuaPush(field.FieldType);
-                    ilg.Emit(Ldc_I4_1);
-                    ilg.Emit(Ret);
-                }
-                else if (member is PropertyInfo property)
-                {
-                    ilg.Emit(Ldarg_1);
-                    ilg.Emit(Call, property.GetMethod);
-                    ilg.EmitLuaPush(property.PropertyType);
-                    ilg.Emit(Ldc_I4_1);
-                    ilg.Emit(Ret);
-                }
-            }
-
-            return (lua_CFunction)method.CreateDelegate(typeof(lua_CFunction), matcher);
         }
     }
 }

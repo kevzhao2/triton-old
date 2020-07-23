@@ -34,22 +34,12 @@ namespace Triton
     {
         private const string GcHelperMetatable = "<>__gcHelper";
 
-        // A callback that is run when a Lua GC occurs. This is done by creating a table with a `__gc` metamethod.
         private static readonly lua_CFunction _gcCallback = GcCallback;
 
-        // The main Lua state.
         private readonly IntPtr _state;
-
-        // A handle to the `LuaEnvironment`. By storing the handle in the "extra space" portion of a Lua state, we can
-        // retrieve the `LuaEnvironment` instance that a Lua state is attached to.
         private readonly GCHandle _selfHandle;
-
-        // A cache of Lua objects. Maps a pointer (retrieved via `lua_topointer`) to the reference in the Lua registry
-        // along with a weak reference to the Lua object. This allows for efficient lookup and cleanup.
-        private readonly Dictionary<IntPtr, (int reference, WeakReference<LuaObject> weakReference)> _luaObjects =
-            new Dictionary<IntPtr, (int, WeakReference<LuaObject>)>();
-
-        private readonly ClrMetatableManager _metatableCache;
+        private readonly Dictionary<IntPtr, (int reference, WeakReference<LuaObject> weakReference)> _luaObjects;
+        private readonly ClrMetatableManager _metatableManager;
 
         private bool _isDisposed;
 
@@ -61,11 +51,25 @@ namespace Triton
             _state = luaL_newstate();
             luaL_openlibs(_state);  // Open all standard libraries by default for convenience
 
+            // Store a handle to the `LuaEnvironment` in the extra space portion of a Lua state. This allows us to
+            // easily retrieve the `LuaEnvironment` instance, given a Lua state.
+            //
             _selfHandle = GCHandle.Alloc(this, GCHandleType.Weak);
             Marshal.WriteIntPtr(lua_getextraspace(_state), GCHandle.ToIntPtr(_selfHandle));
 
-            _metatableCache = new ClrMetatableManager(_state, this);
+            // Create a cache of Lua objects, which maps a pointer (which can be retrieved via `lua_topointer`) to the
+            // reference in the Lua registry along with a weak reference to the Lua object.
+            //
+            // A weak reference is required as otherwise, the Lua object will never be collected and Lua memory will be
+            // leaked.
+            //
+            _luaObjects = new Dictionary<IntPtr, (int, WeakReference<LuaObject>)>();
 
+            _metatableManager = new ClrMetatableManager(_state, this);
+
+            // Set up a metatable with a `__gc` metamethod. This allows us to perform memory cleanup whenever a Lua
+            // garbage collection occurs.
+            //
             luaL_newmetatable(_state, GcHelperMetatable);
             lua_pushstring(_state, "__gc");
             lua_pushcfunction(_state, _gcCallback);
@@ -80,6 +84,7 @@ namespace Triton
         // managed -> unmanaged transition.
         //
         // Thus, you must ensure that `LuaEnvironment` instances are properly disposed of!!
+        //
 
         /// <summary>
         /// Gets or sets the value of the given <paramref name="global"/>.
@@ -132,8 +137,9 @@ namespace Triton
 
             var luaObjects = environment._luaObjects;
 
-            // Scan through the Lua objects, cleaning up any which have been GC'd by the CLR. The objects within Lua
-            // will then be cleaned up on the next Lua GC.
+            // Scan through the Lua objects, cleaning up any which have been cleaned up by the CLR. The objects within
+            // Lua will then be cleaned up on the next Lua garbage collection.
+            //
             var deadPtrs = new List<IntPtr>(luaObjects.Count);
             foreach (var (ptr, (reference, weakReference)) in luaObjects)
             {
@@ -212,7 +218,7 @@ namespace Triton
 
             var ptr = lua_topointer(_state, -1);
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
-            var table = new LuaTable(this, reference, _state);
+            var table = new LuaTable(_state, this, reference);
 
             _luaObjects[ptr] = (reference, new WeakReference<LuaObject>(table));
             return table;
@@ -232,7 +238,7 @@ namespace Triton
 
             var ptr = lua_topointer(_state, -1);
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
-            var function = new LuaFunction(this, reference, _state);
+            var function = new LuaFunction(_state, this, reference);
 
             _luaObjects[ptr] = (reference, new WeakReference<LuaObject>(function));
             return function;
@@ -252,7 +258,7 @@ namespace Triton
             var ptr = lua_newthread(_state);
 
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
-            var thread = new LuaThread(this, reference, ptr);
+            var thread = new LuaThread(ptr, this, reference);
 
             _luaObjects[ptr] = (reference, new WeakReference<LuaObject>(thread));
             return thread;
@@ -276,11 +282,13 @@ namespace Triton
                 throw CreateExceptionFromStack<LuaEvalException>(_state);
             }
 
-            return new LuaResults(this, _state);
+            return new LuaResults(_state, this);
         }
 
+        // TODO: re-examine approach to marshaling objects, might have a better solution
+
         /// <summary>
-        /// Pushes a CLR type onto the stack of the given Lua <paramref name="state"/>.
+        /// Pushes the given CLR <paramref name="type"/> onto the stack of the Lua <paramref name="state"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="type">The CLR type.</param>
@@ -288,12 +296,12 @@ namespace Triton
         {
             // TODO: can perform caching of types here
             PushClrTypeOrObject(state, type, isType: true);
-            _metatableCache.PushClrTypeMetatable(state, type);
+            _metatableManager.PushClrTypeMetatable(state, type);
             lua_setmetatable(state, -2);
         }
 
         /// <summary>
-        /// Pushes a CLR object onto the stack of the given Lua <paramref name="state"/>.
+        /// Pushes a CLR <paramref name="obj"/> onto the stack of the Lua <paramref name="state"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="obj">The CLR object.</param>
@@ -301,13 +309,13 @@ namespace Triton
         {
             // TODO: can perform caching of objects here
             PushClrTypeOrObject(state, obj, isType: false);
-            _metatableCache.PushClrObjectMetatable(state, obj);
+            _metatableManager.PushClrObjectMetatable(state, obj);
             lua_setmetatable(state, -2);
         }
 
         /// <summary>
-        /// Converts the Lua value on the stack of the given Lua <paramref name="state"/> at <paramref name="index"/>
-        /// into a Lua <paramref name="value"/>.
+        /// Converts the Lua value on the stack of the Lua <paramref name="state"/> at the given
+        /// <paramref name="index"/> into a Lua <paramref name="value"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="index">The index of the Lua value on the stack.</param>
@@ -316,8 +324,8 @@ namespace Triton
             ToValue(state, index, out value, lua_type(state, index));
 
         /// <summary>
-        /// Converts the Lua value on the stack of the given Lua <paramref name="state"/> at <paramref name="index"/>
-        /// into a Lua <paramref name="value"/>.
+        /// Converts the Lua value on the stack of the Lua <paramref name="state"/> at the given
+        /// <paramref name="index"/> into a Lua <paramref name="value"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="index">The index of the Lua value on the stack.</param>
@@ -325,8 +333,6 @@ namespace Triton
         /// <param name="type">The type of the Lua value.</param>
         internal void ToValue(IntPtr state, int index, out LuaValue value, LuaType type)
         {
-            Debug.Assert(state != IntPtr.Zero);
-
             value = type switch
             {
                 LuaType.None => default,
@@ -345,14 +351,14 @@ namespace Triton
 
             LuaObject ToLuaObject(IntPtr state, int index, LuaType type)
             {
-                LuaObject obj;
+                LuaObject luaObj;
 
                 var ptr = lua_topointer(state, index);
                 if (_luaObjects.TryGetValue(ptr, out var tuple))
                 {
-                    if (tuple.weakReference.TryGetTarget(out obj))
+                    if (tuple.weakReference.TryGetTarget(out luaObj))
                     {
-                        return obj;
+                        return luaObj;
                     }
                 }
                 else
@@ -362,16 +368,16 @@ namespace Triton
                     tuple.reference = luaL_ref(state, LUA_REGISTRYINDEX);
                 }
 
-                obj = type switch
+                luaObj = type switch
                 {
-                    LuaType.Table => new LuaTable(this, tuple.reference, state),
-                    LuaType.Function => new LuaFunction(this, tuple.reference, state),
-                    _ => new LuaThread(this, tuple.reference, ptr)
+                    LuaType.Table => new LuaTable(state, this, tuple.reference),
+                    LuaType.Function => new LuaFunction(state, this, tuple.reference),
+                    _ => new LuaThread(ptr, this, tuple.reference)
                 };
 
-                tuple.weakReference = new WeakReference<LuaObject>(obj);
+                tuple.weakReference = new WeakReference<LuaObject>(luaObj);
                 _luaObjects[ptr] = tuple;
-                return obj;
+                return luaObj;
             }
 
             static LuaValue ToClrTypeOrObject(IntPtr state, int index)
@@ -388,15 +394,13 @@ namespace Triton
         }
 
         /// <summary>
-        /// Creates a <typeparamref name="TException"/> from the top of the stack of the given Lua
-        /// <paramref name="state"/>.
+        /// Creates a <typeparamref name="TException"/> from the top of the stack of the Lua <paramref name="state"/>.
         /// </summary>
         /// <typeparam name="TException">The type of exception.</typeparam>
         /// <param name="state">The Lua state.</param>
         /// <returns>The exception.</returns>
         internal TException CreateExceptionFromStack<TException>(IntPtr state)
         {
-            Debug.Assert(state != IntPtr.Zero);
             Debug.Assert(lua_type(state, -1) == LuaType.String);
 
             var message = lua_tostring(state, -1);
@@ -405,9 +409,6 @@ namespace Triton
 
         private void PushClrTypeOrObject(IntPtr state, object typeOrObj, bool isType)
         {
-            Debug.Assert(state != IntPtr.Zero);
-            Debug.Assert(typeOrObj != null);
-
             var handle = GCHandle.Alloc(typeOrObj);
             var ptr = lua_newuserdatauv(state, (UIntPtr)IntPtr.Size, 1);
             Marshal.WriteIntPtr(ptr, GCHandle.ToIntPtr(handle));

@@ -28,8 +28,8 @@ namespace Triton
     /// </summary>
     public sealed class LuaTable : LuaObject
     {
-        internal LuaTable(LuaEnvironment environment, int reference, IntPtr state) :
-            base(environment, reference, state)
+        internal LuaTable(IntPtr state, LuaEnvironment environment, int reference) :
+            base(state, environment, reference)
         {
         }
 
@@ -50,7 +50,7 @@ namespace Triton
                 }
 
                 IndexerPrologue();  // Performs validation
-                return GetterShared(lua_getfield(_state, -1, field));
+                return GetShared(lua_getfield(_state, -1, field));
             }
 
             set
@@ -77,7 +77,7 @@ namespace Triton
             get
             {
                 IndexerPrologue();  // Performs validation
-                return GetterShared(lua_geti(_state, -1, index));
+                return GetShared(lua_geti(_state, -1, index));
             }
 
             set
@@ -100,7 +100,7 @@ namespace Triton
             {
                 IndexerPrologue();  // Performs validation
                 key.Push(_state);
-                return GetterShared(lua_gettable(_state, -2));
+                return GetShared(lua_gettable(_state, -2));
             }
 
             set
@@ -121,7 +121,7 @@ namespace Triton
             lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
         }
 
-        private LuaValue GetterShared(LuaType type)
+        private LuaValue GetShared(LuaType type)
         {
             _environment.ToValue(_state, -1, out var value, type);
             return value;

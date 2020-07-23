@@ -37,7 +37,26 @@ namespace Triton.Interop
         /// <param name="type">The type.</param>
         /// <returns>All of the publicly accessible <see langword="const"/> fields.</returns>
         public static IEnumerable<FieldInfo> GetAllConstFields(this Type type) =>
-            type.GetFields(Public | Static | FlattenHierarchy).Where(f => f.IsLiteral);
+            type.GetFields(Public | Static | FlattenHierarchy)
+                .Where(f => f.IsLiteral && !f.IsSpecialName);
+
+        /// <summary>
+        /// Gets all of the publicly accessible <see langword="static"/> fields.
+        /// </summary>
+        /// <param name="type">The type.</param>
+        /// <returns>All of the publicly accessible <see langword="static"/> fields.</returns>
+        public static IEnumerable<FieldInfo> GetAllStaticFields(this Type type) =>
+            type.GetFields(Public | Static | FlattenHierarchy)
+                .Where(f => !f.IsLiteral && !f.IsSpecialName && !f.FieldType.IsByRefLike);
+
+        /// <summary>
+        /// Gets all of the publicly accessible <see langword="static"/> properties.
+        /// </summary>
+        /// <param name="type">The type.</param>
+        /// <returns>All of the publicly accessible <see langword="static"/> properties.</returns>
+        public static IEnumerable<PropertyInfo> GetAllStaticProperties(this Type type) =>
+            type.GetProperties(Public | Static | FlattenHierarchy)
+                .Where(p => !p.IsSpecialName && !p.PropertyType.IsByRefLike);
 
         /// <summary>
         /// Gets all of the publicly accessible nested types.
@@ -47,6 +66,6 @@ namespace Triton.Interop
         public static IEnumerable<Type> GetAllNestedTypes(this Type type) =>
             type.BaseType is null
                 ? Enumerable.Empty<Type>()
-                : type.GetNestedTypes().Concat(GetAllNestedTypes(type.BaseType));
+                : type.GetNestedTypes().Concat(GetAllNestedTypes(type.BaseType)).Where(t => !t.IsSpecialName);
     }
 }

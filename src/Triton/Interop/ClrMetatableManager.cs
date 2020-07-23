@@ -20,7 +20,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using static Triton.NativeMethods;
 
 namespace Triton.Interop
@@ -31,9 +30,6 @@ namespace Triton.Interop
     internal sealed class ClrMetatableManager
     {
         private readonly ClrMetavalueGenerator _metavalueGenerator;
-
-        // To store the metatables for the CLR types and objects, we will use two Lua tables with integer keys and
-        // metatable values.
         private readonly int _typeTableReference;
         private readonly int _objectTableReference;
         private readonly Dictionary<Type, int> _typeTableKeys = new Dictionary<Type, int>();
@@ -41,12 +37,11 @@ namespace Triton.Interop
 
         internal ClrMetatableManager(IntPtr state, LuaEnvironment environment)
         {
-            Debug.Assert(state != IntPtr.Zero);
-            Debug.Assert(environment != null);
-
             _metavalueGenerator = new ClrMetavalueGenerator(environment);
 
-            // Create the CLR type and object metatable tables.
+            // To store the metatables for the CLR types and objects, we will use two Lua tables with integer keys and
+            // metatable values.
+            //
             lua_newtable(state);
             _typeTableReference = luaL_ref(state, LUA_REGISTRYINDEX);
             lua_newtable(state);
@@ -54,7 +49,7 @@ namespace Triton.Interop
         }
 
         /// <summary>
-        /// Pushes the metatable for the specified CLR <paramref name="type"/> onto the stack of the given Lua
+        /// Pushes the metatable for the given CLR <paramref name="type"/> onto the stack of the Lua
         /// <paramref name="state"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
@@ -63,7 +58,7 @@ namespace Triton.Interop
             PushClrTypeOrObjectMetatable(state, type, isType: true);
 
         /// <summary>
-        /// Pushes the metatable for the specified CLR <paramref name="obj"/> onto the stack of the given Lua
+        /// Pushes the metatable for the given CLR <paramref name="obj"/> onto the stack of the Lua
         /// <paramref name="state"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
@@ -73,9 +68,6 @@ namespace Triton.Interop
 
         private void PushClrTypeOrObjectMetatable(IntPtr state, Type typeOrObjType, bool isType)
         {
-            Debug.Assert(state != IntPtr.Zero);
-            Debug.Assert(typeOrObjType != null);
-
             var tableReference = isType ? _typeTableReference : _objectTableReference;
             var tableKeys = isType ? _typeTableKeys : _objectTableKeys;
 
@@ -123,7 +115,16 @@ namespace Triton.Interop
 
         private void GenerateClrObjectMetatable(IntPtr state, Type objType)
         {
-            throw new NotImplementedException();
+            lua_newtable(state);
+
+            lua_pushcfunction(state, _metavalueGenerator.Gc);
+            lua_setfield(state, -2, "__gc");
+
+            lua_pushcfunction(state, _metavalueGenerator.ToString);
+            lua_setfield(state, -2, "__tostring");
+
+            _metavalueGenerator.PushObjectIndex(state, objType);
+            lua_setfield(state, -2, "__index");
         }
     }
 }

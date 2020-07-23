@@ -381,10 +381,9 @@ namespace Triton
         [Fact]
         public void FromClrType_AsClrObject()
         {
-            var type = typeof(List<int>);
-            var value = LuaValue.FromClrType(type);
+            var value = LuaValue.FromClrType(typeof(List<int>));
 
-            Assert.Same(type, value.AsClrType());
+            Assert.Same(typeof(List<int>), value.AsClrType());
         }
 
         [Fact]

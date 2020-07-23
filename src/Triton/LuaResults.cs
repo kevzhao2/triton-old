@@ -19,7 +19,6 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Diagnostics;
 
 namespace Triton
 {
@@ -28,8 +27,8 @@ namespace Triton
     /// </summary>
     public ref struct LuaResults
     {
-        private readonly LuaEnvironment _environment;
         private readonly IntPtr _state;
+        private readonly LuaEnvironment _environment;
 
         private int _index;
 
@@ -37,15 +36,12 @@ namespace Triton
         /// Initializes a new instance of the <see cref="LuaResults"/> structure with the given
         /// <paramref name="environment"/> and Lua <paramref name="state"/>.
         /// </summary>
-        /// <param name="environment">The Lua environment.</param>
         /// <param name="state">The Lua state.</param>
-        internal LuaResults(LuaEnvironment environment, IntPtr state)
+        /// <param name="environment">The Lua environment.</param>
+        internal LuaResults(IntPtr state, LuaEnvironment environment)
         {
-            Debug.Assert(environment != null);
-            Debug.Assert(state != IntPtr.Zero);
-
-            _environment = environment;
             _state = state;
+            _environment = environment;
             _index = 0;
         }
 

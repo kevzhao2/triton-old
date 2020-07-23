@@ -19,7 +19,6 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Diagnostics;
 using static Triton.NativeMethods;
 
 namespace Triton
@@ -29,13 +28,13 @@ namespace Triton
     /// </summary>
     public sealed class LuaFunction : LuaObject
     {
-        internal LuaFunction(LuaEnvironment environment, int reference, IntPtr state) :
-            base(environment, reference, state)
+        internal LuaFunction(IntPtr state, LuaEnvironment environment, int reference) :
+            base(state, environment, reference)
         {
         }
 
         /// <summary>
-        /// Calls the function with no arguments.
+        /// Calls the Lua function with no arguments.
         /// </summary>
         /// <returns>The results.</returns>
         /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
@@ -47,7 +46,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Calls the function with a single argument.
+        /// Calls the Lua function with a single argument.
         /// </summary>
         /// <param name="arg">The argument.</param>
         /// <returns>The results.</returns>
@@ -61,7 +60,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Calls the function with two arguments.
+        /// Calls the Lua function with two arguments.
         /// </summary>
         /// <param name="arg">The first argument.</param>
         /// <param name="arg2">The second argument.</param>
@@ -77,7 +76,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Calls the function with three arguments.
+        /// Calls the Lua function with three arguments.
         /// </summary>
         /// <param name="arg">The first argument.</param>
         /// <param name="arg2">The second argument.</param>
@@ -95,7 +94,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Calls the function with the specified arguments.
+        /// Calls the Lua function with the specified arguments.
         /// </summary>
         /// <param name="args">The arguments.</param>
         /// <returns>The results.</returns>
@@ -128,15 +127,13 @@ namespace Triton
 
         private LuaResults CallShared(int numArgs)
         {
-            Debug.Assert(numArgs >= 0);
-
             var status = lua_pcall(_state, numArgs, -1, 0);
             if (status != LuaStatus.Ok)
             {
                 throw _environment.CreateExceptionFromStack<LuaEvalException>(_state);
             }
 
-            return new LuaResults(_environment, _state);
+            return new LuaResults(_state, _environment);
         }
     }
 }

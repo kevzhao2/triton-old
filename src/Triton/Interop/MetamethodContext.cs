@@ -19,34 +19,30 @@
 // IN THE SOFTWARE.
 
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
-namespace Triton.Interop.Utils
+namespace Triton.Interop
 {
     /// <summary>
-    /// Matches a string to an index.
+    /// Provides context for a generated metamethod.
     /// </summary>
-    internal sealed class StringMatcher
+    [SuppressMessage("CodeQuality", "IDE0052:Remove unread private members", Justification = "Implicitly used")]
+    internal sealed class MetamethodContext
     {
-        private readonly Dictionary<string, int> _indices = new Dictionary<string, int>();
+        private readonly LuaEnvironment _environment;
+        private readonly Dictionary<string, int> _memberNames;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="StringMatcher"/> class with the specified
-        /// <paramref name="strings"/>.
-        /// </summary>
-        /// <param name="strings">The strings.</param>
-        public StringMatcher(IReadOnlyList<string> strings)
+        internal MetamethodContext(LuaEnvironment environment, IReadOnlyList<string> memberNames)
         {
-            for (var i = 0; i < strings.Count; ++i)
+            _environment = environment;
+
+            _memberNames = new Dictionary<string, int>();
+            for (var i = 0; i < memberNames.Count; ++i)
             {
-                _indices.Add(strings[i], i);
+                _memberNames.Add(memberNames[i], i);
             }
         }
 
-        /// <summary>
-        /// Matches a string <paramref name="s"/>. Returns the string's index, or <c>-1</c> if it does not exist.
-        /// </summary>
-        /// <param name="s">The string.</param>
-        /// <returns>The string's index, or <c>-1</c> if it does not exist.</returns>
-        public int Match(string s) => _indices.TryGetValue(s, out var index) ? index : -1;
+        private int MatchMemberName(string memberName) => _memberNames.TryGetValue(memberName, out var i) ? i : -1;
     }
 }

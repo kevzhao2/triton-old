@@ -19,7 +19,6 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using static Triton.NativeMethods;
 
@@ -30,18 +29,14 @@ namespace Triton
     /// </summary>
     public abstract class LuaObject : IDisposable
     {
+        private protected readonly IntPtr _state;
         private protected readonly LuaEnvironment _environment;
         private protected readonly int _reference;
-        private protected readonly IntPtr _state;
 
         private bool _isDisposed;
 
-        private protected LuaObject(LuaEnvironment environment, int reference, IntPtr state)
+        private protected LuaObject(IntPtr state, LuaEnvironment environment, int reference)
         {
-            Debug.Assert(environment != null);
-            Debug.Assert(reference > LUA_RIDX_GLOBALS);
-            Debug.Assert(state != IntPtr.Zero);
-
             _environment = environment;
             _reference = reference;
             _state = state;
@@ -53,18 +48,17 @@ namespace Triton
             if (!_isDisposed)
             {
                 luaL_unref(_state, LUA_REGISTRYINDEX, _reference);
+
                 _isDisposed = true;
             }
         }
 
         /// <summary>
-        /// Pushes the object onto the stack of the given Lua <paramref name="state"/>.
+        /// Pushes the Lua object onto the stack of the Lua <paramref name="state"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         internal void Push(IntPtr state)
         {
-            Debug.Assert(state != IntPtr.Zero);
-
             // Check if the environments match.
             if (Marshal.ReadIntPtr(lua_getextraspace(state)) != Marshal.ReadIntPtr(lua_getextraspace(_state)))
             {

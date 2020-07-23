@@ -29,15 +29,15 @@ namespace Triton
     /// </summary>
     public sealed class LuaThread : LuaObject
     {
-        internal LuaThread(LuaEnvironment environment, int reference, IntPtr state) :
-            base(environment, reference, state)
+        internal LuaThread(IntPtr state, LuaEnvironment environment, int reference) :
+            base(state, environment, reference)
         {
         }
 
         /// <summary>
-        /// Gets a value indicating whether the thread can be started.
+        /// Gets a value indicating whether the Lua thread can be started.
         /// </summary>
-        /// <value><see langword="true"/> if the thread can be started; otherwise, <see langword="false"/>.</value>
+        /// <value><see langword="true"/> if the Lua thread can be started; otherwise, <see langword="false"/>.</value>
         /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
         public bool CanStart
         {
@@ -49,9 +49,9 @@ namespace Triton
         }
 
         /// <summary>
-        /// Gets a value indicating whether the thread can be resumed.
+        /// Gets a value indicating whether the Lua thread can be resumed.
         /// </summary>
-        /// <value><see langword="true"/> if the thread can be resumed; otherwise, <see langword="false"/>.</value>
+        /// <value><see langword="true"/> if the Lua thread can be resumed; otherwise, <see langword="false"/>.</value>
         /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
         public bool CanResume
         {
@@ -63,9 +63,9 @@ namespace Triton
         }
 
         /// <summary>
-        /// Starts the thread, running the given <paramref name="function"/> with no arguments.
+        /// Starts the Lua thread, running the given <paramref name="function"/> with no arguments.
         /// </summary>
-        /// <param name="function">The function to run on the thread.</param>
+        /// <param name="function">The function to run on the Lua thread.</param>
         /// <returns>The results.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="function"/> is <see langword="null"/>.</exception>
         /// <exception cref="InvalidOperationException">The Lua thread cannot be started.</exception>
@@ -78,9 +78,9 @@ namespace Triton
         }
 
         /// <summary>
-        /// Starts the thread, running the given <paramref name="function"/> with a single argument.
+        /// Starts the Lua thread, running the given <paramref name="function"/> with a single argument.
         /// </summary>
-        /// <param name="function">The function to run on the thread.</param>
+        /// <param name="function">The function to run on the Lua thread.</param>
         /// <param name="arg">The argument.</param>
         /// <returns>The results.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="function"/> is <see langword="null"/>.</exception>
@@ -95,9 +95,9 @@ namespace Triton
         }
 
         /// <summary>
-        /// Starts the thread, running the given <paramref name="function"/> with two arguments.
+        /// Starts the Lua thread, running the given <paramref name="function"/> with two arguments.
         /// </summary>
-        /// <param name="function">The function to run on the thread.</param>
+        /// <param name="function">The function to run on the Lua thread.</param>
         /// <param name="arg">The first argument.</param>
         /// <param name="arg2">The second argument.</param>
         /// <returns>The results.</returns>
@@ -114,9 +114,9 @@ namespace Triton
         }
 
         /// <summary>
-        /// Starts the thread, running the given <paramref name="function"/> with three arguments.
+        /// Starts the Lua thread, running the given <paramref name="function"/> with three arguments.
         /// </summary>
-        /// <param name="function">The function to run on the thread.</param>
+        /// <param name="function">The function to run on the Lua thread.</param>
         /// <param name="arg">The first argument.</param>
         /// <param name="arg2">The second argument.</param>
         /// <param name="arg3">The third argument.</param>
@@ -135,9 +135,9 @@ namespace Triton
         }
 
         /// <summary>
-        /// Starts the thread, running the given <paramref name="function"/> with the given <paramref name="args"/>.
+        /// Starts the Lua thread, running the given <paramref name="function"/> with the given <paramref name="args"/>.
         /// </summary>
-        /// <param name="function">The function to run on the thread.</param>
+        /// <param name="function">The function to run on the Lua thread.</param>
         /// <param name="args">The arguments.</param>
         /// <returns>The results.</returns>
         /// <exception cref="ArgumentNullException">
@@ -161,7 +161,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Resumes the thread with no arguments.
+        /// Resumes the Lua thread with no arguments.
         /// </summary>
         /// <returns>The results.</returns>
         /// <exception cref="InvalidOperationException">The Lua thread cannot be resumed.</exception>
@@ -174,7 +174,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Resumes the thread with a single argument.
+        /// Resumes the Lua thread with a single argument.
         /// </summary>
         /// <param name="arg">The argument.</param>
         /// <returns>The results.</returns>
@@ -189,7 +189,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Resumes the thread with two arguments.
+        /// Resumes the Lua thread with two arguments.
         /// </summary>
         /// <param name="arg">The first argument.</param>
         /// <param name="arg2">The second argument.</param>
@@ -206,7 +206,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Resumes the thread with three arguments.
+        /// Resumes the Lua thread with three arguments.
         /// </summary>
         /// <param name="arg">The first argument.</param>
         /// <param name="arg2">The second argument.</param>
@@ -225,7 +225,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Resumes the thread with the given <paramref name="args"/>.
+        /// Resumes the Lua thread with the given <paramref name="args"/>.
         /// </summary>
         /// <param name="args">The arguments.</param>
         /// <returns>The results.</returns>
@@ -285,7 +285,7 @@ namespace Triton
                 throw _environment.CreateExceptionFromStack<LuaEvalException>(_state);
             }
 
-            return new LuaResults(_environment, _state);
+            return new LuaResults(_state, _environment);
         }
     }
 }

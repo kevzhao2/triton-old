@@ -25,8 +25,6 @@ using System.Runtime.InteropServices;
 using System.Security;
 using System.Text;
 
-[assembly: InternalsVisibleTo("Triton.Tests")]
-
 namespace Triton
 {
     /// <summary>

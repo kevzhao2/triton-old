@@ -299,7 +299,7 @@ namespace Triton
         public object? AsClrObject() => _objectOrTag;
 
         /// <summary>
-        /// Pushes the Lua value onto the stack of the given Lua <paramref name="state"/>.
+        /// Pushes the Lua value onto the stack of the Lua <paramref name="state"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         internal void Push(IntPtr state)

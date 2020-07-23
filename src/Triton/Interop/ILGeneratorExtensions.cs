@@ -22,7 +22,6 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
-using System.Runtime.InteropServices;
 using static System.Reflection.BindingFlags;
 using static System.Reflection.Emit.OpCodes;
 using static Triton.NativeMethods;
@@ -34,14 +33,20 @@ namespace Triton.Interop
     /// </summary>
     internal static class ILGeneratorExtensions
     {
+        private static readonly FieldInfo _environment =
+            typeof(MetamethodContext).GetField("_environment", NonPublic | Instance)!;
+
         private static readonly MethodInfo _lua_pushboolean = typeof(NativeMethods).GetMethod(nameof(lua_pushboolean))!;
         private static readonly MethodInfo _lua_pushinteger = typeof(NativeMethods).GetMethod(nameof(lua_pushinteger))!;
         private static readonly MethodInfo _lua_pushnumber = typeof(NativeMethods).GetMethod(nameof(lua_pushnumber))!;
         private static readonly MethodInfo _lua_pushstring = typeof(NativeMethods).GetMethod(nameof(lua_pushstring))!;
         private static readonly MethodInfo _luaL_error = typeof(NativeMethods).GetMethod(nameof(luaL_error))!;
 
-        private static readonly MethodInfo _pushObject =
-            typeof(ILGeneratorExtensions).GetMethod(nameof(PushObject), NonPublic | Static)!;
+        private static readonly MethodInfo _pushLuaObject =
+            typeof(ILGeneratorExtensions).GetMethod(nameof(PushLuaObject), NonPublic | Static)!;
+
+        private static readonly MethodInfo _pushClrObject =
+            typeof(ILGeneratorExtensions).GetMethod(nameof(PushClrObject), NonPublic | Static)!;
 
         private static readonly HashSet<Type> _signedIntegerTypes =
             new HashSet<Type> { typeof(sbyte), typeof(short), typeof(int), typeof(long) };
@@ -52,13 +57,69 @@ namespace Triton.Interop
         private static readonly HashSet<Type> _numberTypes = new HashSet<Type> { typeof(float), typeof(double) };
 
         /// <summary>
-        /// Emits a Lua push for the given <paramref name="type"/>, assuming that the state and the value have already
-        /// been emitted.
+        /// Defines <paramref name="count"/> labels.
+        /// </summary>
+        /// <param name="ilg">The IL generator.</param>
+        /// <param name="count">The count.</param>
+        /// <returns>The labels.</returns>
+        public static Label[] DefineLabels(this ILGenerator ilg, int count)
+        {
+            var labels = new Label[count];
+            for (var i = 0; i < count; ++i)
+            {
+                labels[i] = ilg.DefineLabel();
+            }
+
+            return labels;
+        }
+
+        /// <summary>
+        /// Emits an indirect load for the given <paramref name="type"/>.
+        /// </summary>
+        /// <param name="ilg">The IL generator.</param>
+        /// <param name="type">The type.</param>
+        public static void EmitLoadIndirect(this ILGenerator ilg, Type type)
+        {
+            if (type == typeof(sbyte))       /* */ ilg.Emit(Ldind_I1);
+            else if (type == typeof(byte))   /* */ ilg.Emit(Ldind_U1);
+            else if (type == typeof(short))  /* */ ilg.Emit(Ldind_I2);
+            else if (type == typeof(ushort)) /* */ ilg.Emit(Ldind_U2);
+            else if (type == typeof(int))    /* */ ilg.Emit(Ldind_I4);
+            else if (type == typeof(uint))   /* */ ilg.Emit(Ldind_U4);
+            else if (type == typeof(long))   /* */ ilg.Emit(Ldind_I8);
+            else if (type == typeof(ulong))  /* */ ilg.Emit(Ldind_I8);
+            else if (type == typeof(float))  /* */ ilg.Emit(Ldind_R4);
+            else if (type == typeof(double)) /* */ ilg.Emit(Ldind_R8);
+            else if (type.IsValueType)       /* */ ilg.Emit(Ldobj, type);
+            else                             /* */ ilg.Emit(Ldind_Ref);
+        }
+
+        /// <summary>
+        /// Emits a Lua error with the given <paramref name="message"/>, assuming that the state is arg 1.
+        /// </summary>
+        /// <param name="ilg">The IL generator.</param>
+        /// <param name="message">The message.</param>
+        public static void EmitLuaError(this ILGenerator ilg, string message)
+        {
+            ilg.Emit(Ldarg_1);
+            ilg.Emit(Ldstr, message);
+            ilg.Emit(Call, _luaL_error);
+        }
+
+        /// <summary>
+        /// Emits a Lua push for the given <paramref name="type"/>, assuming that the context is arg 0, and the
+        /// state and value are pushed on the stack.
         /// </summary>
         /// <param name="ilg">The IL generator.</param>
         /// <param name="type">The type.</param>
         public static void EmitLuaPush(this ILGenerator ilg, Type type)
         {
+            if (type.IsByRef)
+            {
+                type = type.GetElementType();
+                ilg.EmitLoadIndirect(type);
+            }
+
             if (type == typeof(bool))
             {
                 ilg.Emit(Call, _lua_pushboolean);
@@ -98,6 +159,10 @@ namespace Triton.Interop
                 ilg.Emit(Call, _lua_pushstring);
                 ilg.Emit(Pop);
             }
+            else if (typeof(LuaObject).IsAssignableFrom(type))
+            {
+                ilg.Emit(Call, _pushLuaObject);
+            }
             else
             {
                 if (type.IsValueType)
@@ -105,21 +170,15 @@ namespace Triton.Interop
                     ilg.Emit(Box, type);
                 }
 
-                ilg.Emit(Call, _pushObject);
+                ilg.Emit(Ldarg_0);
+                ilg.Emit(Ldfld, _environment);
+                ilg.Emit(Call, _pushClrObject);
             }
         }
 
-        // TODO: this can be optimized by keeping the `LuaEnvironment` instance in context
-        private static void PushObject(IntPtr state, object obj)
-        {
-            var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(lua_getextraspace(state)));
-            if (!(handle.Target is LuaEnvironment environment))
-            {
-                lua_pushnil(state);
-                return;
-            }
+        private static void PushLuaObject(IntPtr state, LuaObject luaObj) => luaObj.Push(state);
 
+        private static void PushClrObject(IntPtr state, object obj, LuaEnvironment environment) =>
             environment.PushClrObject(state, obj);
-        }
     }
 }
