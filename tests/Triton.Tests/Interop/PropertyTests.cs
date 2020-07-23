@@ -18,6 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
+using System;
 using System.Diagnostics.CodeAnalysis;
 using Xunit;
 
@@ -51,6 +52,15 @@ namespace Triton.Interop
             environment.Eval("assert(StaticByRef.String == 'Hello, world!')");
         }
 
+        [Fact]
+        public void GetStaticRefStructNotSupported()
+        {
+            using var environment = new LuaEnvironment();
+            environment["StaticRefStruct"] = LuaValue.FromClrType(typeof(StaticRefStruct));
+
+            Assert.Throws<LuaEvalException>(() => environment.Eval("span = StaticRefStruct.Span"));
+        }
+
         private static class Static
         {
             public static int I4 => 1234;
@@ -68,6 +78,11 @@ namespace Triton.Interop
             public static ref int I4 => ref _i4;
             public static ref double R8 => ref _r8;
             public static ref string? String => ref _string;
+        }
+
+        private static class StaticRefStruct
+        {
+            public static Span<byte> Span => Span<byte>.Empty;
         }
     }
 }

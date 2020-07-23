@@ -26,9 +26,9 @@ namespace Triton.Interop
     /// <summary>
     /// Provides context for a generated metamethod.
     /// </summary>
-    [SuppressMessage("CodeQuality", "IDE0052:Remove unread private members", Justification = "Implicitly used")]
     internal sealed class MetamethodContext
     {
+        [SuppressMessage("CodeQuality", "IDE0052:Remove unread private members", Justification = "Implicitly used")]
         private readonly LuaEnvironment _environment;
         private readonly Dictionary<string, int> _memberNames;
 
@@ -43,6 +43,7 @@ namespace Triton.Interop
             }
         }
 
+        [SuppressMessage("CodeQuality", "IDE0051:Remove unread private members", Justification = "Implicitly used")]
         private int MatchMemberName(string memberName) => _memberNames.TryGetValue(memberName, out var i) ? i : -1;
     }
 }

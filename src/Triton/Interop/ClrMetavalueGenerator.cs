@@ -47,8 +47,6 @@ namespace Triton.Interop
         private readonly LuaEnvironment _environment;
         private readonly List<lua_CFunction> _generatedCallbacks;
 
-        private readonly Dictionary<Type, lua_CFunction> _typeIndex = new Dictionary<Type, lua_CFunction>();
-
         internal ClrMetavalueGenerator(LuaEnvironment environment)
         {
             _environment = environment;

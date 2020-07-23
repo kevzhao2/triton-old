@@ -47,7 +47,7 @@ namespace Triton.Interop
         /// <returns>All of the publicly accessible <see langword="static"/> fields.</returns>
         public static IEnumerable<FieldInfo> GetAllStaticFields(this Type type) =>
             type.GetFields(Public | Static | FlattenHierarchy)
-                .Where(f => !f.IsLiteral && !f.IsSpecialName && !f.FieldType.IsByRefLike);
+                .Where(f => !f.IsLiteral && !f.IsSpecialName);
 
         /// <summary>
         /// Gets all of the publicly accessible <see langword="static"/> properties.
