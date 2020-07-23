@@ -18,36 +18,56 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
+using System.Diagnostics.CodeAnalysis;
 using Xunit;
 
 namespace Triton.Interop
 {
-    public class FieldTests
+    public class PropertyTests
     {
         [Fact]
         public void GetStatics()
         {
             using var environment = new LuaEnvironment();
             environment["Static"] = LuaValue.FromClrType(typeof(Static));
-            var (table, _) = environment.Eval("table = {} return table");
-
-            Static.I4 = 1234;
-            Static.R8 = 1.234;
-            Static.String = "Hello, world!";
-            Static.LuaObject = (LuaObject?)table;
 
             environment.Eval("assert(Static.I4 == 1234)");
             environment.Eval("assert(Static.R8 == 1.234)");
             environment.Eval("assert(Static.String == 'Hello, world!')");
-            environment.Eval("assert(Static.LuaObject == table)");
+        }
+
+        [Fact]
+        public void GetStaticsByRef()
+        {
+            using var environment = new LuaEnvironment();
+            environment["StaticByRef"] = LuaValue.FromClrType(typeof(StaticByRef));
+
+            StaticByRef.I4 = 1234;
+            StaticByRef.R8 = 1.234;
+            StaticByRef.String = "Hello, world!";
+
+            environment.Eval("assert(StaticByRef.I4 == 1234)");
+            environment.Eval("assert(StaticByRef.R8 == 1.234)");
+            environment.Eval("assert(StaticByRef.String == 'Hello, world!')");
         }
 
         private static class Static
         {
-            public static int I4;
-            public static double R8;
-            public static string? String;
-            public static LuaObject? LuaObject;
+            public static int I4 => 1234;
+            public static double R8 => 1.234;
+            public static string String => "Hello, world!";
+        }
+
+        [SuppressMessage("Style", "IDE0044:Add readonly modifier", Justification = "Ref returns")]
+        private static class StaticByRef
+        {
+            private static int _i4;
+            private static double _r8;
+            private static string? _string;
+
+            public static ref int I4 => ref _i4;
+            public static ref double R8 => ref _r8;
+            public static ref string? String => ref _string;
         }
     }
 }
