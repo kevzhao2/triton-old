@@ -29,20 +29,19 @@ namespace Triton
     /// Represents a Lua value.
     /// </summary>
     [StructLayout(LayoutKind.Explicit, Size = 16)]
-    public readonly struct LuaValue : IDisposable
+    public readonly struct LuaValue : IEquatable<LuaValue>, IDisposable
     {
+        private class TypeTag
+        {
+        }
+
         private static readonly TypeTag _booleanTag = new TypeTag();
         private static readonly TypeTag _integerTag = new TypeTag();
         private static readonly TypeTag _numberTag = new TypeTag();
 
-        // `LuaValue` consists of an 8-byte value followed by an 8-byte object or type tag. Primitives (such as `nil`,
-        // booleans, integers, and numbers) are represented using the value and a specific type tag, and objects are
-        // represented using an object type and the actual object.
-
         [FieldOffset(0)] private readonly bool _boolean;
         [FieldOffset(0)] private readonly long _integer;
         [FieldOffset(0)] private readonly double _number;
-        [FieldOffset(0)] private readonly ObjectType _objectType;
 
         [FieldOffset(8)] private readonly object? _objectOrTag;
 
@@ -66,9 +65,9 @@ namespace Triton
             _objectOrTag = _numberTag;
         }
 
-        private LuaValue(ObjectType objectType, object? value) : this()
+        private LuaValue(long type, object? value) : this()
         {
-            _objectType = objectType;
+            _integer = type;
             _objectOrTag = value;  // No null check here since it will be considered to be `nil`
         }
 
@@ -108,25 +107,50 @@ namespace Triton
         /// Gets a value indicating whether the Lua value is a string.
         /// </summary>
         /// <value><see langword="true"/> if the Lua value is a string; otherwise, <see langword="false"/>.</value>
-        public bool IsString => _objectType == ObjectType.String && !IsNil && !(_objectOrTag is TypeTag);
+        public bool IsString => _integer == 1 && _objectOrTag is string;
 
         /// <summary>
         /// Gets a value indicating whether the Lua value is a Lua object.
         /// </summary>
         /// <value><see langword="true"/> if the Lua value is a Lua object; otherwise, <see langword="false"/>.</value>
-        public bool IsLuaObject => _objectType == ObjectType.LuaObject && !IsNil && !(_objectOrTag is TypeTag);
+        public bool IsLuaObject => _integer == 2 && _objectOrTag is LuaObject;
 
         /// <summary>
         /// Gets a value indicating whether the Lua value is a CLR type.
         /// </summary>
         /// <value><see langword="true"/> if the Lua value is a CLR type; otherwise, <see langword="false"/>.</value>
-        public bool IsClrType => _objectType == ObjectType.ClrType && !IsNil && !(_objectOrTag is TypeTag);
+        public bool IsClrType => _integer == 3 && _objectOrTag is Type;
 
         /// <summary>
         /// Gets a value indicating whether the Lua value is a CLR object.
         /// </summary>
         /// <value><see langword="true"/> if the Lua value is a CLR object; otherwise, <see langword="false"/>.</value>
-        public bool IsClrObject => _objectType == ObjectType.ClrObject && !IsNil && !(_objectOrTag is TypeTag);
+        public bool IsClrObject => _integer == 4 && !IsNil && !(_objectOrTag is TypeTag);
+
+        /// <summary>
+        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given object
+        /// <paramref name="value"/>.
+        /// </summary>
+        /// <param name="value">The object value.</param>
+        /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
+        public static LuaValue FromObject(object? value)
+        {
+            if (value is null)                  /* */ return Nil;
+            else if (value is bool b)           /* */ return FromBoolean(b);
+            else if (value is sbyte i1)         /* */ return FromInteger(i1);
+            else if (value is byte u1)          /* */ return FromInteger(u1);
+            else if (value is short i2)         /* */ return FromInteger(i2);
+            else if (value is ushort u2)        /* */ return FromInteger(u2);
+            else if (value is int i4)           /* */ return FromInteger(i4);
+            else if (value is uint u4)          /* */ return FromInteger(u4);
+            else if (value is long i8)          /* */ return FromInteger(i8);
+            else if (value is ulong u8)         /* */ return FromInteger((long)u8);
+            else if (value is float r4)         /* */ return FromNumber(r4);
+            else if (value is double r8)        /* */ return FromNumber(r8);
+            else if (value is string s)         /* */ return FromString(s);
+            else if (value is LuaObject luaObj) /* */ return FromLuaObject(luaObj);
+            else                                /* */ return FromClrObject(value);
+        }
 
         /// <summary>
         /// Creates a new instance of the <see cref="LuaValue"/> structure from the given boolean
@@ -158,7 +182,7 @@ namespace Triton
         /// </summary>
         /// <param name="value">The string value.</param>
         /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
-        public static LuaValue FromString(string? value) => new LuaValue(ObjectType.String, value);
+        public static LuaValue FromString(string? value) => new LuaValue(1, value);
 
         /// <summary>
         /// Creates a new instance of the <see cref="LuaValue"/> structure from the given Lua object
@@ -166,7 +190,7 @@ namespace Triton
         /// </summary>
         /// <param name="value">The Lua object value.</param>
         /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
-        public static LuaValue FromLuaObject(LuaObject? value) => new LuaValue(ObjectType.LuaObject, value);
+        public static LuaValue FromLuaObject(LuaObject? value) => new LuaValue(2, value);
 
         /// <summary>
         /// Creates a new instance of the <see cref="LuaValue"/> structure from the given CLR type
@@ -174,7 +198,7 @@ namespace Triton
         /// </summary>
         /// <param name="value">The CLR type value.</param>
         /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
-        public static LuaValue FromClrType(Type? value) => new LuaValue(ObjectType.ClrType, value);
+        public static LuaValue FromClrType(Type? value) => new LuaValue(3, value);
 
         /// <summary>
         /// Creates a new instance of the <see cref="LuaValue"/> structure from the given CLR object
@@ -182,7 +206,46 @@ namespace Triton
         /// </summary>
         /// <param name="value">The CLR object value.</param>
         /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
-        public static LuaValue FromClrObject(object? value) => new LuaValue(ObjectType.ClrObject, value);
+        public static LuaValue FromClrObject(object? value) => new LuaValue(4, value);
+
+        /// <inheritdoc/>
+        public override bool Equals(object? obj) => obj is LuaValue other && Equals(other);
+
+        /// <summary>
+        /// Indicates whether the Lua value is equal to the <paramref name="other"/> Lua value.
+        /// </summary>
+        /// <param name="other">The other Lua value.</param>
+        /// <returns>
+        /// <see langword="true"/> if the Lua value is equal to <paramref name="other"/>; otherwise,
+        /// <see langword="false"/>.
+        /// </returns>
+        public bool Equals(in LuaValue other) => ((IEquatable<LuaValue>)this).Equals(other);
+
+        /// <inheritdoc/>
+        public override int GetHashCode()
+        {
+            if (_objectOrTag is null)
+            {
+                return 0;
+            }
+
+            if (_objectOrTag == _booleanTag)
+            {
+                return HashCode.Combine(_boolean);
+            }
+            else if (_objectOrTag == _integerTag)
+            {
+                return HashCode.Combine(_integer);
+            }
+            else if (_objectOrTag == _numberTag)
+            {
+                return HashCode.Combine(_number);
+            }
+            else
+            {
+                return HashCode.Combine(_integer, _objectOrTag);
+            }
+        }
 
         /// <inheritdoc/>
         public void Dispose()
@@ -194,81 +257,46 @@ namespace Triton
         }
 
         /// <summary>
-        /// Converts the Lua value into a boolean.
+        /// Converts the Lua value into a boolean. <i>This is unchecked!</i>
         /// </summary>
         /// <returns>The Lua value as a boolean.</returns>
-        public bool AsBoolean()
-        {
-            Debug.Assert(IsBoolean);
-
-            return _boolean;
-        }
+        public bool AsBoolean() => _boolean;
 
         /// <summary>
-        /// Converts the Lua value into an integer.
+        /// Converts the Lua value into an integer. <i>This is unchecked!</i>
         /// </summary>
         /// <returns>The Lua value as an integer.</returns>
-        public long AsInteger()
-        {
-            Debug.Assert(IsInteger);
-
-            return _integer;
-        }
+        public long AsInteger() => _integer;
 
         /// <summary>
-        /// Converts the Lua value into a number.
+        /// Converts the Lua value into a number. <i>This is unchecked!</i>
         /// </summary>
         /// <returns>The Lua value as a number.</returns>
-        public double AsNumber()
-        {
-            Debug.Assert(IsNumber);
-
-            return _number;
-        }
+        public double AsNumber() => _number;
 
         /// <summary>
-        /// Converts the Lua value into a string.
+        /// Converts the Lua value into a string. <i>This is unchecked!</i>
         /// </summary>
         /// <returns>The Lua value as a string.</returns>
-        public string? AsString()
-        {
-            Debug.Assert(IsString);
-
-            return _objectOrTag as string;
-        }
+        public string? AsString() => _objectOrTag as string;
 
         /// <summary>
-        /// Converts the Lua value into a Lua object.
+        /// Converts the Lua value into a Lua object. <i>This is unchecked!</i>
         /// </summary>
         /// <returns>The Lua value as a Lua object.</returns>
-        public LuaObject? AsLuaObject()
-        {
-            Debug.Assert(IsLuaObject);
-
-            return _objectOrTag as LuaObject;
-        }
+        public LuaObject? AsLuaObject() => _objectOrTag as LuaObject;
 
         /// <summary>
-        /// Converts the Lua value into a CLR type.
+        /// Converts the Lua value into a CLR type. <i>This is unchecked!</i>
         /// </summary>
         /// <returns>The Lua value as a CLR type.</returns>
-        public Type? AsClrType()
-        {
-            Debug.Assert(IsClrType);
-
-            return _objectOrTag as Type;
-        }
+        public Type? AsClrType() => _objectOrTag as Type;
 
         /// <summary>
-        /// Converts the Lua value into a CLR object.
+        /// Converts the Lua value into a CLR object. <i>This is unchecked!</i>
         /// </summary>
         /// <returns>The Lua value as a CLR object.</returns>
-        public object? AsClrObject()
-        {
-            Debug.Assert(IsClrObject);
-
-            return _objectOrTag;
-        }
+        public object? AsClrObject() => _objectOrTag;
 
         /// <summary>
         /// Pushes the Lua value onto the stack of the given Lua <paramref name="state"/>.
@@ -276,7 +304,6 @@ namespace Triton
         /// <param name="state">The Lua state.</param>
         internal void Push(IntPtr state)
         {
-            Debug.Assert(state != IntPtr.Zero);
             Debug.Assert(lua_checkstack(state, 1));
 
             if (_objectOrTag is null)
@@ -300,23 +327,13 @@ namespace Triton
             }
             else
             {
-                if (_objectType == ObjectType.String)
+                if (_integer == 1)
                 {
                     lua_pushstring(state, (string)_objectOrTag);
                 }
-                else if (_objectType == ObjectType.LuaObject)
+                else if (_integer == 2)
                 {
                     ((LuaObject)_objectOrTag).Push(state);
-                }
-                else if (_objectType == ObjectType.ClrType)
-                {
-                    var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(lua_getextraspace(state)));
-                    if (!(handle.Target is LuaEnvironment environment))
-                    {
-                        return;
-                    }
-
-                    environment.PushClrType(state, (Type)_objectOrTag);
                 }
                 else
                 {
@@ -326,8 +343,45 @@ namespace Triton
                         return;
                     }
 
-                    environment.PushClrObject(state, _objectOrTag);
+                    if (_integer == 3)
+                    {
+                        environment.PushClrType(state, (Type)_objectOrTag);
+                    }
+                    else
+                    {
+                        environment.PushClrObject(state, _objectOrTag);
+                    }
                 }
+            }
+        }
+
+        bool IEquatable<LuaValue>.Equals(LuaValue other)
+        {
+            if (_objectOrTag is null)
+            {
+                return other._objectOrTag is null;
+            }
+
+            if (!_objectOrTag.Equals(other._objectOrTag))
+            {
+                return false;
+            }
+
+            if (_objectOrTag == _booleanTag)
+            {
+                return _boolean == other._boolean;
+            }
+            else if (_objectOrTag == _integerTag)
+            {
+                return _integer == other._integer;
+            }
+            else if (_objectOrTag == _numberTag)
+            {
+                return _number == other._number;
+            }
+            else
+            {
+                return _integer == other._integer;
             }
         }
 
@@ -335,72 +389,60 @@ namespace Triton
         /// Converts the given boolean <paramref name="value"/> into a Lua value.
         /// </summary>
         /// <param name="value">The boolean value.</param>
-        public static implicit operator LuaValue(bool value) => new LuaValue(value);
+        public static implicit operator LuaValue(bool value) => FromBoolean(value);
 
         /// <summary>
         /// Converts the given integer <paramref name="value"/> into a Lua value.
         /// </summary>
         /// <param name="value">The integer value.</param>
-        public static implicit operator LuaValue(long value) => new LuaValue(value);
+        public static implicit operator LuaValue(long value) => FromInteger(value);
 
         /// <summary>
         /// Converts the given number <paramref name="value"/> into a Lua value.
         /// </summary>
         /// <param name="value">The number value.</param>
-        public static implicit operator LuaValue(double value) => new LuaValue(value);
+        public static implicit operator LuaValue(double value) => FromNumber(value);
 
         /// <summary>
         /// Converts the given string <paramref name="value"/> into a Lua value.
         /// </summary>
         /// <param name="value">The string value.</param>
-        public static implicit operator LuaValue(string? value) => new LuaValue(ObjectType.String, value);
+        public static implicit operator LuaValue(string? value) => FromString(value);
 
         /// <summary>
         /// Converts the given Lua object <paramref name="value"/> into a Lua value.
         /// </summary>
         /// <param name="value">The Lua object value.</param>
-        public static implicit operator LuaValue(LuaObject? value) => new LuaValue(ObjectType.LuaObject, value);
+        public static implicit operator LuaValue(LuaObject? value) => FromLuaObject(value);
 
         /// <summary>
-        /// Converts the given Lua <paramref name="value"/> into a boolean.
+        /// Converts the given Lua <paramref name="value"/> into a boolean. <i>This is unchecked!</i>
         /// </summary>
         /// <param name="value">The Lua value.</param>
         public static explicit operator bool(in LuaValue value) => value.AsBoolean();
 
         /// <summary>
-        /// Converts the given Lua <paramref name="value"/> into an integer.
+        /// Converts the given Lua <paramref name="value"/> into an integer. <i>This is unchecked!</i>
         /// </summary>
         /// <param name="value">The Lua value.</param>
         public static explicit operator long(in LuaValue value) => value.AsInteger();
 
         /// <summary>
-        /// Converts the given Lua <paramref name="value"/> into a number.
+        /// Converts the given Lua <paramref name="value"/> into a number. <i>This is unchecked!</i>
         /// </summary>
         /// <param name="value">The Lua value.</param>
         public static explicit operator double(in LuaValue value) => value.AsNumber();
 
         /// <summary>
-        /// Converts the given Lua <paramref name="value"/> into a string.
+        /// Converts the given Lua <paramref name="value"/> into a string. <i>This is unchecked!</i>
         /// </summary>
         /// <param name="value">The Lua value.</param>
         public static explicit operator string?(in LuaValue value) => value.AsString();
 
         /// <summary>
-        /// Converts the given Lua <paramref name="value"/> into a Lua object.
+        /// Converts the given Lua <paramref name="value"/> into a Lua object. <i>This is unchecked!</i>
         /// </summary>
         /// <param name="value">The Lua value.</param>
         public static explicit operator LuaObject?(in LuaValue value) => value.AsLuaObject();
-
-        private class TypeTag
-        {
-        }
-
-        private enum ObjectType
-        {
-            String,
-            LuaObject,
-            ClrType,
-            ClrObject
-        }
     }
 }

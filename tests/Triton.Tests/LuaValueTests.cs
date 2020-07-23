@@ -21,7 +21,6 @@
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using Xunit;
-using static Triton.NativeMethods;
 
 namespace Triton
 {
@@ -78,7 +77,7 @@ namespace Triton
         [Fact]
         public void IsString_Get_ReturnsFalse_Integer()
         {
-            var value = LuaValue.FromInteger(0);
+            var value = LuaValue.FromInteger(1);
 
             Assert.False(value.IsString);
         }
@@ -104,7 +103,7 @@ namespace Triton
         [Fact]
         public void IsLuaObject_Get_ReturnsFalse_Integer()
         {
-            var value = LuaValue.FromInteger(1);
+            var value = LuaValue.FromInteger(2);
 
             Assert.False(value.IsLuaObject);
         }
@@ -128,7 +127,7 @@ namespace Triton
         [Fact]
         public void IsClrType_Get_ReturnsFalse_Integer()
         {
-            var value = LuaValue.FromInteger(2);
+            var value = LuaValue.FromInteger(3);
 
             Assert.False(value.IsClrType);
         }
@@ -153,7 +152,7 @@ namespace Triton
         [Fact]
         public void IsClrObject_Get_ReturnsFalse_Integer()
         {
-            var value = LuaValue.FromInteger(3);
+            var value = LuaValue.FromInteger(4);
 
             Assert.False(value.IsClrObject);
         }
@@ -174,6 +173,143 @@ namespace Triton
             var value = LuaValue.FromLuaObject(table);
 
             Assert.False(value.IsClrObject);
+        }
+
+        [Fact]
+        public void FromObject_Null()
+        {
+            var value = LuaValue.FromObject(null);
+
+            Assert.True(value.IsNil);
+        }
+
+        [Fact]
+        public void FromObject_Bool()
+        {
+            var value = LuaValue.FromObject(true);
+
+            Assert.True(value.IsBoolean);
+            Assert.True((bool)value);
+        }
+
+        [Fact]
+        public void FromObject_Sbyte()
+        {
+            var value = LuaValue.FromObject(sbyte.MaxValue);
+
+            Assert.True(value.IsInteger);
+            Assert.Equal(sbyte.MaxValue, (long)value);
+        }
+
+        [Fact]
+        public void FromObject_Byte()
+        {
+            var value = LuaValue.FromObject(byte.MaxValue);
+
+            Assert.True(value.IsInteger);
+            Assert.Equal(byte.MaxValue, (long)value);
+        }
+
+        [Fact]
+        public void FromObject_Short()
+        {
+            var value = LuaValue.FromObject(short.MaxValue);
+
+            Assert.True(value.IsInteger);
+            Assert.Equal(short.MaxValue, (long)value);
+        }
+
+        [Fact]
+        public void FromObject_Ushort()
+        {
+            var value = LuaValue.FromObject(ushort.MaxValue);
+
+            Assert.True(value.IsInteger);
+            Assert.Equal(ushort.MaxValue, (long)value);
+        }
+
+        [Fact]
+        public void FromObject_Int()
+        {
+            var value = LuaValue.FromObject(int.MaxValue);
+
+            Assert.True(value.IsInteger);
+            Assert.Equal(int.MaxValue, (long)value);
+        }
+
+        [Fact]
+        public void FromObject_Uint()
+        {
+            var value = LuaValue.FromObject(uint.MaxValue);
+
+            Assert.True(value.IsInteger);
+            Assert.Equal(uint.MaxValue, (long)value);
+        }
+
+        [Fact]
+        public void FromObject_Long()
+        {
+            var value = LuaValue.FromObject(long.MaxValue);
+
+            Assert.True(value.IsInteger);
+            Assert.Equal(long.MaxValue, (long)value);
+        }
+
+        [Fact]
+        public void FromObject_Ulong()
+        {
+            var value = LuaValue.FromObject(ulong.MaxValue);
+
+            Assert.True(value.IsInteger);
+            Assert.Equal(ulong.MaxValue, (ulong)(long)value);
+        }
+
+        [Fact]
+        public void FromObject_Float()
+        {
+            var value = LuaValue.FromObject(1.234f);
+
+            Assert.True(value.IsNumber);
+            Assert.Equal(1.234f, (double)value);
+        }
+
+        [Fact]
+        public void FromObject_Double()
+        {
+            var value = LuaValue.FromObject(1.234);
+
+            Assert.True(value.IsNumber);
+            Assert.Equal(1.234, (double)value);
+        }
+
+        [Fact]
+        public void FromObject_String()
+        {
+            var value = LuaValue.FromObject("test");
+
+            Assert.True(value.IsString);
+            Assert.Equal("test", (string?)value);
+        }
+
+        [Fact]
+        public void FromObject_LuaObject()
+        {
+            using var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+            var value = LuaValue.FromObject(table);
+
+            Assert.True(value.IsLuaObject);
+            Assert.Same(table, (LuaObject?)value);
+        }
+
+        [Fact]
+        public void FromObject_Object()
+        {
+            var list = new List<int>();
+            var value = LuaValue.FromObject(list);
+
+            Assert.True(value.IsClrObject);
+            Assert.Same(list, value.AsClrObject());
         }
 
         [Fact]
@@ -217,6 +353,14 @@ namespace Triton
         }
 
         [Fact]
+        public void FromLuaObject_NullLuaObject()
+        {
+            var value = LuaValue.FromLuaObject(null);
+
+            Assert.True(value.IsNil);
+        }
+
+        [Fact]
         public void FromLuaObject_AsLuaObject()
         {
             using var environment = new LuaEnvironment();
@@ -224,6 +368,31 @@ namespace Triton
             var value = LuaValue.FromLuaObject(table);
 
             Assert.Same(table, value.AsLuaObject());
+        }
+
+        [Fact]
+        public void FromClrType_NullClrType()
+        {
+            var value = LuaValue.FromClrType(null);
+
+            Assert.True(value.IsNil);
+        }
+
+        [Fact]
+        public void FromClrType_AsClrObject()
+        {
+            var type = typeof(List<int>);
+            var value = LuaValue.FromClrType(type);
+
+            Assert.Same(type, value.AsClrType());
+        }
+
+        [Fact]
+        public void FromClrObject_NullClrObject()
+        {
+            var value = LuaValue.FromClrObject(null);
+
+            Assert.True(value.IsNil);
         }
 
         [Fact]
@@ -236,94 +405,230 @@ namespace Triton
         }
 
         [Fact]
-        public void Push_Nil()
+        public void Equals_Object_WrongType_ReturnsFalse()
         {
-            var state = luaL_newstate();
+            var value = LuaValue.FromInteger(1234);
 
-            try
-            {
-                LuaValue.Nil.Push(state);
-
-                Assert.Equal(LuaType.Nil, lua_type(state, -1));
-            }
-            finally
-            {
-                lua_close(state);
-            }
+            Assert.False(value.Equals((object)1));
         }
 
         [Fact]
-        public void Push_Boolean()
+        public void Equals_Object_ReturnsTrue()
         {
-            var state = luaL_newstate();
+            var value = LuaValue.FromInteger(1234);
 
-            try
-            {
-                LuaValue.FromBoolean(true).Push(state);
-
-                Assert.Equal(LuaType.Boolean, lua_type(state, -1));
-                Assert.True(lua_toboolean(state, -1));
-            }
-            finally
-            {
-                lua_close(state);
-            }
+            Assert.True(value.Equals((object)LuaValue.FromInteger(1234)));
         }
 
         [Fact]
-        public void Push_Integer()
+        public void Equals_LuaValue_ReturnsTrue_Nil()
         {
-            var state = luaL_newstate();
+            var value = LuaValue.Nil;
 
-            try
-            {
-                LuaValue.FromInteger(1234).Push(state);
-
-                Assert.Equal(LuaType.Number, lua_type(state, -1));
-                Assert.True(lua_isinteger(state, -1));
-                Assert.Equal(1234, lua_tointeger(state, -1));
-            }
-            finally
-            {
-                lua_close(state);
-            }
+            Assert.True(value.Equals(LuaValue.Nil));
         }
 
         [Fact]
-        public void Push_Number()
+        public void Equals_LuaValue_ReturnsFalse_Nil()
         {
-            var state = luaL_newstate();
+            var value = LuaValue.Nil;
 
-            try
-            {
-                LuaValue.FromNumber(1.234).Push(state);
-
-                Assert.Equal(LuaType.Number, lua_type(state, -1));
-                Assert.False(lua_isinteger(state, -1));
-                Assert.Equal(1.234, lua_tonumber(state, -1));
-            }
-            finally
-            {
-                lua_close(state);
-            }
+            Assert.False(value.Equals(1234));
         }
 
         [Fact]
-        public void Push_String()
+        public void Equals_LuaValue_ReturnsTrue_Boolean()
         {
-            var state = luaL_newstate();
+            var value = LuaValue.FromBoolean(true);
 
-            try
-            {
-                LuaValue.FromString("test").Push(state);
+            Assert.True(value.Equals(true));
+        }
 
-                Assert.Equal(LuaType.String, lua_type(state, -1));
-                Assert.Equal("test", lua_tostring(state, -1));
-            }
-            finally
-            {
-                lua_close(state);
-            }
+        [Fact]
+        public void Equals_LuaValue_ReturnsFalse_Boolean()
+        {
+            var value = LuaValue.FromBoolean(true);
+
+            Assert.False(value.Equals(false));
+        }
+
+        [Fact]
+        public void Equals_LuaValue_ReturnsTrue_Integer()
+        {
+            var value = LuaValue.FromInteger(1234);
+
+            Assert.True(value.Equals(1234));
+        }
+
+        [Fact]
+        public void Equals_LuaValue_ReturnsFalse_Integer()
+        {
+            var value = LuaValue.FromInteger(1234);
+
+            Assert.False(value.Equals(0));
+        }
+
+        [Fact]
+        public void Equals_LuaValue_ReturnsTrue_Number()
+        {
+            var value = LuaValue.FromNumber(1.234);
+
+            Assert.True(value.Equals(1.234));
+        }
+
+        [Fact]
+        public void Equals_LuaValue_ReturnsFalse_Number()
+        {
+            var value = LuaValue.FromNumber(1.234);
+
+            Assert.False(value.Equals(0.0));
+        }
+
+        [Fact]
+        public void Equals_LuaValue_ReturnsTrue_String()
+        {
+            var value = LuaValue.FromString("test");
+
+            Assert.True(value.Equals("test"));
+        }
+
+        [Fact]
+        public void Equals_LuaValue_ReturnsFalse_String()
+        {
+            var value = LuaValue.FromString("test");
+
+            Assert.False(value.Equals("asdf"));
+        }
+
+        [Fact]
+        public void Equals_LuaValue_ReturnsTrue_LuaObject()
+        {
+            using var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+            var value = LuaValue.FromLuaObject(table);
+
+            Assert.True(value.Equals(table));
+        }
+
+        [Fact]
+        public void Equals_LuaValue_ReturnsFalse_LuaObject()
+        {
+            using var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+            var table2 = environment.CreateTable();
+            var value = LuaValue.FromLuaObject(table);
+
+            Assert.False(value.Equals(table2));
+        }
+
+        [Fact]
+        public void Equals_LuaValue_ReturnsTrue_ClrType()
+        {
+            var value = LuaValue.FromClrType(typeof(List<int>));
+
+            Assert.True(value.Equals(LuaValue.FromClrType(typeof(List<int>))));
+        }
+
+        [Fact]
+        public void Equals_LuaValue_ReturnsFalse_ClrType()
+        {
+            var value = LuaValue.FromClrType(typeof(List<int>));
+
+            Assert.False(value.Equals(LuaValue.FromClrType(typeof(List<string>))));
+        }
+
+        [Fact]
+        public void Equals_LuaValue_ReturnsTrue_ClrObject()
+        {
+            var list = new List<int>();
+            var value = LuaValue.FromClrObject(list);
+
+            Assert.True(value.Equals(LuaValue.FromClrObject(list)));
+        }
+
+        [Fact]
+        public void Equals_LuaValue_ReturnsFalse_ClrObject()
+        {
+            var list = new List<int>();
+            var list2 = new List<int>();
+            var value = LuaValue.FromClrObject(list);
+
+            Assert.False(value.Equals(LuaValue.FromClrObject(list2)));
+        }
+
+        [Fact]
+        public void GetHashCode_Equals_Nil_AreSame()
+        {
+            var value = LuaValue.Nil;
+            var value2 = LuaValue.Nil;
+
+            Assert.Equal(value.GetHashCode(), value2.GetHashCode());
+        }
+
+        [Fact]
+        public void GetHashCode_Equals_Boolean_AreSame()
+        {
+            var value = LuaValue.FromBoolean(true);
+            var value2 = LuaValue.FromBoolean(true);
+
+            Assert.Equal(value.GetHashCode(), value2.GetHashCode());
+        }
+
+        [Fact]
+        public void GetHashCode_Equals_Integer_AreSame()
+        {
+            var value = LuaValue.FromInteger(1234);
+            var value2 = LuaValue.FromInteger(1234);
+
+            Assert.Equal(value.GetHashCode(), value2.GetHashCode());
+        }
+
+        [Fact]
+        public void GetHashCode_Equals_Number_AreSame()
+        {
+            var value = LuaValue.FromNumber(1.234);
+            var value2 = LuaValue.FromNumber(1.234);
+
+            Assert.Equal(value.GetHashCode(), value2.GetHashCode());
+        }
+
+        [Fact]
+        public void GetHashCode_Equals_String_AreSame()
+        {
+            var value = LuaValue.FromString("test");
+            var value2 = LuaValue.FromString("test");
+
+            Assert.Equal(value.GetHashCode(), value2.GetHashCode());
+        }
+
+        [Fact]
+        public void GetHashCode_Equals_LuaObject_AreSame()
+        {
+            using var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+            var value = LuaValue.FromLuaObject(table);
+            var value2 = LuaValue.FromLuaObject(table);
+
+            Assert.Equal(value.GetHashCode(), value2.GetHashCode());
+        }
+
+        [Fact]
+        public void GetHashCode_Equals_ClrType_AreSame()
+        {
+            var value = LuaValue.FromClrType(typeof(List<int>));
+            var value2 = LuaValue.FromClrType(typeof(List<int>));
+
+            Assert.Equal(value.GetHashCode(), value2.GetHashCode());
+        }
+
+        [Fact]
+        public void GetHashCode_Equals_ClrObject_AreSame()
+        {
+            var list = new List<int>();
+            var value = LuaValue.FromClrObject(list);
+            var value2 = LuaValue.FromClrObject(list);
+
+            Assert.Equal(value.GetHashCode(), value2.GetHashCode());
         }
 
         [Fact]
