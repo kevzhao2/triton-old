@@ -21,8 +21,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
-using Triton.Interop.CodeGeneration;
 using static Triton.NativeMethods;
 
 namespace Triton.Interop
@@ -30,10 +28,9 @@ namespace Triton.Interop
     /// <summary>
     /// Manages Lua metatables for CLR types and objects.
     /// </summary>
-    internal class ClrMetatableManager
+    internal sealed class ClrMetatableManager
     {
-        private static readonly lua_CFunction _gcCallback = GcCallback;
-        private static readonly lua_CFunction _toStringCallback = ProtectedCall(ToStringCallback);
+        private readonly ClrMetavalueGenerator _metavalueGenerator;
 
         // To store the metatables for the CLR types and objects, we will use two Lua tables with integer keys and
         // metatable values.
@@ -47,42 +44,13 @@ namespace Triton.Interop
             Debug.Assert(state != IntPtr.Zero);
             Debug.Assert(environment != null);
 
+            _metavalueGenerator = new ClrMetavalueGenerator(environment);
+
             // Create the CLR type and object metatable tables.
             lua_newtable(state);
             _typeTableReference = luaL_ref(state, LUA_REGISTRYINDEX);
             lua_newtable(state);
             _objectTableReference = luaL_ref(state, LUA_REGISTRYINDEX);
-        }
-
-        // Performs a "protected" call of a `lua_CFunction`, raising uncaught CLR exceptions as Lua errors. This is
-        // required since exceptions should _NOT_ be thrown in reverse P/Invokes.
-        private static lua_CFunction ProtectedCall(lua_CFunction callback) =>
-            state =>
-            {
-                try
-                {
-                    return callback(state);
-                }
-                catch (Exception ex)
-                {
-                    return luaL_error(state, $"unhandled CLR exception:\n{ex}");
-                }
-            };
-
-        private static int GcCallback(IntPtr state)
-        {
-            var ptr = lua_touserdata(state, 1);
-            var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(ptr));
-            handle.Free();
-            return 0;
-        }
-
-        private static int ToStringCallback(IntPtr state)
-        {
-            var ptr = lua_touserdata(state, 1);
-            var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(ptr));
-            lua_pushstring(state, handle.Target.ToString());
-            return 1;
         }
 
         /// <summary>
@@ -143,13 +111,13 @@ namespace Triton.Interop
         {
             lua_newtable(state);
 
-            lua_pushcfunction(state, _gcCallback);
+            lua_pushcfunction(state, _metavalueGenerator.Gc);
             lua_setfield(state, -2, "__gc");
 
-            lua_pushcfunction(state, _toStringCallback);
+            lua_pushcfunction(state, _metavalueGenerator.ToString);
             lua_setfield(state, -2, "__tostring");
 
-            lua_pushcfunction(state, ProtectedCall(ClrTypeIndexGenerator.Generate(type)));
+            _metavalueGenerator.PushTypeIndex(state, type);
             lua_setfield(state, -2, "__index");
         }
 

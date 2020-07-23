@@ -23,12 +23,11 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.InteropServices;
-using System.Text;
 using static System.Reflection.BindingFlags;
 using static System.Reflection.Emit.OpCodes;
 using static Triton.NativeMethods;
 
-namespace Triton.Interop.Utils
+namespace Triton.Interop
 {
     /// <summary>
     /// Provides extensions for the <see cref="ILGenerator"/> class.
@@ -39,23 +38,22 @@ namespace Triton.Interop.Utils
         private static readonly MethodInfo _lua_pushinteger = typeof(NativeMethods).GetMethod(nameof(lua_pushinteger))!;
         private static readonly MethodInfo _lua_pushnumber = typeof(NativeMethods).GetMethod(nameof(lua_pushnumber))!;
         private static readonly MethodInfo _lua_pushstring = typeof(NativeMethods).GetMethod(nameof(lua_pushstring))!;
+        private static readonly MethodInfo _luaL_error = typeof(NativeMethods).GetMethod(nameof(luaL_error))!;
 
         private static readonly MethodInfo _pushObject =
             typeof(ILGeneratorExtensions).GetMethod(nameof(PushObject), NonPublic | Static)!;
 
-        private static readonly HashSet<Type> _integerTypes = new HashSet<Type>
-        {
-            typeof(sbyte), typeof(byte),
-            typeof(short), typeof(ushort),
-            typeof(int), typeof(uint),
-            typeof(long), typeof(ulong)
-        };
+        private static readonly HashSet<Type> _signedIntegerTypes =
+            new HashSet<Type> { typeof(sbyte), typeof(short), typeof(int), typeof(long) };
+
+        private static readonly HashSet<Type> _unsignedIntegerTypes =
+            new HashSet<Type> { typeof(byte), typeof(ushort), typeof(uint), typeof(ulong) };
 
         private static readonly HashSet<Type> _numberTypes = new HashSet<Type> { typeof(float), typeof(double) };
 
         /// <summary>
-        /// Emits a Lua push for the given <paramref name="type"/>, assuming that the state and the value have been
-        /// emitted.
+        /// Emits a Lua push for the given <paramref name="type"/>, assuming that the state and the value have already
+        /// been emitted.
         /// </summary>
         /// <param name="ilg">The IL generator.</param>
         /// <param name="type">The type.</param>
@@ -65,12 +63,22 @@ namespace Triton.Interop.Utils
             {
                 ilg.Emit(Call, _lua_pushboolean);
             }
-            else if (_integerTypes.Contains(type))
+            else if (_signedIntegerTypes.Contains(type))
             {
                 // As an optimization, don't emit conv.i8 if the type is already the correct size.
-                if (type != typeof(long) && type != typeof(ulong))
+                if (type != typeof(long))
                 {
                     ilg.Emit(Conv_I8);
+                }
+
+                ilg.Emit(Call, _lua_pushinteger);
+            }
+            else if (_unsignedIntegerTypes.Contains(type))
+            {
+                // As an optimization, don't emit conv.u8 if the type is already the correct size.
+                if (type != typeof(ulong))
+                {
+                    ilg.Emit(Conv_U8);
                 }
 
                 ilg.Emit(Call, _lua_pushinteger);
