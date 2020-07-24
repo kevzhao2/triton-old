@@ -36,17 +36,32 @@ namespace Triton.Interop
         private static readonly FieldInfo _environment =
             typeof(MetamethodContext).GetField("_environment", NonPublic | Instance)!;
 
-        private static readonly MethodInfo _lua_pushboolean = typeof(NativeMethods).GetMethod(nameof(lua_pushboolean))!;
-        private static readonly MethodInfo _lua_pushinteger = typeof(NativeMethods).GetMethod(nameof(lua_pushinteger))!;
-        private static readonly MethodInfo _lua_pushnumber = typeof(NativeMethods).GetMethod(nameof(lua_pushnumber))!;
-        private static readonly MethodInfo _lua_pushstring = typeof(NativeMethods).GetMethod(nameof(lua_pushstring))!;
-        private static readonly MethodInfo _luaL_error = typeof(NativeMethods).GetMethod(nameof(luaL_error))!;
+        private static readonly MethodInfo _lua_pushboolean
+            = typeof(NativeMethods).GetMethod(nameof(lua_pushboolean))!;
+
+        private static readonly MethodInfo _lua_pushlightuserdata
+            = typeof(NativeMethods).GetMethod(nameof(lua_pushlightuserdata))!;
+
+        private static readonly MethodInfo _lua_pushinteger
+            = typeof(NativeMethods).GetMethod(nameof(lua_pushinteger))!;
+
+        private static readonly MethodInfo _lua_pushnumber
+            = typeof(NativeMethods).GetMethod(nameof(lua_pushnumber))!;
+
+        private static readonly MethodInfo _lua_pushstring
+            = typeof(NativeMethods).GetMethod(nameof(lua_pushstring))!;
+
+        private static readonly MethodInfo _luaL_error
+            = typeof(NativeMethods).GetMethod(nameof(luaL_error))!;
 
         private static readonly MethodInfo _pushLuaObject =
             typeof(ILGeneratorExtensions).GetMethod(nameof(PushLuaObject), NonPublic | Static)!;
 
         private static readonly MethodInfo _pushClrObject =
             typeof(ILGeneratorExtensions).GetMethod(nameof(PushClrObject), NonPublic | Static)!;
+
+        private static readonly MethodInfo _intPtrOpExplicit =
+            typeof(IntPtr).GetMethod("op_Explicit", new[] { typeof(void*) });
 
         private static readonly HashSet<Type> _signedIntegerTypes =
             new HashSet<Type> { typeof(sbyte), typeof(short), typeof(int), typeof(long) };
@@ -114,15 +129,14 @@ namespace Triton.Interop
         /// <param name="type">The type.</param>
         public static void EmitLuaPush(this ILGenerator ilg, Type type)
         {
-            if (type.IsByRef)
-            {
-                type = type.GetElementType();
-                ilg.EmitLoadIndirect(type);
-            }
-
             if (type == typeof(bool))
             {
                 ilg.Emit(Call, _lua_pushboolean);
+            }
+            else if (type.IsPointer)
+            {
+                ilg.Emit(Call, _intPtrOpExplicit);
+                ilg.Emit(Call, _lua_pushlightuserdata);
             }
             else if (_signedIntegerTypes.Contains(type))
             {

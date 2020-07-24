@@ -18,6 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using Xunit;
@@ -40,6 +41,14 @@ namespace Triton
             var value = LuaValue.FromBoolean(true);
 
             Assert.True(value.IsBoolean);
+        }
+
+        [Fact]
+        public void IsLightUserdata_Get_ReturnsTrue()
+        {
+            var value = LuaValue.FromLightUserdata((IntPtr)1234);
+
+            Assert.True(value.IsLightUserdata);
         }
 
         [Fact]
@@ -193,6 +202,15 @@ namespace Triton
         }
 
         [Fact]
+        public void FromObject_IntPtr()
+        {
+            var value = LuaValue.FromObject((IntPtr)1234);
+
+            Assert.True(value.IsLightUserdata);
+            Assert.Equal((IntPtr)1234, (IntPtr)value);
+        }
+
+        [Fact]
         public void FromObject_Sbyte()
         {
             var value = LuaValue.FromObject(sbyte.MaxValue);
@@ -318,6 +336,14 @@ namespace Triton
             var value = LuaValue.FromBoolean(true);
 
             Assert.True(value.AsBoolean());
+        }
+
+        [Fact]
+        public void FromLightUserdata_AsLightUserdata()
+        {
+            var value = LuaValue.FromLightUserdata((IntPtr)1234);
+
+            Assert.Equal((IntPtr)1234, value.AsLightUserdata());
         }
 
         [Fact]
@@ -452,6 +478,22 @@ namespace Triton
         }
 
         [Fact]
+        public void Equals_LuaValue_ReturnsTrue_LightUserdata()
+        {
+            var value = LuaValue.FromLightUserdata((IntPtr)1234);
+
+            Assert.True(value.Equals((IntPtr)1234));
+        }
+
+        [Fact]
+        public void Equals_LuaValue_ReturnsFalse_LightUserdata()
+        {
+            var value = LuaValue.FromLightUserdata((IntPtr)1234);
+
+            Assert.False(value.Equals((IntPtr)0));
+        }
+
+        [Fact]
         public void Equals_LuaValue_ReturnsTrue_Integer()
         {
             var value = LuaValue.FromInteger(1234);
@@ -574,6 +616,15 @@ namespace Triton
         }
 
         [Fact]
+        public void GetHashCode_Equals_LightUserdata_AreSame()
+        {
+            var value = LuaValue.FromLightUserdata((IntPtr)1234);
+            var value2 = LuaValue.FromLightUserdata((IntPtr)1234);
+
+            Assert.Equal(value.GetHashCode(), value2.GetHashCode());
+        }
+
+        [Fact]
         public void GetHashCode_Equals_Integer_AreSame()
         {
             var value = LuaValue.FromInteger(1234);
@@ -641,6 +692,15 @@ namespace Triton
 
         [Fact]
         [SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "Operator name")]
+        public void op_Implicit_IntPtr()
+        {
+            LuaValue value = (IntPtr)1234;
+
+            Assert.Equal((IntPtr)1234, value.AsLightUserdata());
+        }
+
+        [Fact]
+        [SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "Operator name")]
         public void op_Implicit_Long()
         {
             LuaValue value = 1234;
@@ -684,6 +744,15 @@ namespace Triton
             var value = LuaValue.FromBoolean(true);
 
             Assert.True((bool)value);
+        }
+
+        [Fact]
+        [SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "Operator name")]
+        public void op_Explicit_IntPtr()
+        {
+            var value = LuaValue.FromLightUserdata((IntPtr)1234);
+
+            Assert.Equal((IntPtr)1234, (IntPtr)value);
         }
 
         [Fact]

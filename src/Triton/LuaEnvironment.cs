@@ -333,11 +333,16 @@ namespace Triton
         /// <param name="type">The type of the Lua value.</param>
         internal void ToValue(IntPtr state, int index, out LuaValue value, LuaType type)
         {
+            if (type == LuaType.None)
+            {
+                type = LuaType.Nil;
+            }
+
             value = type switch
             {
-                LuaType.None => default,
                 LuaType.Nil => default,
                 LuaType.Boolean => lua_toboolean(state, index),
+                LuaType.LightUserdata => lua_touserdata(state, index),
                 LuaType.Number => ToIntegerOrNumber(state, index),
                 LuaType.String => lua_tostring(state, index),
                 LuaType.Table => ToLuaObject(state, index, LuaType.Table),

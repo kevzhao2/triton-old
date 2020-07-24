@@ -91,6 +91,16 @@ namespace Triton
         }
 
         [Fact]
+        public void Item_Set_Get_LightUserdata()
+        {
+            using var environment = new LuaEnvironment();
+
+            environment["test"] = (IntPtr)1234;
+
+            Assert.Equal((IntPtr)1234, (IntPtr)environment["test"]);
+        }
+
+        [Fact]
         public void Item_Set_Get_Integer()
         {
             using var environment = new LuaEnvironment();

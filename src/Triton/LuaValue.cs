@@ -20,6 +20,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using static Triton.NativeMethods;
 
@@ -36,10 +37,12 @@ namespace Triton
         }
 
         private static readonly TypeTag _booleanTag = new TypeTag();
+        private static readonly TypeTag _lightUserdataTag = new TypeTag();
         private static readonly TypeTag _integerTag = new TypeTag();
         private static readonly TypeTag _numberTag = new TypeTag();
 
         [FieldOffset(0)] private readonly bool _boolean;
+        [FieldOffset(0)] private readonly IntPtr _lightUserdata;
         [FieldOffset(0)] private readonly long _integer;
         [FieldOffset(0)] private readonly double _number;
 
@@ -51,6 +54,12 @@ namespace Triton
         {
             _boolean = value;
             _objectOrTag = _booleanTag;
+        }
+
+        private LuaValue(IntPtr value) : this()
+        {
+            _lightUserdata = value;
+            _objectOrTag = _lightUserdataTag;
         }
 
         private LuaValue(long value) : this()
@@ -90,6 +99,14 @@ namespace Triton
         /// </summary>
         /// <value><see langword="true"/> if the Lua value is a boolean; otherwise, <see langword="false"/>.</value>
         public bool IsBoolean => _objectOrTag == _booleanTag;
+
+        /// <summary>
+        /// Gets a value indicating whether the Lua value is a light userdata.
+        /// </summary>
+        /// <value>
+        /// <see langword="true"/> if the Lua value is a light userdata; otherwise, <see langword="false"/>.
+        /// </value>
+        public bool IsLightUserdata => _objectOrTag == _lightUserdataTag;
 
         /// <summary>
         /// Gets a value indicating whether the Lua value is an integer.
@@ -133,24 +150,25 @@ namespace Triton
         /// </summary>
         /// <param name="value">The object value.</param>
         /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
-        public static LuaValue FromObject(object? value)
+        public static LuaValue FromObject(object? value) => value switch
         {
-            if (value is null)                  /* */ return Nil;
-            else if (value is bool b)           /* */ return FromBoolean(b);
-            else if (value is sbyte i1)         /* */ return FromInteger(i1);
-            else if (value is byte u1)          /* */ return FromInteger(u1);
-            else if (value is short i2)         /* */ return FromInteger(i2);
-            else if (value is ushort u2)        /* */ return FromInteger(u2);
-            else if (value is int i4)           /* */ return FromInteger(i4);
-            else if (value is uint u4)          /* */ return FromInteger(u4);
-            else if (value is long i8)          /* */ return FromInteger(i8);
-            else if (value is ulong u8)         /* */ return FromInteger((long)u8);
-            else if (value is float r4)         /* */ return FromNumber(r4);
-            else if (value is double r8)        /* */ return FromNumber(r8);
-            else if (value is string s)         /* */ return FromString(s);
-            else if (value is LuaObject luaObj) /* */ return FromLuaObject(luaObj);
-            else                                /* */ return FromClrObject(value);
-        }
+            null             => Nil,
+            bool b           => FromBoolean(b),
+            IntPtr p         => FromLightUserdata(p),
+            sbyte i1         => FromInteger(i1),
+            byte u1          => FromInteger(u1),
+            short i2         => FromInteger(i2),
+            ushort u2        => FromInteger(u2),
+            int i4           => FromInteger(i4),
+            uint u4          => FromInteger(u4),
+            long i8          => FromInteger(i8),
+            ulong u8         => FromInteger((long)u8),
+            float r4         => FromNumber(r4),
+            double r8        => FromNumber(r8),
+            string s         => FromString(s),
+            LuaObject luaObj => FromLuaObject(luaObj),
+            _                => FromClrObject(value)
+        };
 
         /// <summary>
         /// Creates a new instance of the <see cref="LuaValue"/> structure from the given boolean
@@ -159,6 +177,14 @@ namespace Triton
         /// <param name="value">The boolean value.</param>
         /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
         public static LuaValue FromBoolean(bool value) => new LuaValue(value);
+
+        /// <summary>
+        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given light userdata
+        /// <paramref name="value"/>.
+        /// </summary>
+        /// <param name="value">The light userdata value.</param>
+        /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
+        public static LuaValue FromLightUserdata(IntPtr value) => new LuaValue(value);
 
         /// <summary>
         /// Creates a new instance of the <see cref="LuaValue"/> structure from the given integer
@@ -211,56 +237,52 @@ namespace Triton
         /// <inheritdoc/>
         public override bool Equals(object? obj) => obj is LuaValue other && Equals(other);
 
-        /// <summary>
-        /// Indicates whether the Lua value is equal to the <paramref name="other"/> Lua value.
-        /// </summary>
-        /// <param name="other">The other Lua value.</param>
-        /// <returns>
-        /// <see langword="true"/> if the Lua value is equal to <paramref name="other"/>; otherwise,
-        /// <see langword="false"/>.
-        /// </returns>
+        /// <inheritdoc cref="IEquatable{LuaValue}.Equals(LuaValue)"/>
         public bool Equals(in LuaValue other) => ((IEquatable<LuaValue>)this).Equals(other);
 
         /// <inheritdoc/>
-        public override int GetHashCode()
+        public override int GetHashCode() => _objectOrTag switch
         {
-            if (_objectOrTag is null)
-            {
-                return 0;
-            }
+            null => 0,
+            _ when _objectOrTag == _booleanTag       => HashCode.Combine(_boolean),
+            _ when _objectOrTag == _lightUserdataTag => HashCode.Combine(_lightUserdata),
+            _ when _objectOrTag == _integerTag       => HashCode.Combine(_integer),
+            _ when _objectOrTag == _numberTag        => HashCode.Combine(_number),
+            _                                        => HashCode.Combine(_integer, _objectOrTag)
+        };
 
-            if (_objectOrTag == _booleanTag)
-            {
-                return HashCode.Combine(_boolean);
-            }
-            else if (_objectOrTag == _integerTag)
-            {
-                return HashCode.Combine(_integer);
-            }
-            else if (_objectOrTag == _numberTag)
-            {
-                return HashCode.Combine(_number);
-            }
-            else
-            {
-                return HashCode.Combine(_integer, _objectOrTag);
-            }
-        }
+        /// <summary>
+        /// Returns a string that represents the Lua value.
+        /// </summary>
+        /// <returns>A string that represents the Lua value.</returns>
+        [ExcludeFromCodeCoverage]
+        public override string ToString() => _objectOrTag switch
+        {
+            null                                     => "<nil>",
+            _ when _objectOrTag == _booleanTag       => $"<boolean: {_boolean}>",
+            _ when _objectOrTag == _lightUserdataTag => $"<light userdata: 0x{_lightUserdata.ToInt64():x8}>",
+            _ when _objectOrTag == _integerTag       => $"<integer: {_integer}>",
+            _ when _objectOrTag == _numberTag        => $"<number: {_number}>",
+            _ when _number == 1                      => $"<string: {_objectOrTag}>",
+            _ when _number == 2                      => $"<Lua object: {_objectOrTag}>",
+            _ when _number == 3                      => $"<CLR type: {_objectOrTag}>",
+            _                                        => $"<CLR object: {_objectOrTag}>"
+        };
 
         /// <inheritdoc/>
-        public void Dispose()
-        {
-            if (_objectOrTag is LuaObject obj)
-            {
-                obj.Dispose();
-            }
-        }
+        public void Dispose() => (_objectOrTag as LuaObject)?.Dispose();
 
         /// <summary>
         /// Converts the Lua value into a boolean. <i>This is unchecked!</i>
         /// </summary>
         /// <returns>The Lua value as a boolean.</returns>
         public bool AsBoolean() => _boolean;
+
+        /// <summary>
+        /// Converts the Lua value into a light userdata. <i>This is unchecked!</i>
+        /// </summary>
+        /// <returns>The Lua value as a light userdata.</returns>
+        public IntPtr AsLightUserdata() => _lightUserdata;
 
         /// <summary>
         /// Converts the Lua value into an integer. <i>This is unchecked!</i>
@@ -316,6 +338,10 @@ namespace Triton
                 {
                     lua_pushboolean(state, _boolean);
                 }
+                else if (_objectOrTag == _lightUserdataTag)
+                {
+                    lua_pushlightuserdata(state, _lightUserdata);
+                }
                 else if (_objectOrTag == _integerTag)
                 {
                     lua_pushinteger(state, _integer);
@@ -367,22 +393,14 @@ namespace Triton
                 return false;
             }
 
-            if (_objectOrTag == _booleanTag)
+            return _objectOrTag switch
             {
-                return _boolean == other._boolean;
-            }
-            else if (_objectOrTag == _integerTag)
-            {
-                return _integer == other._integer;
-            }
-            else if (_objectOrTag == _numberTag)
-            {
-                return _number == other._number;
-            }
-            else
-            {
-                return _integer == other._integer;
-            }
+                _ when _objectOrTag == _booleanTag       => _boolean == other._boolean,
+                _ when _objectOrTag == _lightUserdataTag => _lightUserdata == other._lightUserdata,
+                _ when _objectOrTag == _integerTag       => _integer == other._integer,
+                _ when _objectOrTag == _numberTag        => _number == other._number,
+                _                                        => true
+            };
         }
 
         /// <summary>
@@ -390,6 +408,12 @@ namespace Triton
         /// </summary>
         /// <param name="value">The boolean value.</param>
         public static implicit operator LuaValue(bool value) => FromBoolean(value);
+
+        /// <summary>
+        /// Converts the given light userdata <paramref name="value"/> into a Lua value.
+        /// </summary>
+        /// <param name="value">The light userdata value.</param>
+        public static implicit operator LuaValue(IntPtr value) => FromLightUserdata(value);
 
         /// <summary>
         /// Converts the given integer <paramref name="value"/> into a Lua value.
@@ -420,6 +444,12 @@ namespace Triton
         /// </summary>
         /// <param name="value">The Lua value.</param>
         public static explicit operator bool(in LuaValue value) => value.AsBoolean();
+        
+        /// <summary>
+        /// Converts the given Lua <paramref name="value"/> into a light userdata. <i>This is unchecked!</i>
+        /// </summary>
+        /// <param name="value">The Lua value.</param>
+        public static explicit operator IntPtr(in LuaValue value) => value.AsLightUserdata();
 
         /// <summary>
         /// Converts the given Lua <paramref name="value"/> into an integer. <i>This is unchecked!</i>

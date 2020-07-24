@@ -185,15 +185,13 @@ namespace Triton.Interop
                     ilg.MarkLabel(labels[i]);
 
                     var member = members[memberNames[i]];
-                    if (member is FieldInfo field)
+                    if (member is FieldInfo { FieldType: var fieldType } field)
                     {
                         ilg.Emit(Ldarg_1);
                         ilg.Emit(Ldsfld, field);
-                        ilg.EmitLuaPush(field.FieldType);
-                        ilg.Emit(Ldc_I4_1);
-                        ilg.Emit(Ret);
+                        ilg.EmitLuaPush(fieldType);
                     }
-                    else if (member is PropertyInfo property)
+                    else if (member is PropertyInfo { PropertyType: var propertyType } property)
                     {
                         if (!property.CanRead)
                         {
@@ -202,12 +200,28 @@ namespace Triton.Interop
                             continue;
                         }
 
+                        if (propertyType.IsByRefLike)
+                        {
+                            ilg.EmitLuaError("attempt to index by-ref like property");
+                            ilg.Emit(Ret);
+                            continue;
+                        }
+
                         ilg.Emit(Ldarg_1);
                         ilg.Emit(Call, property.GetMethod);
-                        ilg.EmitLuaPush(property.PropertyType);
-                        ilg.Emit(Ldc_I4_1);
-                        ilg.Emit(Ret);
+
+                        // Support ref-returning properties by emitting an indirect load.
+                        if (propertyType.IsByRef)
+                        {
+                            propertyType = propertyType.GetElementType();
+                            ilg.EmitLoadIndirect(propertyType);
+                        }
+
+                        ilg.EmitLuaPush(propertyType);
                     }
+
+                    ilg.Emit(Ldc_I4_1);
+                    ilg.Emit(Ret);
                 }
 
                 return (lua_CFunction)method.CreateDelegate(typeof(lua_CFunction), context);

@@ -53,12 +53,21 @@ namespace Triton.Interop
         }
 
         [Fact]
-        public void GetStaticRefStructNotSupported()
+        public void GetStaticNonReadable_RaisesLuaError()
         {
             using var environment = new LuaEnvironment();
-            environment["StaticRefStruct"] = LuaValue.FromClrType(typeof(StaticRefStruct));
+            environment["StaticNonReadable"] = LuaValue.FromClrType(typeof(StaticByRefLike));
 
-            Assert.Throws<LuaEvalException>(() => environment.Eval("span = StaticRefStruct.Span"));
+            Assert.Throws<LuaEvalException>(() => environment.Eval("i4 = StaticNonReadable.I4"));
+        }
+
+        [Fact]
+        public void GetStaticByRefLike_RaisesLuaError()
+        {
+            using var environment = new LuaEnvironment();
+            environment["StaticByRefLike"] = LuaValue.FromClrType(typeof(StaticByRefLike));
+
+            Assert.Throws<LuaEvalException>(() => environment.Eval("span = StaticByRefLike.Span"));
         }
 
         private static class Static
@@ -80,7 +89,12 @@ namespace Triton.Interop
             public static ref string? String => ref _string;
         }
 
-        private static class StaticRefStruct
+        private static class StaticNonReadable
+        {
+            public static int I4 { private get; set; }
+        }
+
+        private static class StaticByRefLike
         {
             public static Span<byte> Span => Span<byte>.Empty;
         }

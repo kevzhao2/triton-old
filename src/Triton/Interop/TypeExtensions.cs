@@ -56,7 +56,7 @@ namespace Triton.Interop
         /// <returns>All of the publicly accessible <see langword="static"/> properties.</returns>
         public static IEnumerable<PropertyInfo> GetAllStaticProperties(this Type type) =>
             type.GetProperties(Public | Static | FlattenHierarchy)
-                .Where(p => !p.IsSpecialName && !p.PropertyType.IsByRefLike);
+                .Where(p => !p.IsSpecialName);
 
         /// <summary>
         /// Gets all of the publicly accessible nested types.
