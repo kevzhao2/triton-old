@@ -37,13 +37,14 @@ namespace Triton.Interop
     {
         private static readonly MethodInfo _lua_tostring = typeof(NativeMethods).GetMethod("lua_tostring")!;
 
-        private static readonly MethodInfo _contextMatchMemberName =
+        private static readonly MethodInfo _matchMemberName =
             typeof(MetamethodContext).GetMethod("MatchMemberName", NonPublic | Instance)!;
 
+        private static readonly lua_CFunction _gcMetamethod = GcMetamethod;
         private static readonly lua_CFunction _tostringMetamethod = ProtectedCall(ToStringMetamethod);
 
         private readonly LuaEnvironment _environment;
-        private readonly List<lua_CFunction> _generatedCallbacks;
+        private readonly List<lua_CFunction> _generatedCallbacks;  // Used to prevent garbage collection of delegates
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ClrMetavalueGenerator"/> class with the specified Lua
@@ -72,15 +73,23 @@ namespace Triton.Interop
                 }
             };
 
+        private static int GcMetamethod(IntPtr state)
+        {
+            var ptr = lua_touserdata(state, 1);
+            var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(ptr).Unmarked());
+            handle.Free();
+            return 0;
+        }
+
         private static int ToStringMetamethod(IntPtr state)
         {
             var ptr = lua_touserdata(state, 1);
-            var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(ptr));
-            lua_pushstring(state, handle.Target.ToString());
+            var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(ptr).Unmarked());
+            _ = lua_pushstring(state, handle.Target.ToString());
             return 1;
         }
 
-        private static DynamicMethod CreateMetamethod(string name) =>
+        private static DynamicMethod CreateDynamicMetamethod(string name) =>
             new DynamicMethod(
                 name, typeof(int), new[] { typeof(MetamethodContext), typeof(IntPtr) }, typeof(MetamethodContext));
         
@@ -97,6 +106,12 @@ namespace Triton.Interop
 
             return (memberNames, members);
         }
+
+        /// <summary>
+        /// Pushes the <c>__gc</c> metamethod onto the stack of the Lua <paramref name="state"/>.
+        /// </summary>
+        /// <param name="state">The Lua state.</param>
+        internal void PushGc(IntPtr state) => lua_pushcfunction(state, _gcMetamethod);
 
         /// <summary>
         /// Pushes the <c>__tostring</c> metamethod onto the stack of the Lua <paramref name="state"/>.
@@ -151,7 +166,7 @@ namespace Triton.Interop
                     ((IEnumerable<MemberInfo>)staticFields).Concat(staticProperties));
 
                 var context = new MetamethodContext(_environment, memberNames);
-                var method = CreateMetamethod("__index");
+                var method = CreateDynamicMetamethod("__index");
                 var ilg = method.GetILGenerator();
                 var labels = ilg.DefineLabels(memberNames.Count);
 
@@ -159,7 +174,7 @@ namespace Triton.Interop
                 ilg.Emit(Ldarg_1);
                 ilg.Emit(Ldc_I4_2);
                 ilg.Emit(Call, _lua_tostring);
-                ilg.Emit(Call, _contextMatchMemberName);
+                ilg.Emit(Call, _matchMemberName);
                 ilg.Emit(Switch, labels);
 
                 ilg.EmitLuaError("attempt to index invalid member");

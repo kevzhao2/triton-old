@@ -228,10 +228,28 @@ namespace Triton.Interop
             }
         }
 
-        private static void PushLuaObject(IntPtr state, LuaObject luaObj, LuaEnvironment environment) =>
-            environment.PushLuaObject(state, luaObj);
+        private static void PushLuaObject(IntPtr state, LuaObject? obj, LuaEnvironment environment)
+        {
+            if (obj is null)
+            {
+                lua_pushnil(state);
+            }
+            else
+            {
+                environment.PushLuaObject(state, obj);
+            }
+        }
 
-        private static void PushClrObject(IntPtr state, object obj, LuaEnvironment environment) =>
-            environment.PushClrObject(state, obj);
+        private static void PushClrObject(IntPtr state, object? obj, LuaEnvironment environment)
+        {
+            if (obj is null)
+            {
+                lua_pushnil(state);
+            }
+            else
+            {
+                environment.PushClrObject(state, obj);
+            }
+        }
     }
 }

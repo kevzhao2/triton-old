@@ -31,17 +31,11 @@ namespace Triton.Interop
     /// </summary>
     internal sealed class ClrTypeObjectManager
     {
-        private readonly Dictionary<IntPtr, Type> _types;
-        private readonly Dictionary<IntPtr, object> _objects;
-
         private readonly ClrMetavalueGenerator _metavalueGenerator;
         private readonly int _typeMetatablesReference;
         private readonly int _objectMetatablesReference;
         private readonly Dictionary<Type, int> _typeMetatableKeys = new Dictionary<Type, int>();
         private readonly Dictionary<Type, int> _objectMetatableKeys = new Dictionary<Type, int>();
-
-        private readonly lua_CFunction _typeGcMetamethod;
-        private readonly lua_CFunction _objectGcMetamethod;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ClrTypeObjectManager"/> class with the specified Lua
@@ -51,9 +45,6 @@ namespace Triton.Interop
         /// <param name="environment">The Lua environment.</param>
         internal ClrTypeObjectManager(IntPtr state, LuaEnvironment environment)
         {
-            _types = new Dictionary<IntPtr, Type>();
-            _objects = new Dictionary<IntPtr, object>();
-            
             _metavalueGenerator = new ClrMetavalueGenerator(environment);
 
             // To store the metatables for the CLR types and objects, we will use two Lua tables with integer keys and
@@ -63,9 +54,6 @@ namespace Triton.Interop
             _typeMetatablesReference = luaL_ref(state, LUA_REGISTRYINDEX);
             lua_newtable(state);
             _objectMetatablesReference = luaL_ref(state, LUA_REGISTRYINDEX);
-
-            _typeGcMetamethod = TypeGcMetamethod;
-            _objectGcMetamethod = ObjectGcMetamethod;
         }
 
         /// <summary>
@@ -75,10 +63,9 @@ namespace Triton.Interop
         /// <param name="type">The CLR type.</param>
         internal void PushClrType(IntPtr state, Type type)
         {
-            var ptr = PushClrTypeOrObject(state, type);
+            PushClrTypeOrObject(state, type, isType: true);
             PushClrTypeOrObjectMetatable(state, type, isType: true);
             lua_setmetatable(state, -2);
-            _types[ptr] = type;
         }
 
         /// <summary>
@@ -88,10 +75,9 @@ namespace Triton.Interop
         /// <param name="obj">The CLR object.</param>
         internal void PushClrObject(IntPtr state, object obj)
         {
-            var ptr = PushClrTypeOrObject(state, obj);
+            PushClrTypeOrObject(state, obj, isType: false);
             PushClrTypeOrObjectMetatable(state, obj.GetType(), isType: false);
             lua_setmetatable(state, -2);
-            _objects[ptr] = obj;
         }
 
         /// <summary>
@@ -104,45 +90,26 @@ namespace Triton.Interop
         internal void ToClrTypeOrObject(IntPtr state, int index, out LuaValue value)
         {
             value = default;
-            ref var typeOrObj = ref Unsafe.AsRef(in value._objectOrTag);
 
             var ptr = lua_touserdata(state, index);
-            if (_types.TryGetValue(ptr, out Unsafe.As<object?, Type>(ref typeOrObj)))
-            {
-                Unsafe.AsRef(in value._integer) = 3;
-            }
-            else if (_objects.TryGetValue(ptr, out Unsafe.As<object?, object>(ref typeOrObj)))
-            {
-                Unsafe.AsRef(in value._integer) = 4;
-            }
+            var ptrValue = Marshal.ReadIntPtr(ptr);
+            var handle = GCHandle.FromIntPtr(ptrValue.Unmarked());
+
+            Unsafe.AsRef(in value._integer) = ptrValue.IsMarked() ? 3 : 4;
+            Unsafe.AsRef(in value._objectOrTag) = handle.Target;
         }
 
-        private int TypeGcMetamethod(IntPtr state)
-        {
-            var ptr = lua_touserdata(state, 1);
-            _types.Remove(ptr);
-
-            var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(ptr));
-            handle.Free();
-            return 0;
-        }
-
-        private int ObjectGcMetamethod(IntPtr state)
-        {
-            var ptr = lua_touserdata(state, 1);
-            _objects.Remove(ptr);
-
-            var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(ptr));
-            handle.Free();
-            return 0;
-        }
-
-        private IntPtr PushClrTypeOrObject(IntPtr state, object typeOrObj)
+        private void PushClrTypeOrObject(IntPtr state, object typeOrObj, bool isType)
         {
             var handle = GCHandle.Alloc(typeOrObj);
             var ptr = lua_newuserdatauv(state, (UIntPtr)IntPtr.Size, 0);
-            Marshal.WriteIntPtr(ptr, GCHandle.ToIntPtr(handle));
-            return ptr;
+            var ptrValue = GCHandle.ToIntPtr(handle);
+
+            // Because we can't distinguish whether the userdata is a CLR type or object later, we need to somehow store
+            // a flag indicating this. One way is by marking the pointer (using the lowest bit) -- this is simple and
+            // does not require us to perform any complicated bookkeeping.
+            //
+            Marshal.WriteIntPtr(ptr, isType ? ptrValue.Marked() : ptrValue);
         }
 
         private void PushClrTypeOrObjectMetatable(IntPtr state, Type typeOrObjType, bool isType)
@@ -168,11 +135,12 @@ namespace Triton.Interop
                     GenerateClrObjectMetatable(state, typeOrObjType);
                 }
 
-                key = tableKeys.Count + 1;  // Sequentially generate the keys to reduce memory usage
+                key = tableKeys.Count + 1;
+
                 lua_rawgeti(state, LUA_REGISTRYINDEX, tableReference);
                 lua_pushvalue(state, -2);
                 lua_rawseti(state, -2, key);
-                lua_pop(state, 1);  // Pop the metatable table from the stack
+                lua_pop(state, 1);  // Pop the metatable table off the stack
 
                 tableKeys[typeOrObjType] = key;
             }
@@ -182,7 +150,7 @@ namespace Triton.Interop
         {
             lua_newtable(state);
 
-            lua_pushcfunction(state, _typeGcMetamethod);
+            _metavalueGenerator.PushGc(state);
             lua_setfield(state, -2, "__gc");
 
             _metavalueGenerator.PushToString(state);
@@ -196,7 +164,7 @@ namespace Triton.Interop
         {
             lua_newtable(state);
 
-            lua_pushcfunction(state, _objectGcMetamethod);
+            _metavalueGenerator.PushGc(state);
             lua_setfield(state, -2, "__gc");
 
             _metavalueGenerator.PushToString(state);
