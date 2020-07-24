@@ -19,9 +19,8 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using Triton.Interop;
 using static Triton.NativeMethods;
 
@@ -32,14 +31,9 @@ namespace Triton
     /// </summary>
     public class LuaEnvironment : IDisposable
     {
-        private const string GcHelperMetatable = "<>__gcHelper";
-
         private readonly IntPtr _state;
-        private readonly Dictionary<IntPtr, (int reference, WeakReference<LuaObject> weakReference)> _luaObjects;
-        private readonly Dictionary<IntPtr, Type> _clrTypes;
-        private readonly Dictionary<IntPtr, object> _clrObjects;
-        private readonly ClrMetatableManager _metatableManager;
-        private readonly lua_CFunction _gcCallback;
+        private readonly LuaObjectManager _luaObjectManager;
+        private readonly ClrTypeObjectManager _clrTypeObjectManager;
 
         private bool _isDisposed;
 
@@ -51,31 +45,8 @@ namespace Triton
             _state = luaL_newstate();
             luaL_openlibs(_state);  // Open all standard libraries by default for convenience
 
-            // Create a cache of Lua objects, which maps a pointer (which can be retrieved via `lua_topointer`) to the
-            // reference in the Lua registry along with a weak reference to the Lua object.
-            //
-            // A weak reference is required as otherwise, the Lua object will never be collected and Lua memory will be
-            // leaked.
-            //
-            _luaObjects = new Dictionary<IntPtr, (int, WeakReference<LuaObject>)>();
-
-            _clrTypes = new Dictionary<IntPtr, Type>();
-            _clrObjects = new Dictionary<IntPtr, object>();
-
-            _metatableManager = new ClrMetatableManager(_state, this);
-
-            // Set up a metatable with a `__gc` metamethod. This allows us to clean up dead Lua objects whenever a Lua
-            // garbage collection occurs.
-            //
-            _gcCallback = GcCallback;
-            lua_newtable(_state);
-            luaL_newmetatable(_state, GcHelperMetatable);
-
-            lua_pushcfunction(_state, _gcCallback);
-            lua_setfield(_state, -2, "__gc");
-
-            lua_setmetatable(_state, -2);
-            lua_pop(_state, 1);
+            _luaObjectManager = new LuaObjectManager(_state, this);
+            _clrTypeObjectManager = new ClrTypeObjectManager(_state, this);
         }
 
         // A finalizer is _NOT_ feasible here. If the finalizer calls `lua_close` during an unmanaged -> managed
@@ -131,13 +102,7 @@ namespace Triton
         {
             if (!_isDisposed)
             {
-                foreach (var (_, (_, weakReference)) in _luaObjects)
-                {
-                    if (weakReference.TryGetTarget(out var obj))
-                    {
-                        obj.Dispose();
-                    }
-                }
+                _luaObjectManager.Dispose();
 
                 lua_close(_state);
 
@@ -179,7 +144,7 @@ namespace Triton
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
             var table = new LuaTable(_state, this, reference);
 
-            _luaObjects[ptr] = (reference, new WeakReference<LuaObject>(table));
+            _luaObjectManager.InternLuaObject(table, ptr);
             return table;
         }
 
@@ -199,7 +164,7 @@ namespace Triton
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
             var function = new LuaFunction(_state, this, reference);
 
-            _luaObjects[ptr] = (reference, new WeakReference<LuaObject>(function));
+            _luaObjectManager.InternLuaObject(function, ptr);
             return function;
         }
 
@@ -215,11 +180,10 @@ namespace Triton
             lua_settop(_state, 0);  // Reset stack
 
             var ptr = lua_newthread(_state);
-
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
-            var thread = new LuaThread(ptr, this, reference);
+            var thread = new LuaThread(_state, this, reference);
 
-            _luaObjects[ptr] = (reference, new WeakReference<LuaObject>(thread));
+            _luaObjectManager.InternLuaObject(thread, ptr);
             return thread;
         }
 
@@ -302,129 +266,99 @@ namespace Triton
         }
 
         /// <summary>
-        /// Pushes the given <paramref name="luaObj"/> onto the stack of the Lua <paramref name="state"/>.
+        /// Pushes the given <paramref name="obj"/> onto the stack of the Lua <paramref name="state"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
-        /// <param name="luaObj">The Lua object.</param>
-        internal void PushLuaObject(IntPtr state, LuaObject luaObj)
-        {
-            // Check if the environments match.
-            if (luaObj._environment != this)
-            {
-                throw new InvalidOperationException("Lua object does not belong to the given state's environment");
-            }
-
-            lua_rawgeti(state, LUA_REGISTRYINDEX, luaObj._reference);
-        }
+        /// <param name="obj">The Lua object.</param>
+        internal void PushLuaObject(IntPtr state, LuaObject obj) => _luaObjectManager.PushLuaObject(state, obj);
 
         /// <summary>
         /// Pushes the given CLR <paramref name="type"/> onto the stack of the Lua <paramref name="state"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="type">The CLR type.</param>
-        internal void PushClrType(IntPtr state, Type type)
-        {
-            // TODO: can perform caching of types here
-            PushClrTypeOrObject(state, type, isType: true);
-            _metatableManager.PushClrTypeMetatable(state, type);
-            lua_setmetatable(state, -2);
-        }
+        internal void PushClrType(IntPtr state, Type type) => _clrTypeObjectManager.PushClrType(state, type);
 
         /// <summary>
         /// Pushes the given CLR <paramref name="obj"/> onto the stack of the Lua <paramref name="state"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="obj">The CLR object.</param>
-        internal void PushClrObject(IntPtr state, object obj)
-        {
-            // TODO: can perform caching of objects here
-            PushClrTypeOrObject(state, obj, isType: false);
-            _metatableManager.PushClrObjectMetatable(state, obj);
-            lua_setmetatable(state, -2);
-        }
+        internal void PushClrObject(IntPtr state, object obj) => _clrTypeObjectManager.PushClrObject(state, obj);
 
         /// <summary>
-        /// Converts the Lua value on the stack of the Lua <paramref name="state"/> at the given
-        /// <paramref name="index"/> into a Lua <paramref name="value"/>.
+        /// Converts the value on the stack of the Lua <paramref name="state"/> at the given <paramref name="index"/>
+        /// to a Lua <paramref name="value"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
-        /// <param name="index">The index of the Lua value on the stack.</param>
+        /// <param name="index">The index of the value on the stack.</param>
         /// <param name="value">The resulting Lua value.</param>
         internal void ToValue(IntPtr state, int index, out LuaValue value) =>
             ToValue(state, index, out value, lua_type(state, index));
 
         /// <summary>
-        /// Converts the Lua value on the stack of the Lua <paramref name="state"/> at the given
-        /// <paramref name="index"/> into a Lua <paramref name="value"/>.
+        /// Converts the value on the stack of the Lua <paramref name="state"/> at the given <paramref name="index"/>
+        /// to a Lua <paramref name="value"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
-        /// <param name="index">The index of the Lua value on the stack.</param>
+        /// <param name="index">The index of the value on the stack.</param>
         /// <param name="value">The resulting Lua value.</param>
         /// <param name="type">The type of the Lua value.</param>
         internal void ToValue(IntPtr state, int index, out LuaValue value, LuaType type)
         {
-            if (type == LuaType.None)
+            // TODO: in .NET 5, use `Unsafe.SkipInit` for a small perf gain
+            value = default;
+
+            // The following code ignores the `readonly` aspect of `LuaValue` and is rather smelly looking. However, it
+            // results in significantly better code generation at JIT time.
+            //
+            ref var objectOrTag = ref Unsafe.AsRef(in value._objectOrTag);
+
+            switch (type)
             {
-                type = LuaType.Nil;
-            }
+            case LuaType.Boolean:
+                Unsafe.AsRef(in value._boolean) = lua_toboolean(state, index);
+                objectOrTag = LuaValue._booleanTag;
+                break;
 
-            value = type switch
-            {
-                LuaType.Nil           => default,
-                LuaType.Boolean       => lua_toboolean(state, index),
-                LuaType.LightUserdata => lua_touserdata(state, index),
-                LuaType.Number        => ToIntegerOrNumber(state, index),
-                LuaType.String        => lua_tostring(state, index),
-                LuaType.Table         => ToLuaObject(state, index, LuaType.Table),
-                LuaType.Function      => ToLuaObject(state, index, LuaType.Function),
-                LuaType.Userdata      => ToClrTypeOrObject(state, index),
-                _                     => ToLuaObject(state, index, LuaType.Thread),
-            };
+            case LuaType.LightUserdata:
+                Unsafe.AsRef(in value._lightUserdata) = lua_touserdata(state, index);
+                objectOrTag = LuaValue._lightUserdataTag;
+                break;
 
-            static LuaValue ToIntegerOrNumber(IntPtr state, int index) =>
-                lua_isinteger(state, index) ? (LuaValue)lua_tointeger(state, index) : lua_tonumber(state, index);
-
-            LuaObject ToLuaObject(IntPtr state, int index, LuaType type)
-            {
-                LuaObject luaObj;
-
-                var ptr = lua_topointer(state, index);
-                if (_luaObjects.TryGetValue(ptr, out var tuple))
+            case LuaType.Number:
+                if (lua_isinteger(state, index))
                 {
-                    if (tuple.weakReference.TryGetTarget(out luaObj))
-                    {
-                        return luaObj;
-                    }
+                    Unsafe.AsRef(in value._integer) = lua_tointeger(state, index);
+                    objectOrTag = LuaValue._integerTag;
                 }
                 else
                 {
-                    // Create a reference to the Lua object in the Lua registry.
-                    lua_pushvalue(state, index);
-                    tuple.reference = luaL_ref(state, LUA_REGISTRYINDEX);
+                    Unsafe.AsRef(in value._number) = lua_tonumber(state, index);
+                    objectOrTag = LuaValue._numberTag;
                 }
+                break;
 
-                luaObj = type switch
-                {
-                    LuaType.Table    => new LuaTable(state, this, tuple.reference),
-                    LuaType.Function => new LuaFunction(state, this, tuple.reference),
-                    _                => new LuaThread(ptr, this, tuple.reference)
-                };
+            case LuaType.String:
+                Unsafe.AsRef(in value._integer) = 1;
+                objectOrTag = lua_tostring(state, index);
+                break;
 
-                tuple.weakReference = new WeakReference<LuaObject>(luaObj);
-                _luaObjects[ptr] = tuple;
-                return luaObj;
-            }
+            case LuaType.Table:
+                _luaObjectManager.ToLuaObject(state, index, LuaType.Table, out value);
+                break;
 
-            static LuaValue ToClrTypeOrObject(IntPtr state, int index)
-            {
-                var ptr = lua_touserdata(state, index);
-                var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(ptr));
+            case LuaType.Function:
+                _luaObjectManager.ToLuaObject(state, index, LuaType.Function, out value);
+                break;
 
-                lua_getiuservalue(state, -1, 1);
-                var isType = lua_toboolean(state, -1);
-                lua_pop(state, 1);
+            case LuaType.Userdata:
+                _clrTypeObjectManager.ToClrTypeOrObject(state, index, out value);
+                break;
 
-                return isType ? LuaValue.FromClrType((Type)handle.Target) : LuaValue.FromClrObject(handle.Target);
+            case LuaType.Thread:
+                _luaObjectManager.ToLuaObject(state, index, LuaType.Thread, out value);
+                break;
             }
         }
 
@@ -438,42 +372,6 @@ namespace Triton
         {
             var message = lua_tostring(state, -1);
             return (TException)Activator.CreateInstance(typeof(TException), message);
-        }
-
-        private void PushClrTypeOrObject(IntPtr state, object typeOrObj, bool isType)
-        {
-            var handle = GCHandle.Alloc(typeOrObj);
-            var ptr = lua_newuserdatauv(state, (UIntPtr)IntPtr.Size, 1);
-            Marshal.WriteIntPtr(ptr, GCHandle.ToIntPtr(handle));
-
-            lua_pushboolean(state, isType);
-            lua_setiuservalue(state, -2, 1);
-        }
-
-        private int GcCallback(IntPtr state)
-        {
-            // Scan through the Lua objects, cleaning up any which have been cleaned up by the CLR. The objects within
-            // Lua will then be cleaned up on the next Lua garbage collection.
-            //
-            var deadPtrs = new List<IntPtr>(_luaObjects.Count);
-            foreach (var (ptr, (reference, weakReference)) in _luaObjects)
-            {
-                if (!weakReference.TryGetTarget(out _))
-                {
-                    luaL_unref(_state, LUA_REGISTRYINDEX, reference);
-                    deadPtrs.Add(ptr);
-                }
-            }
-
-            foreach (var deadPtr in deadPtrs)
-            {
-                _luaObjects.Remove(deadPtr);
-            }
-
-            lua_newtable(_state);
-            luaL_setmetatable(_state, GcHelperMetatable);
-            lua_pop(_state, 1);
-            return 0;
         }
 
         private void LoadString(string chunk)
