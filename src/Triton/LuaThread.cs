@@ -90,7 +90,7 @@ namespace Triton
         public LuaResults Start(LuaFunction function, in LuaValue arg)
         {
             StartPrologue(function);  // Performs validation
-            arg.Push(_state);
+            _environment.PushValue(_state, arg);
             return StartOrResumeShared(1);
         }
 
@@ -108,8 +108,8 @@ namespace Triton
         public LuaResults Start(LuaFunction function, in LuaValue arg, in LuaValue arg2)
         {
             StartPrologue(function);  // Performs validation
-            arg.Push(_state);
-            arg2.Push(_state);
+            _environment.PushValue(_state, arg);
+            _environment.PushValue(_state, arg2);
             return StartOrResumeShared(2);
         }
 
@@ -128,9 +128,9 @@ namespace Triton
         public LuaResults Start(LuaFunction function, in LuaValue arg, in LuaValue arg2, in LuaValue arg3)
         {
             StartPrologue(function);  // Performs validation
-            arg.Push(_state);
-            arg2.Push(_state);
-            arg3.Push(_state);
+            _environment.PushValue(_state, arg);
+            _environment.PushValue(_state, arg2);
+            _environment.PushValue(_state, arg3);
             return StartOrResumeShared(3);
         }
 
@@ -155,7 +155,7 @@ namespace Triton
             StartPrologue(function);  // Performs validation
             for (var i = 0; i < args.Length; ++i)
             {
-                args[i].Push(_state);
+                _environment.PushValue(_state, args[i]);
             }
             return StartOrResumeShared(args.Length);
         }
@@ -184,7 +184,7 @@ namespace Triton
         public LuaResults Resume(in LuaValue arg)
         {
             ResumePrologue();  // Performs validation
-            arg.Push(_state);
+            _environment.PushValue(_state, arg);
             return StartOrResumeShared(1);
         }
 
@@ -200,8 +200,8 @@ namespace Triton
         public LuaResults Resume(in LuaValue arg, in LuaValue arg2)
         {
             ResumePrologue();  // Performs validation
-            arg.Push(_state);
-            arg2.Push(_state);
+            _environment.PushValue(_state, arg);
+            _environment.PushValue(_state, arg2);
             return StartOrResumeShared(2);
         }
 
@@ -218,9 +218,9 @@ namespace Triton
         public LuaResults Resume(in LuaValue arg, in LuaValue arg2, in LuaValue arg3)
         {
             ResumePrologue();  // Performs validation
-            arg.Push(_state);
-            arg2.Push(_state);
-            arg3.Push(_state);
+            _environment.PushValue(_state, arg);
+            _environment.PushValue(_state, arg2);
+            _environment.PushValue(_state, arg3);
             return StartOrResumeShared(3);
         }
 
@@ -243,7 +243,7 @@ namespace Triton
             ResumePrologue();  // Performs validation
             for (var i = 0; i < args.Length; ++i)
             {
-                args[i].Push(_state);
+                _environment.PushValue(_state, args[i]);
             }
             return StartOrResumeShared(args.Length);
         }
@@ -262,7 +262,7 @@ namespace Triton
 
             lua_settop(_state, 0);  // Reset stack
 
-            function.Push(_state);
+            _environment.PushLuaObject(_state, function);
         }
 
         private void ResumePrologue()

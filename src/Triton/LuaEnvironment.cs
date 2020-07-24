@@ -34,12 +34,12 @@ namespace Triton
     {
         private const string GcHelperMetatable = "<>__gcHelper";
 
-        private static readonly lua_CFunction _gcCallback = GcCallback;
-
         private readonly IntPtr _state;
-        private readonly GCHandle _selfHandle;
         private readonly Dictionary<IntPtr, (int reference, WeakReference<LuaObject> weakReference)> _luaObjects;
+        private readonly Dictionary<IntPtr, Type> _clrTypes;
+        private readonly Dictionary<IntPtr, object> _clrObjects;
         private readonly ClrMetatableManager _metatableManager;
+        private readonly lua_CFunction _gcCallback;
 
         private bool _isDisposed;
 
@@ -51,12 +51,6 @@ namespace Triton
             _state = luaL_newstate();
             luaL_openlibs(_state);  // Open all standard libraries by default for convenience
 
-            // Store a handle to the `LuaEnvironment` in the extra space portion of a Lua state. This allows us to
-            // easily retrieve the `LuaEnvironment` instance, given a Lua state.
-            //
-            _selfHandle = GCHandle.Alloc(this, GCHandleType.Weak);
-            Marshal.WriteIntPtr(lua_getextraspace(_state), GCHandle.ToIntPtr(_selfHandle));
-
             // Create a cache of Lua objects, which maps a pointer (which can be retrieved via `lua_topointer`) to the
             // reference in the Lua registry along with a weak reference to the Lua object.
             //
@@ -65,18 +59,23 @@ namespace Triton
             //
             _luaObjects = new Dictionary<IntPtr, (int, WeakReference<LuaObject>)>();
 
+            _clrTypes = new Dictionary<IntPtr, Type>();
+            _clrObjects = new Dictionary<IntPtr, object>();
+
             _metatableManager = new ClrMetatableManager(_state, this);
 
-            // Set up a metatable with a `__gc` metamethod. This allows us to perform memory cleanup whenever a Lua
+            // Set up a metatable with a `__gc` metamethod. This allows us to clean up dead Lua objects whenever a Lua
             // garbage collection occurs.
             //
+            _gcCallback = GcCallback;
+            lua_newtable(_state);
             luaL_newmetatable(_state, GcHelperMetatable);
-            lua_pushstring(_state, "__gc");
-            lua_pushcfunction(_state, _gcCallback);
-            lua_settable(_state, -3);
-            lua_pop(_state, 1);
 
-            SetupGcCallback(_state);
+            lua_pushcfunction(_state, _gcCallback);
+            lua_setfield(_state, -2, "__gc");
+
+            lua_setmetatable(_state, -2);
+            lua_pop(_state, 1);
         }
 
         // A finalizer is _NOT_ feasible here. If the finalizer calls `lua_close` during an unmanaged -> managed
@@ -122,48 +121,9 @@ namespace Triton
 
                 lua_settop(_state, 0);  // Reset stack
 
-                value.Push(_state);
+                PushValue(_state, value);
                 lua_setglobal(_state, global);
             }
-        }
-
-        private static int GcCallback(IntPtr state)
-        {
-            var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(lua_getextraspace(state)));
-            if (!(handle.Target is LuaEnvironment environment))
-            {
-                return 0;
-            }
-
-            var luaObjects = environment._luaObjects;
-
-            // Scan through the Lua objects, cleaning up any which have been cleaned up by the CLR. The objects within
-            // Lua will then be cleaned up on the next Lua garbage collection.
-            //
-            var deadPtrs = new List<IntPtr>(luaObjects.Count);
-            foreach (var (ptr, (reference, weakReference)) in luaObjects)
-            {
-                if (!weakReference.TryGetTarget(out _))
-                {
-                    luaL_unref(state, LUA_REGISTRYINDEX, reference);
-                    deadPtrs.Add(ptr);
-                }
-            }
-
-            foreach (var deadPtr in deadPtrs)
-            {
-                luaObjects.Remove(deadPtr);
-            }
-
-            SetupGcCallback(state);
-            return 0;
-        }
-
-        private static void SetupGcCallback(IntPtr state)
-        {
-            lua_newtable(state);
-            luaL_setmetatable(state, GcHelperMetatable);
-            lua_pop(state, 1);
         }
 
         /// <inheritdoc/>
@@ -180,7 +140,6 @@ namespace Triton
                 }
 
                 lua_close(_state);
-                _selfHandle.Free();
 
                 _isDisposed = true;
             }
@@ -285,7 +244,78 @@ namespace Triton
             return new LuaResults(_state, this);
         }
 
-        // TODO: re-examine approach to marshaling objects, might have a better solution
+        /// <summary>
+        /// Pushes the given Lua <paramref name="value"/> onto the stack of the Lua <paramref name="state"/>.
+        /// </summary>
+        /// <param name="state">The Lua state.</param>
+        /// <param name="value">The Lua value.</param>
+        internal void PushValue(IntPtr state, in LuaValue value)
+        {
+            Debug.Assert(lua_checkstack(state, 1));
+
+            var objectOrTag = value._objectOrTag;
+            if (objectOrTag is null)
+            {
+                lua_pushnil(state);
+            }
+            else if (objectOrTag is LuaValue.TypeTag)
+            {
+                if (objectOrTag == LuaValue._booleanTag)
+                {
+                    lua_pushboolean(state, value._boolean);
+                }
+                else if (objectOrTag == LuaValue._lightUserdataTag)
+                {
+                    lua_pushlightuserdata(state, value._lightUserdata);
+                }
+                else if (objectOrTag == LuaValue._integerTag)
+                {
+                    lua_pushinteger(state, value._integer);
+                }
+                else
+                {
+                    lua_pushnumber(state, value._number);
+                }
+            }
+            else
+            {
+                // TODO: re-examine approach to marshaling objects, might have a better solution
+
+                var integer = value._integer;
+                if (integer == 1)
+                {
+                    lua_pushstring(state, (string)objectOrTag);
+                }
+                else if (integer == 2)
+                {
+                    PushLuaObject(state, (LuaObject)objectOrTag);
+                }
+                else if (integer == 3)
+                {
+                    PushClrType(state, (Type)objectOrTag);
+                }
+                else
+                {
+                    PushClrObject(state, objectOrTag);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Pushes the given <paramref name="luaObj"/> onto the stack of the Lua <paramref name="state"/>.
+        /// </summary>
+        /// <param name="state">The Lua state.</param>
+        /// <param name="luaObj">The Lua object.</param>
+        internal void PushLuaObject(IntPtr state, LuaObject luaObj)
+        {
+            // Check if the environments match.
+            if (luaObj._environment != this)
+            {
+                throw new InvalidOperationException("Lua object does not belong to the given state's environment");
+            }
+
+            lua_rawgeti(state, LUA_REGISTRYINDEX, luaObj._reference);
+        }
 
         /// <summary>
         /// Pushes the given CLR <paramref name="type"/> onto the stack of the Lua <paramref name="state"/>.
@@ -301,7 +331,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Pushes a CLR <paramref name="obj"/> onto the stack of the Lua <paramref name="state"/>.
+        /// Pushes the given CLR <paramref name="obj"/> onto the stack of the Lua <paramref name="state"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="obj">The CLR object.</param>
@@ -340,15 +370,15 @@ namespace Triton
 
             value = type switch
             {
-                LuaType.Nil => default,
-                LuaType.Boolean => lua_toboolean(state, index),
+                LuaType.Nil           => default,
+                LuaType.Boolean       => lua_toboolean(state, index),
                 LuaType.LightUserdata => lua_touserdata(state, index),
-                LuaType.Number => ToIntegerOrNumber(state, index),
-                LuaType.String => lua_tostring(state, index),
-                LuaType.Table => ToLuaObject(state, index, LuaType.Table),
-                LuaType.Function => ToLuaObject(state, index, LuaType.Function),
-                LuaType.Userdata => ToClrTypeOrObject(state, index),
-                _ => ToLuaObject(state, index, LuaType.Thread),
+                LuaType.Number        => ToIntegerOrNumber(state, index),
+                LuaType.String        => lua_tostring(state, index),
+                LuaType.Table         => ToLuaObject(state, index, LuaType.Table),
+                LuaType.Function      => ToLuaObject(state, index, LuaType.Function),
+                LuaType.Userdata      => ToClrTypeOrObject(state, index),
+                _                     => ToLuaObject(state, index, LuaType.Thread),
             };
 
             static LuaValue ToIntegerOrNumber(IntPtr state, int index) =>
@@ -375,9 +405,9 @@ namespace Triton
 
                 luaObj = type switch
                 {
-                    LuaType.Table => new LuaTable(state, this, tuple.reference),
+                    LuaType.Table    => new LuaTable(state, this, tuple.reference),
                     LuaType.Function => new LuaFunction(state, this, tuple.reference),
-                    _ => new LuaThread(ptr, this, tuple.reference)
+                    _                => new LuaThread(ptr, this, tuple.reference)
                 };
 
                 tuple.weakReference = new WeakReference<LuaObject>(luaObj);
@@ -406,8 +436,6 @@ namespace Triton
         /// <returns>The exception.</returns>
         internal TException CreateExceptionFromStack<TException>(IntPtr state)
         {
-            Debug.Assert(lua_type(state, -1) == LuaType.String);
-
             var message = lua_tostring(state, -1);
             return (TException)Activator.CreateInstance(typeof(TException), message);
         }
@@ -420,6 +448,32 @@ namespace Triton
 
             lua_pushboolean(state, isType);
             lua_setiuservalue(state, -2, 1);
+        }
+
+        private int GcCallback(IntPtr state)
+        {
+            // Scan through the Lua objects, cleaning up any which have been cleaned up by the CLR. The objects within
+            // Lua will then be cleaned up on the next Lua garbage collection.
+            //
+            var deadPtrs = new List<IntPtr>(_luaObjects.Count);
+            foreach (var (ptr, (reference, weakReference)) in _luaObjects)
+            {
+                if (!weakReference.TryGetTarget(out _))
+                {
+                    luaL_unref(_state, LUA_REGISTRYINDEX, reference);
+                    deadPtrs.Add(ptr);
+                }
+            }
+
+            foreach (var deadPtr in deadPtrs)
+            {
+                _luaObjects.Remove(deadPtr);
+            }
+
+            lua_newtable(_state);
+            luaL_setmetatable(_state, GcHelperMetatable);
+            lua_pop(_state, 1);
+            return 0;
         }
 
         private void LoadString(string chunk)

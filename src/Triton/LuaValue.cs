@@ -19,10 +19,8 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
-using static Triton.NativeMethods;
 
 namespace Triton
 {
@@ -32,21 +30,21 @@ namespace Triton
     [StructLayout(LayoutKind.Explicit, Size = 16)]
     public readonly struct LuaValue : IEquatable<LuaValue>, IDisposable
     {
-        private class TypeTag
+        internal class TypeTag
         {
         }
 
-        private static readonly TypeTag _booleanTag = new TypeTag();
-        private static readonly TypeTag _lightUserdataTag = new TypeTag();
-        private static readonly TypeTag _integerTag = new TypeTag();
-        private static readonly TypeTag _numberTag = new TypeTag();
+        internal static readonly TypeTag _booleanTag = new TypeTag();
+        internal static readonly TypeTag _lightUserdataTag = new TypeTag();
+        internal static readonly TypeTag _integerTag = new TypeTag();
+        internal static readonly TypeTag _numberTag = new TypeTag();
 
-        [FieldOffset(0)] private readonly bool _boolean;
-        [FieldOffset(0)] private readonly IntPtr _lightUserdata;
-        [FieldOffset(0)] private readonly long _integer;
-        [FieldOffset(0)] private readonly double _number;
+        [FieldOffset(0)] internal readonly bool _boolean;
+        [FieldOffset(0)] internal readonly IntPtr _lightUserdata;
+        [FieldOffset(0)] internal readonly long _integer;
+        [FieldOffset(0)] internal readonly double _number;
 
-        [FieldOffset(8)] private readonly object? _objectOrTag;
+        [FieldOffset(8)] internal readonly object? _objectOrTag;
 
         // TODO: in .NET 5, use `Unsafe.SkipInit` for a small perf gain in constructor
 
@@ -243,7 +241,7 @@ namespace Triton
         /// <inheritdoc/>
         public override int GetHashCode() => _objectOrTag switch
         {
-            null => 0,
+            null                                     => 0,
             _ when _objectOrTag == _booleanTag       => HashCode.Combine(_boolean),
             _ when _objectOrTag == _lightUserdataTag => HashCode.Combine(_lightUserdata),
             _ when _objectOrTag == _integerTag       => HashCode.Combine(_integer),
@@ -319,67 +317,6 @@ namespace Triton
         /// </summary>
         /// <returns>The Lua value as a CLR object.</returns>
         public object? AsClrObject() => _objectOrTag;
-
-        /// <summary>
-        /// Pushes the Lua value onto the stack of the Lua <paramref name="state"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        internal void Push(IntPtr state)
-        {
-            Debug.Assert(lua_checkstack(state, 1));
-
-            if (_objectOrTag is null)
-            {
-                lua_pushnil(state);
-            }
-            else if (_objectOrTag is TypeTag)
-            {
-                if (_objectOrTag == _booleanTag)
-                {
-                    lua_pushboolean(state, _boolean);
-                }
-                else if (_objectOrTag == _lightUserdataTag)
-                {
-                    lua_pushlightuserdata(state, _lightUserdata);
-                }
-                else if (_objectOrTag == _integerTag)
-                {
-                    lua_pushinteger(state, _integer);
-                }
-                else
-                {
-                    lua_pushnumber(state, _number);
-                }
-            }
-            else
-            {
-                if (_integer == 1)
-                {
-                    lua_pushstring(state, (string)_objectOrTag);
-                }
-                else if (_integer == 2)
-                {
-                    ((LuaObject)_objectOrTag).Push(state);
-                }
-                else
-                {
-                    var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(lua_getextraspace(state)));
-                    if (!(handle.Target is LuaEnvironment environment))
-                    {
-                        return;
-                    }
-
-                    if (_integer == 3)
-                    {
-                        environment.PushClrType(state, (Type)_objectOrTag);
-                    }
-                    else
-                    {
-                        environment.PushClrObject(state, _objectOrTag);
-                    }
-                }
-            }
-        }
 
         bool IEquatable<LuaValue>.Equals(LuaValue other)
         {

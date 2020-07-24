@@ -19,7 +19,6 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Runtime.InteropServices;
 using static Triton.NativeMethods;
 
 namespace Triton
@@ -29,9 +28,9 @@ namespace Triton
     /// </summary>
     public abstract class LuaObject : IDisposable
     {
-        private protected readonly IntPtr _state;
-        private protected readonly LuaEnvironment _environment;
-        private protected readonly int _reference;
+        internal readonly IntPtr _state;
+        internal readonly LuaEnvironment _environment;
+        internal readonly int _reference;
 
         private bool _isDisposed;
 
@@ -51,21 +50,6 @@ namespace Triton
 
                 _isDisposed = true;
             }
-        }
-
-        /// <summary>
-        /// Pushes the Lua object onto the stack of the Lua <paramref name="state"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        internal void Push(IntPtr state)
-        {
-            // Check if the environments match.
-            if (Marshal.ReadIntPtr(lua_getextraspace(state)) != Marshal.ReadIntPtr(lua_getextraspace(_state)))
-            {
-                throw new InvalidOperationException("Lua object does not belong to the given state's environment");
-            }
-
-            lua_rawgeti(state, LUA_REGISTRYINDEX, _reference);
         }
 
         private protected void ThrowIfDisposed()

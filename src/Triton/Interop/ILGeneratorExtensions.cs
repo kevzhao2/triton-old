@@ -95,18 +95,54 @@ namespace Triton.Interop
         /// <param name="type">The type.</param>
         public static void EmitLoadIndirect(this ILGenerator ilg, Type type)
         {
-            if (type == typeof(sbyte))       /* */ ilg.Emit(Ldind_I1);
-            else if (type == typeof(byte))   /* */ ilg.Emit(Ldind_U1);
-            else if (type == typeof(short))  /* */ ilg.Emit(Ldind_I2);
-            else if (type == typeof(ushort)) /* */ ilg.Emit(Ldind_U2);
-            else if (type == typeof(int))    /* */ ilg.Emit(Ldind_I4);
-            else if (type == typeof(uint))   /* */ ilg.Emit(Ldind_U4);
-            else if (type == typeof(long))   /* */ ilg.Emit(Ldind_I8);
-            else if (type == typeof(ulong))  /* */ ilg.Emit(Ldind_I8);
-            else if (type == typeof(float))  /* */ ilg.Emit(Ldind_R4);
-            else if (type == typeof(double)) /* */ ilg.Emit(Ldind_R8);
-            else if (type.IsValueType)       /* */ ilg.Emit(Ldobj, type);
-            else                             /* */ ilg.Emit(Ldind_Ref);
+            if (type == typeof(sbyte))
+            {
+                ilg.Emit(Ldind_I1);
+            }
+            else if (type == typeof(byte))
+            {
+                ilg.Emit(Ldind_U1);
+            }
+            else if (type == typeof(short))
+            {
+                ilg.Emit(Ldind_I2);
+            }
+            else if (type == typeof(ushort))
+            {
+                ilg.Emit(Ldind_U2);
+            }
+            else if (type == typeof(int))
+            {
+                ilg.Emit(Ldind_I4);
+            }
+            else if (type == typeof(uint))
+            {
+                ilg.Emit(Ldind_U4);
+            }
+            else if (type == typeof(long))
+            {
+                ilg.Emit(Ldind_I8);
+            }
+            else if (type == typeof(ulong))
+            {
+                ilg.Emit(Ldind_I8);
+            }
+            else if (type == typeof(float))
+            {
+                ilg.Emit(Ldind_R4);
+            }
+            else if (type == typeof(double))
+            {
+                ilg.Emit(Ldind_R8);
+            }
+            else if (type.IsValueType)
+            {
+                ilg.Emit(Ldobj, type);
+            }
+            else
+            {
+                ilg.Emit(Ldind_Ref);
+            }
         }
 
         /// <summary>
@@ -175,6 +211,8 @@ namespace Triton.Interop
             }
             else if (typeof(LuaObject).IsAssignableFrom(type))
             {
+                ilg.Emit(Ldarg_0);
+                ilg.Emit(Ldfld, _environment);
                 ilg.Emit(Call, _pushLuaObject);
             }
             else
@@ -190,7 +228,8 @@ namespace Triton.Interop
             }
         }
 
-        private static void PushLuaObject(IntPtr state, LuaObject luaObj) => luaObj.Push(state);
+        private static void PushLuaObject(IntPtr state, LuaObject luaObj, LuaEnvironment environment) =>
+            environment.PushLuaObject(state, luaObj);
 
         private static void PushClrObject(IntPtr state, object obj, LuaEnvironment environment) =>
             environment.PushClrObject(state, obj);

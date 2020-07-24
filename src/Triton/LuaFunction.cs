@@ -55,7 +55,7 @@ namespace Triton
         public LuaResults Call(in LuaValue arg)
         {
             CallPrologue();  // Performs validation.
-            arg.Push(_state);
+            _environment.PushValue(_state, arg);
             return CallShared(1);
         }
 
@@ -70,8 +70,8 @@ namespace Triton
         public LuaResults Call(in LuaValue arg, in LuaValue arg2)
         {
             CallPrologue();  // Performs validation
-            arg.Push(_state);
-            arg2.Push(_state);
+            _environment.PushValue(_state, arg);
+            _environment.PushValue(_state, arg2);
             return CallShared(2);
         }
 
@@ -87,9 +87,9 @@ namespace Triton
         public LuaResults Call(in LuaValue arg, in LuaValue arg2, in LuaValue arg3)
         {
             CallPrologue();  // Performs validation
-            arg.Push(_state);
-            arg2.Push(_state);
-            arg3.Push(_state);
+            _environment.PushValue(_state, arg);
+            _environment.PushValue(_state, arg2);
+            _environment.PushValue(_state, arg3);
             return CallShared(3);
         }
 
@@ -111,7 +111,7 @@ namespace Triton
             CallPrologue();  // Performs validation
             for (var i = 0; i < args.Length; ++i)
             {
-                args[i].Push(_state);
+                _environment.PushValue(_state, args[i]);
             }
             return CallShared(args.Length);
         }

@@ -139,7 +139,7 @@ namespace Triton.Interop
             foreach (var constField in type.GetAllConstFields())
             {
                 var value = LuaValue.FromObject(constField.GetValue(null));
-                value.Push(state);
+                _environment.PushValue(state, value);
                 lua_setfield(state, -2, constField.Name);
             }
 

@@ -61,7 +61,7 @@ namespace Triton
                 }
 
                 IndexerPrologue();  // Performs validation
-                value.Push(_state);
+                _environment.PushValue(_state, value);
                 lua_setfield(_state, -2, field);
             }
         }
@@ -83,7 +83,7 @@ namespace Triton
             set
             {
                 IndexerPrologue();  // Performs validation
-                value.Push(_state);
+                _environment.PushValue(_state, value);
                 lua_seti(_state, -2, index);
             }
         }
@@ -99,15 +99,15 @@ namespace Triton
             get
             {
                 IndexerPrologue();  // Performs validation
-                key.Push(_state);
+                _environment.PushValue(_state, key);
                 return GetShared(lua_gettable(_state, -2));
             }
 
             set
             {
                 IndexerPrologue();  // Performs validation
-                key.Push(_state);
-                value.Push(_state);
+                _environment.PushValue(_state, key);
+                _environment.PushValue(_state, value);
                 lua_settable(_state, -3);
             }
         }
