@@ -29,6 +29,13 @@ namespace Triton
     /// </summary>
     public sealed class LuaThread : LuaObject
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="LuaThread"/> class with the specified Lua
+        /// <paramref name="state"/>, <paramref name="environment"/>, and <paramref name="reference"/>.
+        /// </summary>
+        /// <param name="state">The Lua state.</param>
+        /// <param name="environment">The Lua environment.</param>
+        /// <param name="reference">The reference.</param>
         internal LuaThread(IntPtr state, LuaEnvironment environment, int reference) :
             base(state, environment, reference)
         {

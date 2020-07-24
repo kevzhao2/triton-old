@@ -185,7 +185,7 @@ namespace Triton.Interop
             lua_pushcfunction(state, _typeGcMetamethod);
             lua_setfield(state, -2, "__gc");
 
-            lua_pushcfunction(state, _metavalueGenerator.ToString);
+            _metavalueGenerator.PushToString(state);
             lua_setfield(state, -2, "__tostring");
 
             _metavalueGenerator.PushTypeIndex(state, type);
@@ -199,7 +199,7 @@ namespace Triton.Interop
             lua_pushcfunction(state, _objectGcMetamethod);
             lua_setfield(state, -2, "__gc");
 
-            lua_pushcfunction(state, _metavalueGenerator.ToString);
+            _metavalueGenerator.PushToString(state);
             lua_setfield(state, -2, "__tostring");
 
             _metavalueGenerator.PushObjectIndex(state, objType);

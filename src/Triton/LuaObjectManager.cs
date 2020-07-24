@@ -133,7 +133,6 @@ namespace Triton
             }
             else
             {
-                // Create a reference to the Lua object in the Lua registry.
                 lua_pushvalue(state, index);
                 tuple.reference = luaL_ref(state, LUA_REGISTRYINDEX);
             }

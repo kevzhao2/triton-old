@@ -243,8 +243,6 @@ namespace Triton
             }
             else
             {
-                // TODO: re-examine approach to marshaling objects, might have a better solution
-
                 var integer = value._integer;
                 if (integer == 1)
                 {
@@ -312,36 +310,34 @@ namespace Triton
             // The following code ignores the `readonly` aspect of `LuaValue` and is rather smelly looking. However, it
             // results in significantly better code generation at JIT time.
             //
-            ref var objectOrTag = ref Unsafe.AsRef(in value._objectOrTag);
-
             switch (type)
             {
             case LuaType.Boolean:
                 Unsafe.AsRef(in value._boolean) = lua_toboolean(state, index);
-                objectOrTag = LuaValue._booleanTag;
+                Unsafe.AsRef(in value._objectOrTag) = LuaValue._booleanTag;
                 break;
 
             case LuaType.LightUserdata:
                 Unsafe.AsRef(in value._lightUserdata) = lua_touserdata(state, index);
-                objectOrTag = LuaValue._lightUserdataTag;
+                Unsafe.AsRef(in value._objectOrTag) = LuaValue._lightUserdataTag;
                 break;
 
             case LuaType.Number:
                 if (lua_isinteger(state, index))
                 {
                     Unsafe.AsRef(in value._integer) = lua_tointeger(state, index);
-                    objectOrTag = LuaValue._integerTag;
+                    Unsafe.AsRef(in value._objectOrTag) = LuaValue._integerTag;
                 }
                 else
                 {
                     Unsafe.AsRef(in value._number) = lua_tonumber(state, index);
-                    objectOrTag = LuaValue._numberTag;
+                    Unsafe.AsRef(in value._objectOrTag) = LuaValue._numberTag;
                 }
                 break;
 
             case LuaType.String:
                 Unsafe.AsRef(in value._integer) = 1;
-                objectOrTag = lua_tostring(state, index);
+                Unsafe.AsRef(in value._objectOrTag) = lua_tostring(state, index);
                 break;
 
             case LuaType.Table:

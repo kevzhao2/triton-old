@@ -32,6 +32,12 @@ namespace Triton.Interop
         private readonly LuaEnvironment _environment;
         private readonly Dictionary<string, int> _memberNames;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MetamethodContext"/> class with the specified Lua
+        /// <paramref name="environment"/> and <paramref name="memberNames"/>.
+        /// </summary>
+        /// <param name="environment">The Lua environment.</param>
+        /// <param name="memberNames">The member names.</param>
         internal MetamethodContext(LuaEnvironment environment, IReadOnlyList<string> memberNames)
         {
             _environment = environment;

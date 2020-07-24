@@ -33,8 +33,8 @@ namespace Triton
         private int _index;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="LuaResults"/> structure with the given
-        /// <paramref name="environment"/> and Lua <paramref name="state"/>.
+        /// Initializes a new instance of the <see cref="LuaResults"/> structure with the given Lua
+        /// <paramref name="state"/> and <paramref name="environment"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="environment">The Lua environment.</param>

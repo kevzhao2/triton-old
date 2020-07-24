@@ -27,7 +27,6 @@ using System.Runtime.InteropServices;
 using static System.Reflection.BindingFlags;
 using static System.Reflection.Emit.OpCodes;
 using static Triton.NativeMethods;
-using Debug = System.Diagnostics.Debug;
 
 namespace Triton.Interop
 {
@@ -41,12 +40,16 @@ namespace Triton.Interop
         private static readonly MethodInfo _contextMatchMemberName =
             typeof(MetamethodContext).GetMethod("MatchMemberName", NonPublic | Instance)!;
 
-        private static readonly lua_CFunction _gcMetamethod = GcMetamethod;
         private static readonly lua_CFunction _tostringMetamethod = ProtectedCall(ToStringMetamethod);
 
         private readonly LuaEnvironment _environment;
         private readonly List<lua_CFunction> _generatedCallbacks;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ClrMetavalueGenerator"/> class with the specified Lua
+        /// <paramref name="environment"/>.
+        /// </summary>
+        /// <param name="environment">The Lua environment.</param>
         internal ClrMetavalueGenerator(LuaEnvironment environment)
         {
             _environment = environment;
@@ -69,20 +72,8 @@ namespace Triton.Interop
                 }
             };
 
-        private static int GcMetamethod(IntPtr state)
-        {
-            Debug.Assert(lua_type(state, 1) == LuaType.Userdata);
-
-            var ptr = lua_touserdata(state, 1);
-            var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(ptr));
-            handle.Free();
-            return 0;
-        }
-
         private static int ToStringMetamethod(IntPtr state)
         {
-            Debug.Assert(lua_type(state, 1) == LuaType.Userdata);
-
             var ptr = lua_touserdata(state, 1);
             var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(ptr));
             lua_pushstring(state, handle.Target.ToString());
@@ -108,16 +99,10 @@ namespace Triton.Interop
         }
 
         /// <summary>
-        /// Gets the <c>__gc</c> metamethod for CLR types and objects.
+        /// Pushes the <c>__tostring</c> metamethod onto the stack of the Lua <paramref name="state"/>.
         /// </summary>
-        /// <value>The <c>__gc</c> metamethod for CLR types and objects.</value>
-        public lua_CFunction Gc => _gcMetamethod;
-
-        /// <summary>
-        /// Gets the <c>__tostring</c> metamethod for CLR types and objects.
-        /// </summary>
-        /// <value>The <c>__tostring</c> metamethod for CLR types and objects.</value>
-        public new lua_CFunction ToString => _tostringMetamethod;
+        /// <param name="state">The Lua state.</param>
+        internal void PushToString(IntPtr state) => lua_pushcfunction(state, _tostringMetamethod);
 
         /// <summary>
         /// Pushes the <c>__index</c> metavalue for the given CLR <paramref name="type"/> onto the stack of the Lua
@@ -125,7 +110,7 @@ namespace Triton.Interop
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="type">The CLR type.</param>
-        public void PushTypeIndex(IntPtr state, Type type)
+        internal void PushTypeIndex(IntPtr state, Type type)
         {
             // The metavalue is a table with entries for const fields, static events, static methods, and nested
             // types. This table then has an `__index` metamethod which resolves non-const static fields and
@@ -232,9 +217,9 @@ namespace Triton.Interop
         /// Pushes the <c>__index</c> metavalue for the given CLR <paramref name="objType"/> onto the stack of the Lua
         /// <paramref name="state"/>.
         /// </summary>
-        /// <param name="state"></param>
-        /// <param name="objType"></param>
-        public void PushObjectIndex(IntPtr state, Type objType)
+        /// <param name="state">The Lua state.</param>
+        /// <param name="objType">The CLR object type.</param>
+        internal void PushObjectIndex(IntPtr state, Type objType)
         {
             // The metavalue is a table with entries for instance events and instance methods. This table then has an
             // `__index` metamethod which resolves instance fields and instance properties.
@@ -243,7 +228,6 @@ namespace Triton.Interop
             // unmanaged <-> managed transitions.
             //
             lua_newtable(state);
-
         }
     }
 }
