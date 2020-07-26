@@ -19,6 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
+using static Triton.NativeMethods;
 
 namespace Triton
 {
@@ -52,7 +53,7 @@ namespace Triton
         /// <param name="rest">The rest of the results.</param>
         public void Deconstruct(out LuaValue result, out LuaResults rest)
         {
-            _environment.ToValue(_state, ++_index, out result);
+            _environment.ToValue(_state, ++_index, out result, lua_type(_state, _index));
             rest = this;
         }
 
@@ -64,8 +65,8 @@ namespace Triton
         /// <param name="rest">The rest of the results.</param>
         public void Deconstruct(out LuaValue result, out LuaValue result2, out LuaResults rest)
         {
-            _environment.ToValue(_state, ++_index, out result);
-            _environment.ToValue(_state, ++_index, out result2);
+            _environment.ToValue(_state, ++_index, out result, lua_type(_state, _index));
+            _environment.ToValue(_state, ++_index, out result2, lua_type(_state, _index));
             rest = this;
         }
 
@@ -79,9 +80,9 @@ namespace Triton
         public void Deconstruct(
             out LuaValue result, out LuaValue result2, out LuaValue result3, out LuaResults rest)
         {
-            _environment.ToValue(_state, ++_index, out result);
-            _environment.ToValue(_state, ++_index, out result2);
-            _environment.ToValue(_state, ++_index, out result3);
+            _environment.ToValue(_state, ++_index, out result, lua_type(_state, _index));
+            _environment.ToValue(_state, ++_index, out result2, lua_type(_state, _index));
+            _environment.ToValue(_state, ++_index, out result3, lua_type(_state, _index));
             rest = this;
         }
     }

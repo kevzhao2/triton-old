@@ -19,17 +19,29 @@
 // IN THE SOFTWARE.
 
 using System;
-using BenchmarkDotNet.Running;
-using Triton.Benchmarks.Micro;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 
-namespace Triton.Benchmarks
+namespace Triton.Interop
 {
-    class Program
+    /// <summary>
+    /// Provides LINQ extensions.
+    /// </summary>
+    internal static class LinqExtensions
     {
-        static void Main()
+        public static IEnumerable<int> IndicesWhere<T>(this IEnumerable<T> enumerable, Func<T, bool> predicate)
         {
-            BenchmarkRunner.Run<GlobalSetGet>();
-            Console.ReadKey(true);
+            var index = 0;
+            foreach (var item in enumerable)
+            {
+                if (predicate(item))
+                {
+                    yield return index;
+                }
+
+                ++index;
+            }
         }
     }
 }

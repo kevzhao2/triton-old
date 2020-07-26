@@ -35,11 +35,11 @@ namespace Triton
         }
 
         [Fact]
-        public void Call_FunctionDisposed_ThrowsObjectDisposedException()
+        public void Call_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
-            using var environment = new LuaEnvironment();
+            var environment = new LuaEnvironment();
             var function = environment.CreateFunction("return 0");
-            function.Dispose();
+            environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => function.Call());
         }

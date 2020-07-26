@@ -19,7 +19,6 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Diagnostics;
 using static Triton.NativeMethods;
 
 namespace Triton
@@ -45,12 +44,12 @@ namespace Triton
         /// Gets a value indicating whether the Lua thread can be started.
         /// </summary>
         /// <value><see langword="true"/> if the Lua thread can be started; otherwise, <see langword="false"/>.</value>
-        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public bool CanStart
         {
             get
             {
-                ThrowIfDisposed();
+                _environment.ThrowIfDisposed();
                 return lua_status(_state) == LuaStatus.Ok;
             }
         }
@@ -59,12 +58,12 @@ namespace Triton
         /// Gets a value indicating whether the Lua thread can be resumed.
         /// </summary>
         /// <value><see langword="true"/> if the Lua thread can be resumed; otherwise, <see langword="false"/>.</value>
-        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public bool CanResume
         {
             get
             {
-                ThrowIfDisposed();
+                _environment.ThrowIfDisposed();
                 return lua_status(_state) == LuaStatus.Yield;
             }
         }
@@ -77,11 +76,11 @@ namespace Triton
         /// <exception cref="ArgumentNullException"><paramref name="function"/> is <see langword="null"/>.</exception>
         /// <exception cref="InvalidOperationException">The Lua thread cannot be started.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Start(LuaFunction function)
         {
             StartPrologue(function);  // Performs validation
-            return StartOrResumeShared(0);
+            return _environment.Resume(_state, 0);
         }
 
         /// <summary>
@@ -93,12 +92,12 @@ namespace Triton
         /// <exception cref="ArgumentNullException"><paramref name="function"/> is <see langword="null"/>.</exception>
         /// <exception cref="InvalidOperationException">The Lua thread cannot be started.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Start(LuaFunction function, in LuaValue arg)
         {
             StartPrologue(function);  // Performs validation
             _environment.PushValue(_state, arg);
-            return StartOrResumeShared(1);
+            return _environment.Resume(_state, 1);
         }
 
         /// <summary>
@@ -111,13 +110,13 @@ namespace Triton
         /// <exception cref="ArgumentNullException"><paramref name="function"/> is <see langword="null"/>.</exception>
         /// <exception cref="InvalidOperationException">The Lua thread cannot be started.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Start(LuaFunction function, in LuaValue arg, in LuaValue arg2)
         {
             StartPrologue(function);  // Performs validation
             _environment.PushValue(_state, arg);
             _environment.PushValue(_state, arg2);
-            return StartOrResumeShared(2);
+            return _environment.Resume(_state, 2);
         }
 
         /// <summary>
@@ -131,14 +130,14 @@ namespace Triton
         /// <exception cref="ArgumentNullException"><paramref name="function"/> is <see langword="null"/>.</exception>
         /// <exception cref="InvalidOperationException">The Lua thread cannot be started.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Start(LuaFunction function, in LuaValue arg, in LuaValue arg2, in LuaValue arg3)
         {
             StartPrologue(function);  // Performs validation
             _environment.PushValue(_state, arg);
             _environment.PushValue(_state, arg2);
             _environment.PushValue(_state, arg3);
-            return StartOrResumeShared(3);
+            return _environment.Resume(_state, 3);
         }
 
         /// <summary>
@@ -151,7 +150,7 @@ namespace Triton
         /// <paramref name="function"/> or <paramref name="args"/> are <see langword="null"/>.
         /// </exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Start(LuaFunction function, params LuaValue[] args)
         {
             if (args is null)
@@ -164,7 +163,7 @@ namespace Triton
             {
                 _environment.PushValue(_state, args[i]);
             }
-            return StartOrResumeShared(args.Length);
+            return _environment.Resume(_state, args.Length);
         }
 
         /// <summary>
@@ -173,11 +172,11 @@ namespace Triton
         /// <returns>The results.</returns>
         /// <exception cref="InvalidOperationException">The Lua thread cannot be resumed.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Resume()
         {
             ResumePrologue();  // Performs validation
-            return StartOrResumeShared(0);
+            return _environment.Resume(_state, 0);
         }
 
         /// <summary>
@@ -187,12 +186,12 @@ namespace Triton
         /// <returns>The results.</returns>
         /// <exception cref="InvalidOperationException">The Lua thread cannot be resumed.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Resume(in LuaValue arg)
         {
             ResumePrologue();  // Performs validation
             _environment.PushValue(_state, arg);
-            return StartOrResumeShared(1);
+            return _environment.Resume(_state, 1);
         }
 
         /// <summary>
@@ -203,13 +202,13 @@ namespace Triton
         /// <returns>The results.</returns>
         /// <exception cref="InvalidOperationException">The Lua thread cannot be resumed.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Resume(in LuaValue arg, in LuaValue arg2)
         {
             ResumePrologue();  // Performs validation
             _environment.PushValue(_state, arg);
             _environment.PushValue(_state, arg2);
-            return StartOrResumeShared(2);
+            return _environment.Resume(_state, 2);
         }
 
         /// <summary>
@@ -221,14 +220,14 @@ namespace Triton
         /// <returns>The results.</returns>
         /// <exception cref="InvalidOperationException">The Lua thread cannot be resumed.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Resume(in LuaValue arg, in LuaValue arg2, in LuaValue arg3)
         {
             ResumePrologue();  // Performs validation
             _environment.PushValue(_state, arg);
             _environment.PushValue(_state, arg2);
             _environment.PushValue(_state, arg3);
-            return StartOrResumeShared(3);
+            return _environment.Resume(_state, 3);
         }
 
         /// <summary>
@@ -239,7 +238,7 @@ namespace Triton
         /// <exception cref="ArgumentNullException"><paramref name="args"/> is <see langword="null"/>.</exception>
         /// <exception cref="InvalidOperationException">The Lua thread cannot be resumed.</exception>
         /// <exception cref="LuaEvalException">A Lua error occured when evaluating the thread.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua thread is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Resume(params LuaValue[] args)
         {
             if (args is null)
@@ -252,7 +251,7 @@ namespace Triton
             {
                 _environment.PushValue(_state, args[i]);
             }
-            return StartOrResumeShared(args.Length);
+            return _environment.Resume(_state, args.Length);
         }
 
         private void StartPrologue(LuaFunction function)
@@ -280,19 +279,6 @@ namespace Triton
             }
 
             lua_settop(_state, 0);  // Reset stack
-        }
-
-        private LuaResults StartOrResumeShared(int numArgs)
-        {
-            Debug.Assert(numArgs >= 0);
-
-            var status = lua_resume(_state, IntPtr.Zero, numArgs, out _);
-            if (status != LuaStatus.Ok && status != LuaStatus.Yield)
-            {
-                throw _environment.CreateExceptionFromStack<LuaEvalException>(_state);
-            }
-
-            return new LuaResults(_state, _environment);
         }
     }
 }

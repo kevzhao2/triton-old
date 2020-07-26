@@ -19,45 +19,30 @@
 // IN THE SOFTWARE.
 
 using System;
-using static Triton.NativeMethods;
 
 namespace Triton
 {
     /// <summary>
     /// Represents a Lua object.
     /// </summary>
-    public abstract class LuaObject : IDisposable
+    public abstract class LuaObject
     {
         internal readonly IntPtr _state;
         internal readonly LuaEnvironment _environment;
         internal readonly int _reference;
 
-        private bool _isDisposed;
-
+        /// <summary>
+        /// Initializes a new instance of the <see cref="LuaObject"/> class with the specified Lua
+        /// <paramref name="state"/>, <paramref name="environment"/>, and <paramref name="reference"/>.
+        /// </summary>
+        /// <param name="state"></param>
+        /// <param name="environment"></param>
+        /// <param name="reference"></param>
         private protected LuaObject(IntPtr state, LuaEnvironment environment, int reference)
         {
             _environment = environment;
             _reference = reference;
             _state = state;
-        }
-
-        /// <inheritdoc/>
-        public void Dispose()
-        {
-            if (!_isDisposed)
-            {
-                luaL_unref(_state, LUA_REGISTRYINDEX, _reference);
-
-                _isDisposed = true;
-            }
-        }
-
-        private protected void ThrowIfDisposed()
-        {
-            if (_isDisposed)
-            {
-                throw new ObjectDisposedException(GetType().FullName);
-            }
         }
     }
 }

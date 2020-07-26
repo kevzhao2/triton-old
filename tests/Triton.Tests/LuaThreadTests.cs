@@ -26,11 +26,11 @@ namespace Triton
     public class LuaThreadTests
     {
         [Fact]
-        public void CanStart_ThreadDisposed_ThrowsObjectDisposedException()
+        public void CanStart_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
-            using var environment = new LuaEnvironment();
+            var environment = new LuaEnvironment();
             var thread = environment.CreateThread();
-            thread.Dispose();
+            environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => thread.CanStart);
         }
@@ -56,11 +56,11 @@ namespace Triton
         }
 
         [Fact]
-        public void CanResume_ThreadDisposed_ThrowsObjectDisposedException()
+        public void CanResume_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
-            using var environment = new LuaEnvironment();
+            var environment = new LuaEnvironment();
             var thread = environment.CreateThread();
-            thread.Dispose();
+            environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => thread.CanResume);
         }
@@ -95,11 +95,11 @@ namespace Triton
         }
 
         [Fact]
-        public void Start_ThreadDisposed_ThrowsObjectDisposedException()
+        public void Start_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
-            using var environment = new LuaEnvironment();
+            var environment = new LuaEnvironment();
             var thread = environment.CreateThread();
-            thread.Dispose();
+            environment.Dispose();
 
             Assert.Throws<ArgumentNullException>(() => thread.Start(null!));
         }
@@ -221,15 +221,15 @@ namespace Triton
         }
 
         [Fact]
-        public void Resume_ThreadDisposed_ThrowsObjectDisposedException()
+        public void Resume_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
-            using var environment = new LuaEnvironment();
+            var environment = new LuaEnvironment();
             var function = environment.CreateFunction(@"
                 coroutine.yield()
                 error('test')");
             var thread = environment.CreateThread();
             thread.Start(function);
-            thread.Dispose();
+            environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => thread.Resume());
         }

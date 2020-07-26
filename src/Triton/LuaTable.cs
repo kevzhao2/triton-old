@@ -46,7 +46,7 @@ namespace Triton
         /// <param name="field">The field.</param>
         /// <returns>The value of the given <paramref name="field"/>.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="field"/> is <see langword="null"/>.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua table is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaValue this[string field]
         {
             get
@@ -78,7 +78,7 @@ namespace Triton
         /// </summary>
         /// <param name="index">The index.</param>
         /// <returns>The value of the given <paramref name="index"/>.</returns>
-        /// <exception cref="ObjectDisposedException">The Lua table is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaValue this[long index]
         {
             get
@@ -100,7 +100,7 @@ namespace Triton
         /// </summary>
         /// <param name="key">The key.</param>
         /// <returns>The value of the given <paramref name="key"/>.</returns>
-        /// <exception cref="ObjectDisposedException">The Lua table is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaValue this[in LuaValue key]
         {
             get
@@ -121,7 +121,7 @@ namespace Triton
 
         private void IndexerPrologue()
         {
-            ThrowIfDisposed();
+            _environment.ThrowIfDisposed();
 
             lua_settop(_state, 0);  // Reset stack
 

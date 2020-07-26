@@ -19,7 +19,6 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Triton.Interop;
 using static Triton.NativeMethods;
@@ -33,7 +32,7 @@ namespace Triton
     {
         private readonly IntPtr _state;
         private readonly LuaObjectManager _luaObjectManager;
-        private readonly ClrTypeObjectManager _clrTypeObjectManager;
+        private readonly ClrObjectManager _clrTypeObjectManager;
 
         private bool _isDisposed;
 
@@ -46,12 +45,12 @@ namespace Triton
             luaL_openlibs(_state);  // Open all standard libraries by default for convenience
 
             _luaObjectManager = new LuaObjectManager(_state, this);
-            _clrTypeObjectManager = new ClrTypeObjectManager(_state, this);
+            _clrTypeObjectManager = new ClrObjectManager(_state, this);
         }
 
         // A finalizer is _NOT_ feasible here. If the finalizer calls `lua_close` during an unmanaged -> managed
         // transition (which is possible since finalizers run on a separate thread), we'll never be able to make the
-        // managed -> unmanaged transition.
+        // managed -> unmanaged transition successfully.
         //
         // Thus, you must ensure that `LuaEnvironment` instances are properly disposed of!!
         //
@@ -102,8 +101,6 @@ namespace Triton
         {
             if (!_isDisposed)
             {
-                _luaObjectManager.Dispose();
-
                 lua_close(_state);
 
                 _isDisposed = true;
@@ -111,7 +108,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Creates a new Lua table with the given initial capacities.
+        /// Creates a Lua table with the given initial capacities.
         /// </summary>
         /// <param name="sequentialCapacity">The initial sequential capacity for the table.</param>
         /// <param name="nonSequentialCapacity">The initial non-sequential capacity for the table.</param>
@@ -144,7 +141,7 @@ namespace Triton
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
             var table = new LuaTable(_state, this, reference);
 
-            _luaObjectManager.InternLuaObject(table, ptr);
+            _luaObjectManager.Intern(table, ptr);
             return table;
         }
 
@@ -158,13 +155,13 @@ namespace Triton
         /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaFunction CreateFunction(string chunk)
         {
-            LoadString(chunk);  // Performs validation
+            Load(chunk);  // Performs validation
 
             var ptr = lua_topointer(_state, -1);
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
             var function = new LuaFunction(_state, this, reference);
 
-            _luaObjectManager.InternLuaObject(function, ptr);
+            _luaObjectManager.Intern(function, ptr);
             return function;
         }
 
@@ -183,7 +180,7 @@ namespace Triton
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
             var thread = new LuaThread(_state, this, reference);
 
-            _luaObjectManager.InternLuaObject(thread, ptr);
+            _luaObjectManager.Intern(thread, ptr);
             return thread;
         }
 
@@ -197,15 +194,33 @@ namespace Triton
         /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Eval(string chunk)
         {
-            LoadString(chunk);  // Performs validation
+            Load(chunk);  // Performs validation
+            return Call(_state, 0);
+        }
 
-            var status = lua_pcall(_state, 0, -1, 0);
-            if (status != LuaStatus.Ok)
-            {
-                throw CreateExceptionFromStack<LuaEvalException>(_state);
-            }
-
-            return new LuaResults(_state, this);
+        /// <summary>
+        /// Pushes the given object <paramref name="value"/> onto the stack of the Lua <paramref name="state"/>.
+        /// </summary>
+        /// <param name="state">The Lua state.</param>
+        /// <param name="value">The object.</param>
+        internal void PushObject(IntPtr state, object? value)
+        {
+            if (value is null)               lua_pushnil(state);
+            else if (value is bool b)        lua_pushboolean(state, b);
+            else if (value is IntPtr p)      lua_pushlightuserdata(state, p);
+            else if (value is sbyte i1)      lua_pushinteger(state, i1);
+            else if (value is byte u1)       lua_pushinteger(state, u1);
+            else if (value is short i2)      lua_pushinteger(state, i2);
+            else if (value is ushort u2)     lua_pushinteger(state, u2);
+            else if (value is int i4)        lua_pushinteger(state, i4);
+            else if (value is uint u4)       lua_pushinteger(state, u4);
+            else if (value is long i8)       lua_pushinteger(state, i8);
+            else if (value is ulong u8)      lua_pushinteger(state, (long)u8);
+            else if (value is float r4)      lua_pushnumber(state, r4);
+            else if (value is double r8)     lua_pushnumber(state, r8);
+            else if (value is string s)      lua_pushstring(state, s);
+            else if (value is LuaObject obj) PushLuaObject(state, obj);
+            else                             PushClrObject(state, value);
         }
 
         /// <summary>
@@ -215,8 +230,6 @@ namespace Triton
         /// <param name="value">The Lua value.</param>
         internal void PushValue(IntPtr state, in LuaValue value)
         {
-            Debug.Assert(lua_checkstack(state, 1));
-
             var objectOrTag = value._objectOrTag;
             if (objectOrTag is null)
             {
@@ -224,79 +237,45 @@ namespace Triton
             }
             else if (objectOrTag is LuaValue.TypeTag)
             {
-                if (objectOrTag == LuaValue._booleanTag)
-                {
-                    lua_pushboolean(state, value._boolean);
-                }
-                else if (objectOrTag == LuaValue._lightUserdataTag)
-                {
-                    lua_pushlightuserdata(state, value._lightUserdata);
-                }
-                else if (objectOrTag == LuaValue._integerTag)
-                {
-                    lua_pushinteger(state, value._integer);
-                }
-                else
-                {
-                    lua_pushnumber(state, value._number);
-                }
+                if (objectOrTag == LuaValue._booleanTag)            lua_pushboolean(state, value._boolean);
+                else if (objectOrTag == LuaValue._lightUserdataTag) lua_pushlightuserdata(state, value._lightUserdata);
+                else if (objectOrTag == LuaValue._integerTag)       lua_pushinteger(state, value._integer);
+                else                                                lua_pushnumber(state, value._number);
             }
             else
             {
                 var integer = value._integer;
-                if (integer == 1)
-                {
-                    lua_pushstring(state, (string)objectOrTag);
-                }
-                else if (integer == 2)
-                {
-                    PushLuaObject(state, (LuaObject)objectOrTag);
-                }
-                else if (integer == 3)
-                {
-                    PushClrType(state, (Type)objectOrTag);
-                }
-                else
-                {
-                    PushClrObject(state, objectOrTag);
-                }
+                if (integer == 1)                                   lua_pushstring(state, (string)objectOrTag);
+                else if (integer == 2)                              PushLuaObject(state, (LuaObject)objectOrTag);
+                else if (integer == 3)                              PushClrType(state, (Type)objectOrTag);
+                else                                                PushClrObject(state, objectOrTag);
             }
         }
 
         /// <summary>
-        /// Pushes the given <paramref name="obj"/> onto the stack of the Lua <paramref name="state"/>.
+        /// Pushes the given Lua <paramref name="obj"/> onto the stack of the Lua <paramref name="state"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="obj">The Lua object.</param>
-        internal void PushLuaObject(IntPtr state, LuaObject obj) => _luaObjectManager.PushLuaObject(state, obj);
+        internal void PushLuaObject(IntPtr state, LuaObject obj) => _luaObjectManager.Push(state, obj);
 
         /// <summary>
         /// Pushes the given CLR <paramref name="type"/> onto the stack of the Lua <paramref name="state"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="type">The CLR type.</param>
-        internal void PushClrType(IntPtr state, Type type) => _clrTypeObjectManager.PushClrType(state, type);
+        internal void PushClrType(IntPtr state, Type type) => _clrTypeObjectManager.PushNonGenericType(state, type);
 
         /// <summary>
         /// Pushes the given CLR <paramref name="obj"/> onto the stack of the Lua <paramref name="state"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="obj">The CLR object.</param>
-        internal void PushClrObject(IntPtr state, object obj) => _clrTypeObjectManager.PushClrObject(state, obj);
+        internal void PushClrObject(IntPtr state, object obj) => _clrTypeObjectManager.PushObject(state, obj);
 
         /// <summary>
         /// Converts the value on the stack of the Lua <paramref name="state"/> at the given <paramref name="index"/>
-        /// to a Lua <paramref name="value"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="index">The index of the value on the stack.</param>
-        /// <param name="value">The resulting Lua value.</param>
-        internal void ToValue(IntPtr state, int index, out LuaValue value) =>
-            ToValue(state, index, out value, lua_type(state, index));
-
-        /// <summary>
-        /// Converts the value on the stack of the Lua <paramref name="state"/> at the given <paramref name="index"/>
-        /// to a Lua <paramref name="value"/>.
+        /// into a Lua <paramref name="value"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="index">The index of the value on the stack.</param>
@@ -304,25 +283,29 @@ namespace Triton
         /// <param name="type">The type of the Lua value.</param>
         internal void ToValue(IntPtr state, int index, out LuaValue value, LuaType type)
         {
-            // TODO: in .NET 5, use `Unsafe.SkipInit` for a small perf gain
-            value = default;
-
-            // The following code ignores the `readonly` aspect of `LuaValue` and is rather smelly looking. However, it
-            // results in significantly better code generation at JIT time.
+            // The following code is unsafe and ignores the `readonly` aspect of `LuaValue`. However, it results in
+            // significantly improved code generation: ~10% speed improvement in getting globals.
             //
             switch (type)
             {
+            default:
+                value = default;
+                break;
+
             case LuaType.Boolean:
+                value = default;
                 Unsafe.AsRef(in value._boolean) = lua_toboolean(state, index);
                 Unsafe.AsRef(in value._objectOrTag) = LuaValue._booleanTag;
                 break;
 
             case LuaType.LightUserdata:
+                value = default;
                 Unsafe.AsRef(in value._lightUserdata) = lua_touserdata(state, index);
                 Unsafe.AsRef(in value._objectOrTag) = LuaValue._lightUserdataTag;
                 break;
 
             case LuaType.Number:
+                value = default;
                 if (lua_isinteger(state, index))
                 {
                     Unsafe.AsRef(in value._integer) = lua_tointeger(state, index);
@@ -336,41 +319,59 @@ namespace Triton
                 break;
 
             case LuaType.String:
+                value = default;
                 Unsafe.AsRef(in value._integer) = 1;
                 Unsafe.AsRef(in value._objectOrTag) = lua_tostring(state, index);
                 break;
 
             case LuaType.Table:
-                _luaObjectManager.ToLuaObject(state, index, LuaType.Table, out value);
+                _luaObjectManager.ToValue(state, index, out value, LuaType.Table);
                 break;
 
             case LuaType.Function:
-                _luaObjectManager.ToLuaObject(state, index, LuaType.Function, out value);
+                _luaObjectManager.ToValue(state, index, out value, LuaType.Function);
                 break;
 
             case LuaType.Userdata:
-                _clrTypeObjectManager.ToClrTypeOrObject(state, index, out value);
+                _clrTypeObjectManager.ToValue(state, index, out value);
                 break;
 
             case LuaType.Thread:
-                _luaObjectManager.ToLuaObject(state, index, LuaType.Thread, out value);
+                _luaObjectManager.ToValue(state, index, out value, LuaType.Thread);
                 break;
             }
         }
 
         /// <summary>
-        /// Creates a <typeparamref name="TException"/> from the top of the stack of the Lua <paramref name="state"/>.
+        /// Performs a function call with <paramref name="numArgs"/> argmuents.
         /// </summary>
-        /// <typeparam name="TException">The type of exception.</typeparam>
         /// <param name="state">The Lua state.</param>
-        /// <returns>The exception.</returns>
-        internal TException CreateExceptionFromStack<TException>(IntPtr state)
+        /// <param name="numArgs">The number of arguments.</param>
+        /// <returns>The Lua results.</returns>
+        internal LuaResults Call(IntPtr state, int numArgs) =>
+            CallOrResume(state, lua_pcall(_state, numArgs, -1, 0));
+
+        /// <summary>
+        /// Performs a thread resume with <paramref name="numArgs"/> arguments.
+        /// </summary>
+        /// <param name="state">The Lua state.</param>
+        /// <param name="numArgs">The number of arguments.</param>
+        /// <returns>The Lua results.</returns>
+        internal LuaResults Resume(IntPtr state, int numArgs) =>
+            CallOrResume(state, lua_resume(state, IntPtr.Zero, numArgs, out _));
+
+        /// <summary>
+        /// Throws an <see cref="ObjectDisposedException"/> if the Lua environment is disposed.
+        /// </summary>
+        internal void ThrowIfDisposed()
         {
-            var message = lua_tostring(state, -1);
-            return (TException)Activator.CreateInstance(typeof(TException), message);
+            if (_isDisposed)
+            {
+                throw new ObjectDisposedException(GetType().FullName);
+            }
         }
 
-        private void LoadString(string chunk)
+        private void Load(string chunk)
         {
             if (chunk is null)
             {
@@ -384,16 +385,20 @@ namespace Triton
             var status = luaL_loadstring(_state, chunk);
             if (status != LuaStatus.Ok)
             {
-                throw CreateExceptionFromStack<LuaLoadException>(_state);
+                var message = lua_tostring(_state, -1);
+                throw new LuaLoadException(message);
             }
         }
 
-        private void ThrowIfDisposed()
+        private LuaResults CallOrResume(IntPtr state, LuaStatus status)
         {
-            if (_isDisposed)
+            if (status != LuaStatus.Ok && status != LuaStatus.Yield)
             {
-                throw new ObjectDisposedException(GetType().FullName);
+                var message = lua_tostring(state, -1);
+                throw new LuaEvalException(message);
             }
+
+            return new LuaResults(state, this);
         }
     }
 }

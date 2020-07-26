@@ -32,40 +32,31 @@ namespace Triton.Interop
     internal static class TypeExtensions
     {
         /// <summary>
-        /// Gets all of the publicly accessible <see langword="const"/> fields.
+        /// Gets the <see langword="public"/> <see langword="static"/> fields.
         /// </summary>
         /// <param name="type">The type.</param>
-        /// <returns>All of the publicly accessible <see langword="const"/> fields.</returns>
-        public static IEnumerable<FieldInfo> GetAllConstFields(this Type type) =>
+        /// <returns>The <see langword="public"/> <see langword="static"/> fields.</returns>
+        public static IEnumerable<FieldInfo> GetPublicStaticFields(this Type type) =>
             type.GetFields(Public | Static | FlattenHierarchy)
-                .Where(f => f.IsLiteral && !f.IsSpecialName);
+                .Where(f => !f.IsSpecialName);
 
         /// <summary>
-        /// Gets all of the publicly accessible <see langword="static"/> fields.
+        /// Gets the <see langword="public"/> <see langword="static"/> properties.
         /// </summary>
         /// <param name="type">The type.</param>
-        /// <returns>All of the publicly accessible <see langword="static"/> fields.</returns>
-        public static IEnumerable<FieldInfo> GetAllStaticFields(this Type type) =>
-            type.GetFields(Public | Static | FlattenHierarchy)
-                .Where(f => !f.IsLiteral && !f.IsSpecialName);
-
-        /// <summary>
-        /// Gets all of the publicly accessible <see langword="static"/> properties.
-        /// </summary>
-        /// <param name="type">The type.</param>
-        /// <returns>All of the publicly accessible <see langword="static"/> properties.</returns>
-        public static IEnumerable<PropertyInfo> GetAllStaticProperties(this Type type) =>
+        /// <returns>The <see langword="public"/> <see langword="static"/> properties.</returns>
+        public static IEnumerable<PropertyInfo> GetPublicStaticProperties(this Type type) =>
             type.GetProperties(Public | Static | FlattenHierarchy)
                 .Where(p => !p.IsSpecialName);
 
         /// <summary>
-        /// Gets all of the publicly accessible nested types.
+        /// Gets the <see langword="public"/> nested types.
         /// </summary>
         /// <param name="type">The type.</param>
-        /// <returns>All of the publicly accessible nested types.</returns>
-        public static IEnumerable<Type> GetAllNestedTypes(this Type type) =>
+        /// <returns>The <see langword="public"/> nested types.</returns>
+        public static IEnumerable<Type> GetPublicNestedTypes(this Type type) =>
             type.BaseType is null
                 ? Enumerable.Empty<Type>()
-                : type.GetNestedTypes().Concat(GetAllNestedTypes(type.BaseType)).Where(t => !t.IsSpecialName);
+                : type.GetNestedTypes().Concat(GetPublicNestedTypes(type.BaseType)).Where(t => !t.IsSpecialName);
     }
 }

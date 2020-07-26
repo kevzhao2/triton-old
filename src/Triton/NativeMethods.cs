@@ -64,11 +64,6 @@ namespace Triton
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_createtable(IntPtr L, int narr, int nrec);
 
-        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int lua_error(IntPtr L);
-
-        public static IntPtr lua_getextraspace(IntPtr L) => L - IntPtr.Size;
-
         public static unsafe LuaType lua_getfield(IntPtr L, int index, string k)
         {
             var maxLength = Encoding.UTF8.GetMaxByteCount(k.Length) + 1;
@@ -101,16 +96,7 @@ namespace Triton
         public static extern LuaType lua_geti(IntPtr L, int index, long n);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        public static extern LuaType lua_getiuservalue(IntPtr L, int index, int n);
-
-        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        public static extern bool lua_getmetatable(IntPtr L, int index);
-
-        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern LuaType lua_gettable(IntPtr L, int index);
-
-        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int lua_gettop(IntPtr L);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern bool lua_isinteger(IntPtr L, int index);
@@ -178,24 +164,26 @@ namespace Triton
         public static extern void lua_pushvalue(IntPtr L, int index);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        public static extern LuaType lua_rawget(IntPtr L, int index);
-
-        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern LuaType lua_rawgeti(IntPtr L, int index, long n);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void lua_rawset(IntPtr L, int index);
+        public static extern LuaType lua_rawgetp(IntPtr L, int index, IntPtr p);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_rawseti(IntPtr L, int index, long n);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void lua_rawsetp(IntPtr L, int index, IntPtr p);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_remove(IntPtr L, int index);
 
         public static unsafe LuaStatus lua_resume(IntPtr L, IntPtr from, int nargs, out int nresults)
         {
-            nresults = 0;
-            return lua_resume(L, from, nargs, (IntPtr)Unsafe.AsPointer(ref nresults));
+            fixed (int* nresultsPtr = &nresults)
+            {
+                return lua_resume(L, from, nargs, (IntPtr)nresultsPtr);
+            }
         }
 
         public static unsafe void lua_setfield(IntPtr L, int index, string k)
@@ -230,9 +218,6 @@ namespace Triton
         public static extern void lua_seti(IntPtr L, int index, long n);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        public static extern bool lua_setiuservalue(IntPtr L, int index, int n);
-
-        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern bool lua_setmetatable(IntPtr L, int index);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
@@ -246,9 +231,6 @@ namespace Triton
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern bool lua_toboolean(IntPtr L, int index);
-
-        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        public static extern lua_CFunction lua_tocfunction(IntPtr L, int index);
 
         public static long lua_tointeger(IntPtr L, int index) => lua_tointegerx(L, index, IntPtr.Zero);
 
@@ -283,7 +265,7 @@ namespace Triton
         private static extern IntPtr lua_pushlstring(IntPtr L, IntPtr s, UIntPtr len);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        private static extern LuaStatus lua_resume(IntPtr L, IntPtr from, int nargs, IntPtr nresults);
+        private static extern LuaStatus lua_resume(IntPtr l, IntPtr from, int nargs, IntPtr nresults);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         private static extern void lua_setfield(IntPtr L, int index, IntPtr k);

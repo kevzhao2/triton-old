@@ -40,11 +40,10 @@ namespace Triton.Interop
         private static readonly MethodInfo _matchMemberName =
             typeof(MetamethodContext).GetMethod("MatchMemberName", NonPublic | Instance)!;
 
-        private static readonly lua_CFunction _gcMetamethod = GcMetamethod;
-        private static readonly lua_CFunction _tostringMetamethod = ProtectedCall(ToStringMetamethod);
+        private static readonly Type[] _metamethodParameterTypes = new[] { typeof(MetamethodContext), typeof(IntPtr) };
 
         private readonly LuaEnvironment _environment;
-        private readonly List<lua_CFunction> _generatedCallbacks;  // Used to prevent garbage collection of delegates
+        private readonly List<lua_CFunction> _generatedMetamethods;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ClrMetavalueGenerator"/> class with the specified Lua
@@ -54,7 +53,7 @@ namespace Triton.Interop
         internal ClrMetavalueGenerator(LuaEnvironment environment)
         {
             _environment = environment;
-            _generatedCallbacks = new List<lua_CFunction>();
+            _generatedMetamethods = new List<lua_CFunction>();
         }
 
         // Creates a wrapper `lua_CFunction` that performs a "protected" call of a `lua_CFunction`, raising uncaught CLR
@@ -73,52 +72,6 @@ namespace Triton.Interop
                 }
             };
 
-        private static int GcMetamethod(IntPtr state)
-        {
-            var ptr = lua_touserdata(state, 1);
-            var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(ptr).Unmarked());
-            handle.Free();
-            return 0;
-        }
-
-        private static int ToStringMetamethod(IntPtr state)
-        {
-            var ptr = lua_touserdata(state, 1);
-            var handle = GCHandle.FromIntPtr(Marshal.ReadIntPtr(ptr).Unmarked());
-            _ = lua_pushstring(state, handle.Target.ToString());
-            return 1;
-        }
-
-        private static DynamicMethod CreateDynamicMetamethod(string name) =>
-            new DynamicMethod(
-                name, typeof(int), new[] { typeof(MetamethodContext), typeof(IntPtr) }, typeof(MetamethodContext));
-        
-        private static (List<string> memberNames, Dictionary<string, MemberInfo> members) GenerateMemberIndices(
-            IEnumerable<MemberInfo> allMembers)
-        {
-            var memberNames = new List<string>();
-            var members = new Dictionary<string, MemberInfo>();
-            foreach (var member in allMembers)
-            {
-                memberNames.Add(member.Name);
-                members.Add(member.Name, member);
-            }
-
-            return (memberNames, members);
-        }
-
-        /// <summary>
-        /// Pushes the <c>__gc</c> metamethod onto the stack of the Lua <paramref name="state"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        internal void PushGc(IntPtr state) => lua_pushcfunction(state, _gcMetamethod);
-
-        /// <summary>
-        /// Pushes the <c>__tostring</c> metamethod onto the stack of the Lua <paramref name="state"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        internal void PushToString(IntPtr state) => lua_pushcfunction(state, _tostringMetamethod);
-
         /// <summary>
         /// Pushes the <c>__index</c> metavalue for the given CLR <paramref name="type"/> onto the stack of the Lua
         /// <paramref name="state"/>.
@@ -127,23 +80,24 @@ namespace Triton.Interop
         /// <param name="type">The CLR type.</param>
         internal void PushTypeIndex(IntPtr state, Type type)
         {
-            // The metavalue is a table with entries for const fields, static events, static methods, and nested
-            // types. This table then has an `__index` metamethod which resolves non-const static fields and
-            // static properties.
+            // The metavalue for a CLR type's `__index` metamethod is a table 
+
+            // The metavalue is a table with entries for const fields, static readonly fields, static events,
+            // static methods, and nested types. This table then has an `__index` metamethod which resolves non-readonly
+            // static fields  static properties.
             //
             // Essentially, we are caching all cacheable members, which greatly improves performance as there are fewer
             // unmanaged <-> managed transitions.
             //
             lua_newtable(state);
 
-            foreach (var constField in type.GetAllConstFields())
+            foreach (var field in type.GetPublicStaticFields().Where(f => f.IsLiteral || f.IsInitOnly))
             {
-                var value = LuaValue.FromObject(constField.GetValue(null));
-                _environment.PushValue(state, value);
-                lua_setfield(state, -2, constField.Name);
+                _environment.PushObject(state, field.GetValue(null));
+                lua_setfield(state, -2, field.Name);
             }
 
-            foreach (var nestedType in type.GetAllNestedTypes())
+            foreach (var nestedType in type.GetPublicNestedTypes())
             {
                 _environment.PushClrType(state, nestedType);
                 lua_setfield(state, -2, nestedType.Name);
@@ -152,7 +106,7 @@ namespace Triton.Interop
             lua_newtable(state);
 
             var indexMetamethod = ProtectedCall(GenerateIndexMetamethod());
-            _generatedCallbacks.Add(indexMetamethod);
+            _generatedMetamethods.Add(indexMetamethod);
             lua_pushcfunction(state, indexMetamethod);
             lua_setfield(state, -2, "__index");
 
@@ -160,15 +114,56 @@ namespace Triton.Interop
 
             lua_CFunction GenerateIndexMetamethod()
             {
-                var staticFields = type.GetAllStaticFields();
-                var staticProperties = type.GetAllStaticProperties();
-                var (memberNames, members) = GenerateMemberIndices(
-                    ((IEnumerable<MemberInfo>)staticFields).Concat(staticProperties));
+                var fields = type.GetPublicStaticFields().Where(f => !f.IsLiteral && !f.IsInitOnly);
+                var properties = type.GetPublicStaticProperties();
+                var members = fields.Cast<MemberInfo>().Concat(properties).ToList();
+                var memberNames = members.Select(m => m.Name).ToList();
 
                 var context = new MetamethodContext(_environment, memberNames);
+                var method = new DynamicMethod(
+                    "__index", typeof(int), _metamethodParameterTypes, typeof(MetamethodContext));
+                var ilg = method.GetILGenerator();
+
+                var labels = ilg.DefineLabels(members.Count);
+
+                // Match the provided key to a member index. Note that a non-string key is invalid, as types do not
+                // support other mechanisms of indexing.
+                //
+
+                // Match the key from Lua 
+                // Match the string from Lua to a member index.
+                //
+                ilg.Emit(Ldarg_0);
+                ilg.Emit(Ldarg_1);
+                ilg.Emit(Ldc_I4_2);
+                ilg.Emit(Call, _lua_tostring);
+
+
+
+
+                throw new NotImplementedException();
+
+                /*var staticFields = (IEnumerable<MemberInfo>)type
+                    .GetAllStaticFields()
+                    .Where(f => !f.IsLiteral && !f.IsInitOnly);
+                var staticProperties = (IEnumerable<MemberInfo>)type
+                    .GetAllStaticProperties();
+                var (memberNames, members) = OrderMembers(staticFields.Concat(staticProperties));
+
+                var nonReadablePropertyIndices = members
+                    .Where(kvp => kvp.Value is PropertyInfo property && !property.CanRead)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+                var byrefLikePropertyIndices = members
+                    .Where(kvp => kvp.Value is PropertyInfo { PropertyType: var type } && type.IsByRefLike)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+
+                var context = new MetamethodContext(_environment, memberNames);
+
                 var method = CreateDynamicMetamethod("__index");
                 var ilg = method.GetILGenerator();
-                var labels = ilg.DefineLabels(memberNames.Count);
+                var labels = ilg.DefineLabels(members.Count);
 
                 ilg.Emit(Ldarg_0);
                 ilg.Emit(Ldarg_1);
@@ -177,11 +172,51 @@ namespace Triton.Interop
                 ilg.Emit(Call, _matchMemberName);
                 ilg.Emit(Switch, labels);
 
-                ilg.EmitLuaError("attempt to index invalid member");
+                // Default case: invalid member
+                //
+                ilg.EmitLuaError("attempt to get invalid member");
                 ilg.Emit(Ret);
+
+                // Invalid case: non-readable properties
+                //
+                if (nonReadablePropertyIndices.Count > 0)
+                {
+                    foreach (var index in nonReadablePropertyIndices)
+                    {
+                        ilg.MarkLabel(labels[index]);
+
+                        members.Remove(index);
+                    }
+
+                    ilg.EmitLuaError("attempt to get non-readable property");
+                    ilg.Emit(Ret);
+                }
+
+                // Invalid case: byref-like type properties
+                //
+                if (byrefLikePropertyIndices.Count > 0)
+                {
+                    foreach (var index in byrefLikePropertyIndices)
+                    {
+                        ilg.MarkLabel(labels[index]);
+
+                        members.Remove(index);
+                    }
+
+                    ilg.EmitLuaError("attempt to get byref-like property");
+                    ilg.Emit(Ret);
+                }
+
+                // Valid cases: fields and eligible properties
+                //
 
                 for (var i = 0; i < memberNames.Count; ++i)
                 {
+                    if (nonReadablePropertyIndices.Contains(i) || byrefLikePropertyIndices.Contains(i))
+                    {
+                        continue;
+                    }
+
                     ilg.MarkLabel(labels[i]);
 
                     var member = members[memberNames[i]];
@@ -193,24 +228,9 @@ namespace Triton.Interop
                     }
                     else if (member is PropertyInfo { PropertyType: var propertyType } property)
                     {
-                        if (!property.CanRead)
-                        {
-                            ilg.EmitLuaError("attempt to index non-readable property");
-                            ilg.Emit(Ret);
-                            continue;
-                        }
-
-                        if (propertyType.IsByRefLike)
-                        {
-                            ilg.EmitLuaError("attempt to index by-ref like property");
-                            ilg.Emit(Ret);
-                            continue;
-                        }
-
                         ilg.Emit(Ldarg_1);
                         ilg.Emit(Call, property.GetMethod);
 
-                        // Support ref-returning properties by emitting an indirect load.
                         if (propertyType.IsByRef)
                         {
                             propertyType = propertyType.GetElementType();
@@ -224,7 +244,7 @@ namespace Triton.Interop
                     ilg.Emit(Ret);
                 }
 
-                return (lua_CFunction)method.CreateDelegate(typeof(lua_CFunction), context);
+                return (lua_CFunction)method.CreateDelegate(typeof(lua_CFunction), context);*/
             }
         }
 

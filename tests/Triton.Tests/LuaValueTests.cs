@@ -185,152 +185,6 @@ namespace Triton
         }
 
         [Fact]
-        public void FromObject_Null()
-        {
-            var value = LuaValue.FromObject(null);
-
-            Assert.True(value.IsNil);
-        }
-
-        [Fact]
-        public void FromObject_Bool()
-        {
-            var value = LuaValue.FromObject(true);
-
-            Assert.True(value.IsBoolean);
-            Assert.True((bool)value);
-        }
-
-        [Fact]
-        public void FromObject_IntPtr()
-        {
-            var value = LuaValue.FromObject((IntPtr)1234);
-
-            Assert.True(value.IsLightUserdata);
-            Assert.Equal((IntPtr)1234, (IntPtr)value);
-        }
-
-        [Fact]
-        public void FromObject_Sbyte()
-        {
-            var value = LuaValue.FromObject(sbyte.MaxValue);
-
-            Assert.True(value.IsInteger);
-            Assert.Equal(sbyte.MaxValue, (long)value);
-        }
-
-        [Fact]
-        public void FromObject_Byte()
-        {
-            var value = LuaValue.FromObject(byte.MaxValue);
-
-            Assert.True(value.IsInteger);
-            Assert.Equal(byte.MaxValue, (long)value);
-        }
-
-        [Fact]
-        public void FromObject_Short()
-        {
-            var value = LuaValue.FromObject(short.MaxValue);
-
-            Assert.True(value.IsInteger);
-            Assert.Equal(short.MaxValue, (long)value);
-        }
-
-        [Fact]
-        public void FromObject_Ushort()
-        {
-            var value = LuaValue.FromObject(ushort.MaxValue);
-
-            Assert.True(value.IsInteger);
-            Assert.Equal(ushort.MaxValue, (long)value);
-        }
-
-        [Fact]
-        public void FromObject_Int()
-        {
-            var value = LuaValue.FromObject(int.MaxValue);
-
-            Assert.True(value.IsInteger);
-            Assert.Equal(int.MaxValue, (long)value);
-        }
-
-        [Fact]
-        public void FromObject_Uint()
-        {
-            var value = LuaValue.FromObject(uint.MaxValue);
-
-            Assert.True(value.IsInteger);
-            Assert.Equal(uint.MaxValue, (long)value);
-        }
-
-        [Fact]
-        public void FromObject_Long()
-        {
-            var value = LuaValue.FromObject(long.MaxValue);
-
-            Assert.True(value.IsInteger);
-            Assert.Equal(long.MaxValue, (long)value);
-        }
-
-        [Fact]
-        public void FromObject_Ulong()
-        {
-            var value = LuaValue.FromObject(ulong.MaxValue);
-
-            Assert.True(value.IsInteger);
-            Assert.Equal(ulong.MaxValue, (ulong)(long)value);
-        }
-
-        [Fact]
-        public void FromObject_Float()
-        {
-            var value = LuaValue.FromObject(1.234f);
-
-            Assert.True(value.IsNumber);
-            Assert.Equal(1.234f, (double)value);
-        }
-
-        [Fact]
-        public void FromObject_Double()
-        {
-            var value = LuaValue.FromObject(1.234);
-
-            Assert.True(value.IsNumber);
-            Assert.Equal(1.234, (double)value);
-        }
-
-        [Fact]
-        public void FromObject_String()
-        {
-            var value = LuaValue.FromObject("test");
-
-            Assert.True(value.IsString);
-            Assert.Equal("test", (string?)value);
-        }
-
-        [Fact]
-        public void FromObject_LuaObject()
-        {
-            using var environment = new LuaEnvironment();
-            var table = environment.CreateTable();
-            var value = LuaValue.FromObject(table);
-
-            Assert.True(value.IsLuaObject);
-            Assert.Same(table, (LuaObject?)value);
-        }
-
-        [Fact]
-        public void FromObject_Object()
-        {
-            var list = new List<int>();
-            var value = LuaValue.FromObject(list);
-
-            Assert.True(value.IsClrObject);
-            Assert.Same(list, value.AsClrObject());
-        }
-
-        [Fact]
         public void FromBoolean_AsBoolean()
         {
             var value = LuaValue.FromBoolean(true);
@@ -679,6 +533,26 @@ namespace Triton
             var value2 = LuaValue.FromClrObject(list);
 
             Assert.Equal(value.GetHashCode(), value2.GetHashCode());
+        }
+
+        [Fact]
+        [SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "Operator name")]
+        public void op_Equals()
+        {
+            var value = LuaValue.FromInteger(1234);
+            var value2 = LuaValue.FromInteger(1234);
+
+            Assert.True(value == value2);
+        }
+
+        [Fact]
+        [SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "Operator name")]
+        public void op_NotEquals()
+        {
+            var value = LuaValue.FromInteger(1234);
+            var value2 = LuaValue.FromInteger(1234);
+
+            Assert.False(value != value2);
         }
 
         [Fact]

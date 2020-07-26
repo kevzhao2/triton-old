@@ -45,11 +45,11 @@ namespace Triton
         /// </summary>
         /// <returns>The results.</returns>
         /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua function is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Call()
         {
             CallPrologue();  // Performs validation
-            return CallShared(0);
+            return _environment.Call(_state, 0);
         }
 
         /// <summary>
@@ -58,12 +58,12 @@ namespace Triton
         /// <param name="arg">The argument.</param>
         /// <returns>The results.</returns>
         /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua function is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Call(in LuaValue arg)
         {
             CallPrologue();  // Performs validation.
             _environment.PushValue(_state, arg);
-            return CallShared(1);
+            return _environment.Call(_state, 1);
         }
 
         /// <summary>
@@ -73,13 +73,13 @@ namespace Triton
         /// <param name="arg2">The second argument.</param>
         /// <returns>The results.</returns>
         /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua function is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Call(in LuaValue arg, in LuaValue arg2)
         {
             CallPrologue();  // Performs validation
             _environment.PushValue(_state, arg);
             _environment.PushValue(_state, arg2);
-            return CallShared(2);
+            return _environment.Call(_state, 2);
         }
 
         /// <summary>
@@ -90,14 +90,14 @@ namespace Triton
         /// <param name="arg3">The third argument.</param>
         /// <returns>The results.</returns>
         /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua function is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Call(in LuaValue arg, in LuaValue arg2, in LuaValue arg3)
         {
             CallPrologue();  // Performs validation
             _environment.PushValue(_state, arg);
             _environment.PushValue(_state, arg2);
             _environment.PushValue(_state, arg3);
-            return CallShared(3);
+            return _environment.Call(_state, 3);
         }
 
         /// <summary>
@@ -107,7 +107,7 @@ namespace Triton
         /// <returns>The results.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="args"/> is <see langword="null"/>.</exception>
         /// <exception cref="LuaEvalException">A Lua error occurred when evaluating the function.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua function is disposed.</exception>
+        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Call(params LuaValue[] args)
         {
             if (args is null)
@@ -120,27 +120,16 @@ namespace Triton
             {
                 _environment.PushValue(_state, args[i]);
             }
-            return CallShared(args.Length);
+            return _environment.Call(_state, args.Length);
         }
 
         private void CallPrologue()
         {
-            ThrowIfDisposed();
+            _environment.ThrowIfDisposed();
 
             lua_settop(_state, 0);  // Reset stack
 
             lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-        }
-
-        private LuaResults CallShared(int numArgs)
-        {
-            var status = lua_pcall(_state, numArgs, -1, 0);
-            if (status != LuaStatus.Ok)
-            {
-                throw _environment.CreateExceptionFromStack<LuaEvalException>(_state);
-            }
-
-            return new LuaResults(_state, _environment);
         }
     }
 }

@@ -35,11 +35,11 @@ namespace Triton
         }
 
         [Fact]
-        public void Item_String_Get_TableDisposed_ThrowsObjectDisposedException()
+        public void Item_String_Get_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
-            using var environment = new LuaEnvironment();
+            var environment = new LuaEnvironment();
             var table = environment.CreateTable();
-            table.Dispose();
+            environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => table["test"]);
         }
@@ -54,11 +54,11 @@ namespace Triton
         }
 
         [Fact]
-        public void Item_String_Set_TableDisposed_ThrowsObjectDisposedException()
+        public void Item_String_Set_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
-            using var environment = new LuaEnvironment();
+            var environment = new LuaEnvironment();
             var table = environment.CreateTable();
-            table.Dispose();
+            environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => table["test"] = 1234);
         }
@@ -75,21 +75,21 @@ namespace Triton
         }
 
         [Fact]
-        public void Item_Long_Get_TableDisposed_ThrowsObjectDisposedException()
+        public void Item_Long_Get_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
-            using var environment = new LuaEnvironment();
+            var environment = new LuaEnvironment();
             var table = environment.CreateTable();
-            table.Dispose();
+            environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => table[1]);
         }
 
         [Fact]
-        public void Item_Long_Set_TableDisposed_ThrowsObjectDisposedException()
+        public void Item_Long_Set_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
-            using var environment = new LuaEnvironment();
+            var environment = new LuaEnvironment();
             var table = environment.CreateTable();
-            table.Dispose();
+            environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => table[1] = 1234);
         }
@@ -106,21 +106,21 @@ namespace Triton
         }
 
         [Fact]
-        public void Item_LuaValue_Get_TableDisposed_ThrowsObjectDisposedException()
+        public void Item_LuaValue_Get_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
-            using var environment = new LuaEnvironment();
+            var environment = new LuaEnvironment();
             var table = environment.CreateTable();
-            table.Dispose();
+            environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => table[true]);
         }
 
         [Fact]
-        public void Item_LuaValue_Set_TableDisposed_ThrowsObjectDisposedException()
+        public void Item_LuaValue_Set_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
-            using var environment = new LuaEnvironment();
+            var environment = new LuaEnvironment();
             var table = environment.CreateTable();
-            table.Dispose();
+            environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => table[true] = 1234);
         }

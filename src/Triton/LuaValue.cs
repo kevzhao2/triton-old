@@ -19,7 +19,9 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace Triton
@@ -28,10 +30,44 @@ namespace Triton
     /// Represents a Lua value.
     /// </summary>
     [StructLayout(LayoutKind.Explicit, Size = 16)]
-    public readonly struct LuaValue : IEquatable<LuaValue>, IDisposable
+    public readonly struct LuaValue : IEquatable<LuaValue>
     {
         internal class TypeTag
         {
+        }
+
+        // Acts as a proxy around a CLR type. Signals that the static members and constructors of a type can be
+        // accessed.
+        //
+        internal class ClrTypeProxy
+        {
+            internal ClrTypeProxy(Type type)
+            {
+                Debug.Assert(type != null);
+                Debug.Assert(!type.IsPointer && !type.IsByRef && !type.IsByRefLike);
+                Debug.Assert(!type.IsGenericParameter && !type.IsGenericTypeDefinition);
+
+                Type = type;
+            }
+
+            internal Type Type { get; }
+        }
+
+        // Acts as a proxy around generic CLR types with the same name. Signals that the generic constructions can be
+        // accessed (and if there is a nullary type included, static members and constructors of that type).
+        //
+        internal class ClrGenericTypeProxy
+        {
+            internal ClrGenericTypeProxy(Type[] types)
+            {
+                Debug.Assert(types.Length >= 1);
+                Debug.Assert(types.Count(t => !t.IsGenericTypeDefinition) <= 1);
+                Debug.Assert(!types.Any(t => t.IsPointer || t.IsByRef || t.IsByRefLike));
+
+                Types = types;
+            }
+
+            internal Type[] Types { get; }
         }
 
         internal static readonly TypeTag _booleanTag = new TypeTag();
@@ -43,39 +79,36 @@ namespace Triton
         [FieldOffset(0)] internal readonly IntPtr _lightUserdata;
         [FieldOffset(0)] internal readonly long _integer;
         [FieldOffset(0)] internal readonly double _number;
-
         [FieldOffset(8)] internal readonly object? _objectOrTag;
 
-        // TODO: in .NET 5, use `Unsafe.SkipInit` for a small perf gain in constructor
-
-        private LuaValue(bool value) : this()
+        private LuaValue(bool boolean) : this()
         {
-            _boolean = value;
+            _boolean = boolean;
             _objectOrTag = _booleanTag;
         }
 
-        private LuaValue(IntPtr value) : this()
+        private LuaValue(IntPtr lightUserdata) : this()
         {
-            _lightUserdata = value;
+            _lightUserdata = lightUserdata;
             _objectOrTag = _lightUserdataTag;
         }
 
-        private LuaValue(long value) : this()
+        private LuaValue(long integer) : this()
         {
-            _integer = value;
+            _integer = integer;
             _objectOrTag = _integerTag;
         }
 
-        private LuaValue(double value) : this()
+        private LuaValue(double number) : this()
         {
-            _number = value;
+            _number = number;
             _objectOrTag = _numberTag;
         }
 
-        private LuaValue(long type, object? value) : this()
+        private LuaValue(long type, object? obj) : this()
         {
             _integer = type;
-            _objectOrTag = value;  // No null check here since it will be considered to be `nil`
+            _objectOrTag = obj;
         }
 
         /// <summary>
@@ -143,94 +176,61 @@ namespace Triton
         public bool IsClrObject => _integer == 4 && !IsNil && !(_objectOrTag is TypeTag);
 
         /// <summary>
-        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given object
-        /// <paramref name="value"/>.
+        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given <paramref name="boolean"/>.
         /// </summary>
-        /// <param name="value">The object value.</param>
+        /// <param name="boolean">The boolean.</param>
         /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
-        public static LuaValue FromObject(object? value) => value switch
-        {
-            null             => Nil,
-            bool b           => FromBoolean(b),
-            IntPtr p         => FromLightUserdata(p),
-            sbyte i1         => FromInteger(i1),
-            byte u1          => FromInteger(u1),
-            short i2         => FromInteger(i2),
-            ushort u2        => FromInteger(u2),
-            int i4           => FromInteger(i4),
-            uint u4          => FromInteger(u4),
-            long i8          => FromInteger(i8),
-            ulong u8         => FromInteger((long)u8),
-            float r4         => FromNumber(r4),
-            double r8        => FromNumber(r8),
-            string s         => FromString(s),
-            LuaObject luaObj => FromLuaObject(luaObj),
-            _                => FromClrObject(value)
-        };
+        public static LuaValue FromBoolean(bool boolean) => new LuaValue(boolean);
 
         /// <summary>
-        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given boolean
-        /// <paramref name="value"/>.
+        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given
+        /// <paramref name="lightUserdata"/>.
         /// </summary>
-        /// <param name="value">The boolean value.</param>
+        /// <param name="lightUserdata">The light userdata.</param>
         /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
-        public static LuaValue FromBoolean(bool value) => new LuaValue(value);
+        public static LuaValue FromLightUserdata(IntPtr lightUserdata) => new LuaValue(lightUserdata);
 
         /// <summary>
-        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given light userdata
-        /// <paramref name="value"/>.
+        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given <paramref name="integer"/>.
         /// </summary>
-        /// <param name="value">The light userdata value.</param>
+        /// <param name="integer">The integer.</param>
         /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
-        public static LuaValue FromLightUserdata(IntPtr value) => new LuaValue(value);
+        public static LuaValue FromInteger(long integer) => new LuaValue(integer);
 
         /// <summary>
-        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given integer
-        /// <paramref name="value"/>.
+        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given <paramref name="number"/>.
         /// </summary>
-        /// <param name="value">The integer value.</param>
+        /// <param name="number">The number.</param>
         /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
-        public static LuaValue FromInteger(long value) => new LuaValue(value);
+        public static LuaValue FromNumber(double number) => new LuaValue(number);
 
         /// <summary>
-        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given number
-        /// <paramref name="value"/>.
+        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given <paramref name="str"/>.
         /// </summary>
-        /// <param name="value">The number value.</param>
+        /// <param name="str">The string.</param>
         /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
-        public static LuaValue FromNumber(double value) => new LuaValue(value);
+        public static LuaValue FromString(string? str) => new LuaValue(1, str);
 
         /// <summary>
-        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given string
-        /// <paramref name="value"/>.
+        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given Lua <paramref name="obj"/>.
         /// </summary>
-        /// <param name="value">The string value.</param>
+        /// <param name="obj">The Lua object.</param>
         /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
-        public static LuaValue FromString(string? value) => new LuaValue(1, value);
+        public static LuaValue FromLuaObject(LuaObject? obj) => new LuaValue(2, obj);
 
         /// <summary>
-        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given Lua object
-        /// <paramref name="value"/>.
+        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given CLR <paramref name="type"/>.
         /// </summary>
-        /// <param name="value">The Lua object value.</param>
+        /// <param name="type">The CLR type.</param>
         /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
-        public static LuaValue FromLuaObject(LuaObject? value) => new LuaValue(2, value);
+        public static LuaValue FromClrType(Type? type) => new LuaValue(3, type);
 
         /// <summary>
-        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given CLR type
-        /// <paramref name="value"/>.
+        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given CLR <paramref name="obj"/>.
         /// </summary>
-        /// <param name="value">The CLR type value.</param>
+        /// <param name="obj">The CLR object.</param>
         /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
-        public static LuaValue FromClrType(Type? value) => new LuaValue(3, value);
-
-        /// <summary>
-        /// Creates a new instance of the <see cref="LuaValue"/> structure from the given CLR object
-        /// <paramref name="value"/>.
-        /// </summary>
-        /// <param name="value">The CLR object value.</param>
-        /// <returns>A new instance of the <see cref="LuaValue"/> structure.</returns>
-        public static LuaValue FromClrObject(object? value) => new LuaValue(4, value);
+        public static LuaValue FromClrObject(object? obj) => new LuaValue(4, obj);
 
         /// <inheritdoc/>
         public override bool Equals(object? obj) => obj is LuaValue other && Equals(other);
@@ -266,9 +266,6 @@ namespace Triton
             _ when _number == 3                      => $"<CLR type: {_objectOrTag}>",
             _                                        => $"<CLR object: {_objectOrTag}>"
         };
-
-        /// <inheritdoc/>
-        public void Dispose() => (_objectOrTag as LuaObject)?.Dispose();
 
         /// <summary>
         /// Converts the Lua value into a boolean. <i>This is unchecked!</i>
@@ -341,40 +338,62 @@ namespace Triton
         }
 
         /// <summary>
-        /// Converts the given boolean <paramref name="value"/> into a Lua value.
+        /// Returns a value indicating whether <paramref name="left"/> and <paramref name="right"/> are equal.
         /// </summary>
-        /// <param name="value">The boolean value.</param>
-        public static implicit operator LuaValue(bool value) => FromBoolean(value);
+        /// <param name="left">The left Lua value.</param>
+        /// <param name="right">The right Lua value.</param>
+        /// <returns>
+        /// <see langword="true"/> if <paramref name="left"/> and <paramref name="right"/> are equal; otherwise,
+        /// <see langword="false"/>.
+        /// </returns>
+        public static bool operator ==(in LuaValue left, in LuaValue right) => left.Equals(right);
 
         /// <summary>
-        /// Converts the given light userdata <paramref name="value"/> into a Lua value.
+        /// Returns a value indicating whether <paramref name="left"/> and <paramref name="right"/> are not equal.
         /// </summary>
-        /// <param name="value">The light userdata value.</param>
-        public static implicit operator LuaValue(IntPtr value) => FromLightUserdata(value);
+        /// <param name="left">The left Lua value.</param>
+        /// <param name="right">The right Lua value.</param>
+        /// <returns>
+        /// <see langword="true"/> if <paramref name="left"/> and <paramref name="right"/> are not equal; otherwise,
+        /// <see langword="false"/>.
+        /// </returns>
+        public static bool operator !=(in LuaValue left, in LuaValue right) => !left.Equals(right);
 
         /// <summary>
-        /// Converts the given integer <paramref name="value"/> into a Lua value.
+        /// Converts the given <paramref name="boolean"/> into a Lua value.
         /// </summary>
-        /// <param name="value">The integer value.</param>
-        public static implicit operator LuaValue(long value) => FromInteger(value);
+        /// <param name="boolean">The boolean.</param>
+        public static implicit operator LuaValue(bool boolean) => FromBoolean(boolean);
 
         /// <summary>
-        /// Converts the given number <paramref name="value"/> into a Lua value.
+        /// Converts the given <paramref name="lightUserdata"/> into a Lua value.
         /// </summary>
-        /// <param name="value">The number value.</param>
-        public static implicit operator LuaValue(double value) => FromNumber(value);
+        /// <param name="lightUserdata">The light userdata.</param>
+        public static implicit operator LuaValue(IntPtr lightUserdata) => FromLightUserdata(lightUserdata);
 
         /// <summary>
-        /// Converts the given string <paramref name="value"/> into a Lua value.
+        /// Converts the given <paramref name="integer"/> into a Lua value.
         /// </summary>
-        /// <param name="value">The string value.</param>
-        public static implicit operator LuaValue(string? value) => FromString(value);
+        /// <param name="integer">The integer.</param>
+        public static implicit operator LuaValue(long integer) => FromInteger(integer);
 
         /// <summary>
-        /// Converts the given Lua object <paramref name="value"/> into a Lua value.
+        /// Converts the given <paramref name="number"/> into a Lua value.
         /// </summary>
-        /// <param name="value">The Lua object value.</param>
-        public static implicit operator LuaValue(LuaObject? value) => FromLuaObject(value);
+        /// <param name="number">The number.</param>
+        public static implicit operator LuaValue(double number) => FromNumber(number);
+
+        /// <summary>
+        /// Converts the given <paramref name="str"/> into a Lua value.
+        /// </summary>
+        /// <param name="str">The string.</param>
+        public static implicit operator LuaValue(string? str) => FromString(str);
+
+        /// <summary>
+        /// Converts the given Lua <paramref name="obj"/> into a Lua value.
+        /// </summary>
+        /// <param name="obj">The Lua object.</param>
+        public static implicit operator LuaValue(LuaObject? obj) => FromLuaObject(obj);
 
         /// <summary>
         /// Converts the given Lua <paramref name="value"/> into a boolean. <i>This is unchecked!</i>

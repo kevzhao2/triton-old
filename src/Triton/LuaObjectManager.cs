@@ -28,15 +28,13 @@ namespace Triton
     /// <summary>
     /// Manages Lua objects.
     /// </summary>
-    internal sealed class LuaObjectManager : IDisposable
+    internal sealed class LuaObjectManager
     {
         private const string GcHelperMetatable = "<>__gcHelper";
 
         private readonly LuaEnvironment _environment;
         private readonly Dictionary<IntPtr, (int reference, WeakReference<LuaObject> weakReference)> _objects;
-        private readonly lua_CFunction _gcCallback;
-
-        private bool _isDisposed;
+        private readonly lua_CFunction _gcMetamethod;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="LuaObjectManager"/> class with the specified Lua
@@ -51,55 +49,40 @@ namespace Triton
             // Create a cache of Lua objects, which maps a pointer (retrieved via `lua_topointer`) to the reference in
             // the Lua registry along with a weak reference to the Lua object.
             //
-            // This weak reference is required, as otherwise the Lua object will never be garbage collected.
+            // The reference must be weak, as otherwise the Lua object can never be garbage collected.
             //
             _objects = new Dictionary<IntPtr, (int, WeakReference<LuaObject>)>();
 
             // Set up a metatable with a `__gc` metamethod. This allows us to clean up dead Lua objects whenever a Lua
             // garbage collection occurs.
             //
-            _gcCallback = GcCallback;
+            // To prevent garbage collection of the delegate, it needs to be stored as a field.
+            //
+            _gcMetamethod = GcMetamethod;
             lua_newtable(state);
             luaL_newmetatable(state, GcHelperMetatable);
 
-            lua_pushcfunction(state, _gcCallback);
+            lua_pushcfunction(state, _gcMetamethod);
             lua_setfield(state, -2, "__gc");
 
             lua_setmetatable(state, -2);
             lua_pop(state, 1);
         }
 
-        /// <inheritdoc/>
-        public void Dispose()
-        {
-            if (!_isDisposed)
-            {
-                foreach (var (_, (_, weakReference)) in _objects)
-                {
-                    if (weakReference.TryGetTarget(out var obj))
-                    {
-                        obj.Dispose();
-                    }
-                }
-
-                _isDisposed = true;
-            }
-        }
-
         /// <summary>
-        /// Interns the given <paramref name="luaObj"/>.
+        /// Interns the given Lua <paramref name="obj"/>.
         /// </summary>
-        /// <param name="luaObj">The Lua object.</param>
+        /// <param name="obj">The Lua object.</param>
         /// <param name="ptr">The pointer to the Lua object.</param>
-        internal void InternLuaObject(LuaObject luaObj, IntPtr ptr) =>
-            _objects[ptr] = (luaObj._reference, new WeakReference<LuaObject>(luaObj));
+        internal void Intern(LuaObject obj, IntPtr ptr) =>
+            _objects[ptr] = (obj._reference, new WeakReference<LuaObject>(obj));
 
         /// <summary>
-        /// Pushes the given <paramref name="obj"/> onto the stack of the Lua <paramref name="state"/>.
+        /// Pushes the given Lua <paramref name="obj"/> onto the stack of the Lua <paramref name="state"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="obj">The Lua object.</param>
-        internal void PushLuaObject(IntPtr state, LuaObject obj)
+        internal void Push(IntPtr state, LuaObject obj)
         {
             if (obj._environment != _environment)  // Ensure that the environments match
             {
@@ -111,13 +94,13 @@ namespace Triton
 
         /// <summary>
         /// Converts the Lua object on the stack of the Lua <paramref name="state"/> at the given
-        /// <paramref name="index"/> to a Lua <paramref name="value"/>.
+        /// <paramref name="index"/> into a Lua <paramref name="value"/>.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="index">The index of the Lua object on the stack.</param>
-        /// <param name="type">The type of the Lua object.</param>
         /// <param name="value">The resulting Lua value.</param>
-        internal void ToLuaObject(IntPtr state, int index, LuaType type, out LuaValue value)
+        /// <param name="type">The type of the Lua object.</param>
+        internal void ToValue(IntPtr state, int index, out LuaValue value, LuaType type)
         {
             value = default;
             Unsafe.AsRef(in value._integer) = 2;
@@ -148,7 +131,7 @@ namespace Triton
             _objects[ptr] = tuple;
         }
 
-        private int GcCallback(IntPtr state)
+        private int GcMetamethod(IntPtr state)
         {
             var deadPtrs = new List<IntPtr>(_objects.Count);
 
