@@ -198,11 +198,6 @@ namespace Triton
             return Call(_state, 0);
         }
 
-        /// <summary>
-        /// Pushes the given object <paramref name="value"/> onto the stack of the Lua <paramref name="state"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="value">The object.</param>
         internal void PushObject(IntPtr state, object? value)
         {
             if (value is null)               lua_pushnil(state);
@@ -223,11 +218,10 @@ namespace Triton
             else                             PushClrObject(state, value);
         }
 
-        /// <summary>
-        /// Pushes the given Lua <paramref name="value"/> onto the stack of the Lua <paramref name="state"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="value">The Lua value.</param>
+        internal void PushLuaObject(IntPtr state, LuaObject obj) => _luaObjectManager.Push(state, obj);
+
+        internal void PushClrObject(IntPtr state, object obj) => _clrTypeObjectManager.Push(state, obj);
+
         internal void PushValue(IntPtr state, in LuaValue value)
         {
             var objectOrTag = value._objectOrTag;
@@ -247,40 +241,10 @@ namespace Triton
                 var integer = value._integer;
                 if (integer == 1)                                   lua_pushstring(state, (string)objectOrTag);
                 else if (integer == 2)                              PushLuaObject(state, (LuaObject)objectOrTag);
-                else if (integer == 3)                              PushClrType(state, (Type)objectOrTag);
                 else                                                PushClrObject(state, objectOrTag);
             }
         }
 
-        /// <summary>
-        /// Pushes the given Lua <paramref name="obj"/> onto the stack of the Lua <paramref name="state"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="obj">The Lua object.</param>
-        internal void PushLuaObject(IntPtr state, LuaObject obj) => _luaObjectManager.Push(state, obj);
-
-        /// <summary>
-        /// Pushes the given CLR <paramref name="type"/> onto the stack of the Lua <paramref name="state"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="type">The CLR type.</param>
-        internal void PushClrType(IntPtr state, Type type) => _clrTypeObjectManager.PushNonGenericType(state, type);
-
-        /// <summary>
-        /// Pushes the given CLR <paramref name="obj"/> onto the stack of the Lua <paramref name="state"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="obj">The CLR object.</param>
-        internal void PushClrObject(IntPtr state, object obj) => _clrTypeObjectManager.PushObject(state, obj);
-
-        /// <summary>
-        /// Converts the value on the stack of the Lua <paramref name="state"/> at the given <paramref name="index"/>
-        /// into a Lua <paramref name="value"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="index">The index of the value on the stack.</param>
-        /// <param name="value">The resulting Lua value.</param>
-        /// <param name="type">The type of the Lua value.</param>
         internal void ToValue(IntPtr state, int index, out LuaValue value, LuaType type)
         {
             // The following code is unsafe and ignores the `readonly` aspect of `LuaValue`. However, it results in
@@ -342,27 +306,14 @@ namespace Triton
             }
         }
 
-        /// <summary>
-        /// Performs a function call with <paramref name="numArgs"/> argmuents.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="numArgs">The number of arguments.</param>
-        /// <returns>The Lua results.</returns>
+        internal object ToClrObject(IntPtr state, int index) => _clrTypeObjectManager.ToClrObject(state, index);
+
         internal LuaResults Call(IntPtr state, int numArgs) =>
             CallOrResume(state, lua_pcall(_state, numArgs, -1, 0));
 
-        /// <summary>
-        /// Performs a thread resume with <paramref name="numArgs"/> arguments.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="numArgs">The number of arguments.</param>
-        /// <returns>The Lua results.</returns>
         internal LuaResults Resume(IntPtr state, int numArgs) =>
             CallOrResume(state, lua_resume(state, IntPtr.Zero, numArgs, out _));
 
-        /// <summary>
-        /// Throws an <see cref="ObjectDisposedException"/> if the Lua environment is disposed.
-        /// </summary>
         internal void ThrowIfDisposed()
         {
             if (_isDisposed)

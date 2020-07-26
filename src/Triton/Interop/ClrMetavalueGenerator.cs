@@ -26,6 +26,7 @@ using System.Reflection.Emit;
 using System.Runtime.InteropServices;
 using static System.Reflection.BindingFlags;
 using static System.Reflection.Emit.OpCodes;
+using static Triton.LuaValue;
 using static Triton.NativeMethods;
 
 namespace Triton.Interop
@@ -99,7 +100,7 @@ namespace Triton.Interop
 
             foreach (var nestedType in type.GetPublicNestedTypes())
             {
-                _environment.PushClrType(state, nestedType);
+                _environment.PushClrObject(state, new ClrTypeProxy(nestedType));
                 lua_setfield(state, -2, nestedType.Name);
             }
 

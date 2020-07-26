@@ -71,11 +71,6 @@ namespace Triton.Interop
             _objectPtrs = new Dictionary<object, IntPtr>();
         }
 
-        /// <summary>
-        /// Pushes the given CLR <paramref name="obj"/> onto the stack of the Lua <paramref name="state"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="obj">The CLR object.</param>
         internal void Push(IntPtr state, object obj)
         {
             lua_getfield(state, LUA_REGISTRYINDEX, ObjectCacheField);
@@ -107,13 +102,12 @@ namespace Triton.Interop
             lua_remove(state, -2);  // Remove the object cache from the stack
         }
 
-        /// <summary>
-        /// Converts the CLR object on the stack of the Lua <paramref name="state"/> at the given
-        /// <paramref name="index"/> into a Lua <paramref name="value"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="index">The index of the CLR object on the stack.</param>
-        /// <param name="value">The resulting Lua value.</param>
+        internal object ToClrObject(IntPtr state, int index)
+        {
+            var ptr = lua_touserdata(state, index);
+            return _objects[ptr];
+        }
+
         internal void ToValue(IntPtr state, int index, out LuaValue value)
         {
             value = default;
@@ -132,7 +126,7 @@ namespace Triton.Interop
             {
                 PushTypeMetatable(state, type);
             }
-            else if (obj is LuaValue.ClrGenericTypeProxy { Types: var types })
+            else if (obj is LuaValue.ClrGenericTypesProxy { Types: var types })
             {
                 PushGenericTypeMetatable(state, types);
             }
@@ -178,8 +172,7 @@ namespace Triton.Interop
 
         private int ToStringMetamethod(IntPtr state)
         {
-            var ptr = lua_touserdata(state, 1);
-            var obj = _objects[ptr];
+            var obj = ToClrObject(state, 1);
 
             try
             {
