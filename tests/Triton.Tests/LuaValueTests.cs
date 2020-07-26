@@ -21,6 +21,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace Triton
@@ -33,6 +34,22 @@ namespace Triton
             var value = LuaValue.Nil;
 
             Assert.True(value.IsNil);
+        }
+
+        [Fact]
+        public void IsPrimitive_Get_ReturnsTrue()
+        {
+            var value = LuaValue.FromInteger(1234);
+
+            Assert.True(value.IsPrimitive);
+        }
+
+        [Fact]
+        public void IsPrimitive_Get_ReturnsFalse()
+        {
+            var value = LuaValue.FromString("test");
+
+            Assert.False(value.IsPrimitive);
         }
 
         [Fact]
@@ -68,6 +85,30 @@ namespace Triton
         }
 
         [Fact]
+        public void IsObject_Get_ReturnsTrue()
+        {
+            var value = LuaValue.FromString("test");
+
+            Assert.True(value.IsObject);
+        }
+
+        [Fact]
+        public void IsObject_Get_ReturnsFalse_Nil()
+        {
+            var value = LuaValue.Nil;
+
+            Assert.False(value.IsObject);
+        }
+
+        [Fact]
+        public void IsObject_Get_ReturnsFalse_Primitive()
+        {
+            var value = LuaValue.FromInteger(1234);
+
+            Assert.False(value.IsObject);
+        }
+
+        [Fact]
         public void IsString_Get_ReturnsTrue()
         {
             var value = LuaValue.FromString("test");
@@ -76,17 +117,11 @@ namespace Triton
         }
 
         [Fact]
-        public void IsString_Get_ReturnsFalse_Nil()
+        public void IsString_Get_ReturnsFalse()
         {
-            var value = LuaValue.FromString(null);
-
-            Assert.False(value.IsString);
-        }
-
-        [Fact]
-        public void IsString_Get_ReturnsFalse_Integer()
-        {
-            var value = LuaValue.FromInteger(1);
+            using var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+            var value = LuaValue.FromLuaObject(table);
 
             Assert.False(value.IsString);
         }
@@ -102,17 +137,9 @@ namespace Triton
         }
 
         [Fact]
-        public void IsLuaObject_Get_ReturnsFalse_Nil()
+        public void IsLuaObject_Get_ReturnsFalse()
         {
-            var value = LuaValue.FromLuaObject(null);
-
-            Assert.False(value.IsLuaObject);
-        }
-
-        [Fact]
-        public void IsLuaObject_Get_ReturnsFalse_Integer()
-        {
-            var value = LuaValue.FromInteger(2);
+            var value = LuaValue.FromString("test");
 
             Assert.False(value.IsLuaObject);
         }
@@ -126,19 +153,28 @@ namespace Triton
         }
 
         [Fact]
-        public void IsClrType_Get_ReturnsFalse_Nil()
+        public void IsClrType_Get_ReturnsFalse()
         {
-            var value = LuaValue.FromClrType(null);
+            var value = LuaValue.FromString("test");
 
             Assert.False(value.IsClrType);
         }
 
         [Fact]
-        public void IsClrType_Get_ReturnsFalse_Integer()
+        public void IsClrGenericTypes_Get_ReturnsTrue()
         {
-            var value = LuaValue.FromInteger(3);
+            var types = new[] { typeof(Task), typeof(Task<>) };
+            var value = LuaValue.FromClrGenericTypes(types);
 
-            Assert.False(value.IsClrType);
+            Assert.True(value.IsClrGenericTypes);
+        }
+
+        [Fact]
+        public void IsClrGenericTypes_Get_ReturnsFalse()
+        {
+            var value = LuaValue.FromString("test");
+
+            Assert.False(value.IsClrGenericTypes);
         }
 
         [Fact]
@@ -153,15 +189,15 @@ namespace Triton
         [Fact]
         public void IsClrObject_Get_ReturnsFalse_Nil()
         {
-            var value = LuaValue.FromClrObject(null);
+            var value = LuaValue.Nil;
 
             Assert.False(value.IsClrObject);
         }
 
         [Fact]
-        public void IsClrObject_Get_ReturnsFalse_Integer()
+        public void IsClrObject_Get_ReturnsFalse_Primitive()
         {
-            var value = LuaValue.FromInteger(4);
+            var value = LuaValue.FromInteger(1234);
 
             Assert.False(value.IsClrObject);
         }
@@ -180,6 +216,23 @@ namespace Triton
             using var environment = new LuaEnvironment();
             var table = environment.CreateTable();
             var value = LuaValue.FromLuaObject(table);
+
+            Assert.False(value.IsClrObject);
+        }
+
+        [Fact]
+        public void IsClrObject_Get_ReturnsFalse_ClrType()
+        {
+            var value = LuaValue.FromClrType(typeof(List<int>));
+
+            Assert.False(value.IsClrObject);
+        }
+
+        [Fact]
+        public void IsClrObject_Get_ReturnsFalse_ClrGenericTypes()
+        {
+            var types = new[] { typeof(Task), typeof(Task<>) };
+            var value = LuaValue.FromClrGenericTypes(types);
 
             Assert.False(value.IsClrObject);
         }
@@ -251,15 +304,19 @@ namespace Triton
         }
 
         [Fact]
-        public void FromClrType_NullClrType()
+        public void FromClrType_NullType_ThrowsArgumentNullException()
         {
-            var value = LuaValue.FromClrType(null);
-
-            Assert.True(value.IsNil);
+            Assert.Throws<ArgumentNullException>(() => LuaValue.FromClrType(null!));
         }
 
         [Fact]
-        public void FromClrType_AsClrObject()
+        public void FromClrType_GenericType_ThrowsArgumentNullException()
+        {
+            Assert.Throws<ArgumentException>(() => LuaValue.FromClrType(typeof(List<>)));
+        }
+
+        [Fact]
+        public void FromClrType_AsClrType()
         {
             var value = LuaValue.FromClrType(typeof(List<int>));
 
@@ -267,11 +324,32 @@ namespace Triton
         }
 
         [Fact]
-        public void FromClrObject_NullClrObject()
+        public void FromClrGenericTypes_NullTypes_ThrowsArgumentNullException()
         {
-            var value = LuaValue.FromClrObject(null);
+            Assert.Throws<ArgumentNullException>(() => LuaValue.FromClrGenericTypes(null!));
+        }
 
-            Assert.True(value.IsNil);
+        [Fact]
+        public void FromClrGenericTypes_TypesContainsMoreThanOneNonGenericType_ThrowsArgumentxception()
+        {
+            var types = new[] { typeof(int), typeof(int) };
+
+            Assert.Throws<ArgumentException>(() => LuaValue.FromClrGenericTypes(types));
+        }
+
+        [Fact]
+        public void FromClrGenericTypes_AsClrGenericTypes()
+        {
+            var types = new[] { typeof(Task), typeof(Task<>) };
+            var value = LuaValue.FromClrGenericTypes(types);
+
+            Assert.Same(types, value.AsClrGenericTypes());
+        }
+
+        [Fact]
+        public void FromClrObject_NullObj_ThrowsArgumentNullException()
+        {
+            Assert.Throws<ArgumentNullException>(() => LuaValue.FromClrObject(null!));
         }
 
         [Fact]
@@ -433,6 +511,25 @@ namespace Triton
         }
 
         [Fact]
+        public void Equals_LuaValue_ReturnsTrue_ClrGenericTypes()
+        {
+            var types = new Type[] { typeof(Task), typeof(Task<>) };
+            var value = LuaValue.FromClrGenericTypes(types);
+
+            Assert.True(value.Equals(LuaValue.FromClrGenericTypes(types)));
+        }
+
+        [Fact]
+        public void Equals_LuaValue_ReturnsFalse_ClrGenericTypes()
+        {
+            var types = new Type[] { typeof(Task), typeof(Task<>) };
+            var types2 = new Type[] { typeof(Action), typeof(Action<>) };
+            var value = LuaValue.FromClrGenericTypes(types);
+
+            Assert.False(value.Equals(LuaValue.FromClrGenericTypes(types2)));
+        }
+
+        [Fact]
         public void Equals_LuaValue_ReturnsTrue_ClrObject()
         {
             var list = new List<int>();
@@ -521,6 +618,16 @@ namespace Triton
         {
             var value = LuaValue.FromClrType(typeof(List<int>));
             var value2 = LuaValue.FromClrType(typeof(List<int>));
+
+            Assert.Equal(value.GetHashCode(), value2.GetHashCode());
+        }
+
+        [Fact]
+        public void GetHashCode_Equals_ClrGenericTypes_AreSame()
+        {
+            var types = new Type[] { typeof(Task), typeof(Task<>) };
+            var value = LuaValue.FromClrGenericTypes(types);
+            var value2 = LuaValue.FromClrGenericTypes(types);
 
             Assert.Equal(value.GetHashCode(), value2.GetHashCode());
         }

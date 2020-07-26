@@ -19,6 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using static Triton.NativeMethods;
 
 namespace Triton
@@ -28,13 +29,6 @@ namespace Triton
     /// </summary>
     public sealed class LuaThread : LuaObject
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="LuaThread"/> class with the specified Lua
-        /// <paramref name="state"/>, <paramref name="environment"/>, and <paramref name="reference"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="environment">The Lua environment.</param>
-        /// <param name="reference">The reference.</param>
         internal LuaThread(IntPtr state, LuaEnvironment environment, int reference) :
             base(state, environment, reference)
         {
@@ -67,6 +61,10 @@ namespace Triton
                 return lua_status(_state) == LuaStatus.Yield;
             }
         }
+
+        /// <inheritdoc/>
+        [ExcludeFromCodeCoverage]
+        public override string ToString() => $"Lua thread: {_reference}";
 
         /// <summary>
         /// Starts the Lua thread, running the given <paramref name="function"/> with no arguments.

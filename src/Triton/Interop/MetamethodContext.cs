@@ -23,21 +23,14 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Triton.Interop
 {
-    /// <summary>
-    /// Provides context for a generated metamethod.
-    /// </summary>
+    // Provides context for a generated metamethod.
+    //
     internal sealed class MetamethodContext
     {
         [SuppressMessage("CodeQuality", "IDE0052:Remove unread private members", Justification = "Implicitly used")]
         private readonly LuaEnvironment _environment;
         private readonly Dictionary<string, int> _memberNames;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="MetamethodContext"/> class with the specified Lua
-        /// <paramref name="environment"/> and <paramref name="memberNames"/>.
-        /// </summary>
-        /// <param name="environment">The Lua environment.</param>
-        /// <param name="memberNames">The member names.</param>
         internal MetamethodContext(LuaEnvironment environment, IReadOnlyList<string> memberNames)
         {
             _environment = environment;

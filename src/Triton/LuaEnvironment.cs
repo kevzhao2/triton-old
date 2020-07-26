@@ -21,6 +21,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using Triton.Interop;
+using static Triton.LuaValue;
 using static Triton.NativeMethods;
 
 namespace Triton
@@ -31,8 +32,8 @@ namespace Triton
     public class LuaEnvironment : IDisposable
     {
         private readonly IntPtr _state;
-        private readonly LuaObjectManager _luaObjectManager;
-        private readonly ClrObjectManager _clrTypeObjectManager;
+        private readonly LuaObjectManager _luaObjects;
+        private readonly ClrEntityManager _clrEntities;
 
         private bool _isDisposed;
 
@@ -44,8 +45,8 @@ namespace Triton
             _state = luaL_newstate();
             luaL_openlibs(_state);  // Open all standard libraries by default for convenience
 
-            _luaObjectManager = new LuaObjectManager(_state, this);
-            _clrTypeObjectManager = new ClrObjectManager(_state, this);
+            _luaObjects = new LuaObjectManager(_state, this);
+            _clrEntities = new ClrEntityManager(_state, this);
         }
 
         // A finalizer is _NOT_ feasible here. If the finalizer calls `lua_close` during an unmanaged -> managed
@@ -141,7 +142,7 @@ namespace Triton
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
             var table = new LuaTable(_state, this, reference);
 
-            _luaObjectManager.Intern(table, ptr);
+            _luaObjects.Intern(ptr, table);
             return table;
         }
 
@@ -161,7 +162,7 @@ namespace Triton
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
             var function = new LuaFunction(_state, this, reference);
 
-            _luaObjectManager.Intern(function, ptr);
+            _luaObjects.Intern(ptr, function);
             return function;
         }
 
@@ -180,7 +181,7 @@ namespace Triton
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
             var thread = new LuaThread(_state, this, reference);
 
-            _luaObjectManager.Intern(thread, ptr);
+            _luaObjects.Intern(ptr, thread);
             return thread;
         }
 
@@ -215,34 +216,41 @@ namespace Triton
             else if (value is double r8)     lua_pushnumber(state, r8);
             else if (value is string s)      lua_pushstring(state, s);
             else if (value is LuaObject obj) PushLuaObject(state, obj);
-            else                             PushClrObject(state, value);
+            else                             PushClrEntity(state, value);
         }
 
-        internal void PushLuaObject(IntPtr state, LuaObject obj) => _luaObjectManager.Push(state, obj);
+        internal void PushLuaObject(IntPtr state, LuaObject obj) => _luaObjects.Push(state, obj);
 
-        internal void PushClrObject(IntPtr state, object obj) => _clrTypeObjectManager.Push(state, obj);
+        internal void PushClrEntity(IntPtr state, object obj) => _clrEntities.Push(state, obj);
 
         internal void PushValue(IntPtr state, in LuaValue value)
         {
             var objectOrTag = value._objectOrTag;
-            if (objectOrTag is null)
+            if (objectOrTag is null)               lua_pushnil(state);
+            else if (objectOrTag is PrimitiveTag { PrimitiveType: var primitiveType })
             {
-                lua_pushnil(state);
+                switch (primitiveType)
+                {
+                case PrimitiveType.Boolean:
+                    lua_pushboolean(state, value._boolean);
+                    break;
+
+                case PrimitiveType.LightUserdata:
+                    lua_pushlightuserdata(state, value._lightUserdata);
+                    break;
+
+                case PrimitiveType.Integer:
+                    lua_pushinteger(state, value._integer);
+                    break;
+
+                default:
+                    lua_pushnumber(state, value._number);
+                    break;
+                }
             }
-            else if (objectOrTag is LuaValue.TypeTag)
-            {
-                if (objectOrTag == LuaValue._booleanTag)            lua_pushboolean(state, value._boolean);
-                else if (objectOrTag == LuaValue._lightUserdataTag) lua_pushlightuserdata(state, value._lightUserdata);
-                else if (objectOrTag == LuaValue._integerTag)       lua_pushinteger(state, value._integer);
-                else                                                lua_pushnumber(state, value._number);
-            }
-            else
-            {
-                var integer = value._integer;
-                if (integer == 1)                                   lua_pushstring(state, (string)objectOrTag);
-                else if (integer == 2)                              PushLuaObject(state, (LuaObject)objectOrTag);
-                else                                                PushClrObject(state, objectOrTag);
-            }
+            else if (objectOrTag is string str)    lua_pushstring(state, str);
+            else if (objectOrTag is LuaObject obj) PushLuaObject(state, obj);
+            else                                   PushClrEntity(state, objectOrTag);
         }
 
         internal void ToValue(IntPtr state, int index, out LuaValue value, LuaType type)
@@ -259,13 +267,13 @@ namespace Triton
             case LuaType.Boolean:
                 value = default;
                 Unsafe.AsRef(in value._boolean) = lua_toboolean(state, index);
-                Unsafe.AsRef(in value._objectOrTag) = LuaValue._booleanTag;
+                Unsafe.AsRef(in value._objectOrTag) = _booleanTag;
                 break;
 
             case LuaType.LightUserdata:
                 value = default;
                 Unsafe.AsRef(in value._lightUserdata) = lua_touserdata(state, index);
-                Unsafe.AsRef(in value._objectOrTag) = LuaValue._lightUserdataTag;
+                Unsafe.AsRef(in value._objectOrTag) = _lightUserdataTag;
                 break;
 
             case LuaType.Number:
@@ -273,40 +281,37 @@ namespace Triton
                 if (lua_isinteger(state, index))
                 {
                     Unsafe.AsRef(in value._integer) = lua_tointeger(state, index);
-                    Unsafe.AsRef(in value._objectOrTag) = LuaValue._integerTag;
+                    Unsafe.AsRef(in value._objectOrTag) = _integerTag;
                 }
                 else
                 {
                     Unsafe.AsRef(in value._number) = lua_tonumber(state, index);
-                    Unsafe.AsRef(in value._objectOrTag) = LuaValue._numberTag;
+                    Unsafe.AsRef(in value._objectOrTag) = _numberTag;
                 }
                 break;
 
             case LuaType.String:
                 value = default;
-                Unsafe.AsRef(in value._integer) = 1;
                 Unsafe.AsRef(in value._objectOrTag) = lua_tostring(state, index);
                 break;
 
             case LuaType.Table:
-                _luaObjectManager.ToValue(state, index, out value, LuaType.Table);
+                _luaObjects.ToValue(state, index, out value, LuaType.Table);
                 break;
 
             case LuaType.Function:
-                _luaObjectManager.ToValue(state, index, out value, LuaType.Function);
+                _luaObjects.ToValue(state, index, out value, LuaType.Function);
                 break;
 
             case LuaType.Userdata:
-                _clrTypeObjectManager.ToValue(state, index, out value);
+                _clrEntities.ToValue(state, index, out value);
                 break;
 
             case LuaType.Thread:
-                _luaObjectManager.ToValue(state, index, out value, LuaType.Thread);
+                _luaObjects.ToValue(state, index, out value, LuaType.Thread);
                 break;
             }
         }
-
-        internal object ToClrObject(IntPtr state, int index) => _clrTypeObjectManager.ToClrObject(state, index);
 
         internal LuaResults Call(IntPtr state, int numArgs) =>
             CallOrResume(state, lua_pcall(_state, numArgs, -1, 0));

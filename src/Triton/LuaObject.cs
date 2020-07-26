@@ -31,13 +31,6 @@ namespace Triton
         internal readonly LuaEnvironment _environment;
         internal readonly int _reference;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="LuaObject"/> class with the specified Lua
-        /// <paramref name="state"/>, <paramref name="environment"/>, and <paramref name="reference"/>.
-        /// </summary>
-        /// <param name="state"></param>
-        /// <param name="environment"></param>
-        /// <param name="reference"></param>
         private protected LuaObject(IntPtr state, LuaEnvironment environment, int reference)
         {
             _environment = environment;

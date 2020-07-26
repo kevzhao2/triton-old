@@ -19,7 +19,8 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Diagnostics;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -32,56 +33,73 @@ namespace Triton
     [StructLayout(LayoutKind.Explicit, Size = 16)]
     public readonly struct LuaValue : IEquatable<LuaValue>
     {
-        // Acts as a proxy around a CLR object. Signals that the instance members of a type can be accessed.
-        // 
-        internal class ClrObjectProxy
+        // Signals a primitive.
+        //
+        internal sealed class PrimitiveTag
         {
-            internal ClrObjectProxy(object @object)
+            internal PrimitiveTag(PrimitiveType primitiveType)
             {
-                Debug.Assert(@object != null);
-
-                Object = @object;
+                PrimitiveType = primitiveType;
             }
 
-            internal object Object { get; }
+            public PrimitiveType PrimitiveType { get; }
         }
 
-        // Acts as a proxy around a CLR type. Signals that the static members and constructors of a type can be
-        // accessed.
+        // Signals the type of a primitive.
+        //
+        internal enum PrimitiveType
+        {
+            Boolean,
+            LightUserdata,
+            Integer,
+            Number
+        }
+
+        // Signals that a CLR entity should be treated as a CLR type, providing access to the type's static members
+        // and constructors.
         //
         internal class ClrTypeProxy
         {
             internal ClrTypeProxy(Type type)
             {
-                Debug.Assert(type != null);
-                Debug.Assert(!type.IsGenericParameter && !type.IsGenericTypeDefinition);
-
                 Type = type;
             }
 
             internal Type Type { get; }
+
+            public override bool Equals(object obj) => obj is ClrTypeProxy { Type: var type } && Type.Equals(type);
+            public override int GetHashCode() => Type.GetHashCode();
+
+            [ExcludeFromCodeCoverage]
+            public override string ToString() => Type.ToString();
         }
 
-        // Acts as a proxy around generic CLR types with the same name. Signals that the generic constructions can be
-        // accessed (and if there is a nullary type included, static members and constructors of that type).
+        // Signals that a CLR entity should be treated as CLR generic types, providing access to the types' generic
+        // constructors (and if there exists a non-generic type, that type's static members and constructors).
         //
         internal class ClrGenericTypesProxy
         {
             internal ClrGenericTypesProxy(Type[] types)
             {
-                Debug.Assert(types.Length >= 1);
-                Debug.Assert(types.Count(t => !t.IsGenericTypeDefinition) <= 1);
-
                 Types = types;
             }
 
             internal Type[] Types { get; }
+
+            public override bool Equals(object obj) =>
+                obj is ClrGenericTypesProxy { Types: var types } && Types.SequenceEqual(types);
+
+            public override int GetHashCode() =>
+                ((IStructuralEquatable)Types).GetHashCode(EqualityComparer<Type>.Default);
+
+            [ExcludeFromCodeCoverage]
+            public override string ToString() => string.Join(", ", (IEnumerable<Type>)Types);
         }
 
-        internal static readonly object _booleanTag = new object();
-        internal static readonly object _lightUserdataTag = new object();
-        internal static readonly object _integerTag = new object();
-        internal static readonly object _numberTag = new object();
+        internal static readonly PrimitiveTag _booleanTag = new PrimitiveTag(PrimitiveType.Boolean);
+        internal static readonly PrimitiveTag _lightUserdataTag = new PrimitiveTag(PrimitiveType.LightUserdata);
+        internal static readonly PrimitiveTag _integerTag = new PrimitiveTag(PrimitiveType.Integer);
+        internal static readonly PrimitiveTag _numberTag = new PrimitiveTag(PrimitiveType.Number);
 
         [FieldOffset(0)] internal readonly bool _boolean;
         [FieldOffset(0)] internal readonly IntPtr _lightUserdata;
@@ -129,6 +147,11 @@ namespace Triton
         public bool IsNil => _objectOrTag is null;
 
         /// <summary>
+        /// Gets a value indicating whether the Lua value is a primitive.
+        /// </summary>
+        public bool IsPrimitive => _objectOrTag is PrimitiveTag;
+
+        /// <summary>
         /// Gets a value indicating whether the Lua value is a boolean.
         /// </summary>
         public bool IsBoolean => _objectOrTag == _booleanTag;
@@ -147,6 +170,11 @@ namespace Triton
         /// Gets a value indicating whether the Lua value is a number.
         /// </summary>
         public bool IsNumber => _objectOrTag == _numberTag;
+
+        /// <summary>
+        /// Gets a value indicating whether the Lua value is an object.
+        /// </summary>
+        public bool IsObject => !IsNil && !IsPrimitive;
 
         /// <summary>
         /// Gets a value indicating whether the Lua value is a string.
@@ -171,7 +199,7 @@ namespace Triton
         /// <summary>
         /// Gets a value indicating whether the Lua value is a CLR object.
         /// </summary>
-        public bool IsClrObject => _objectOrTag is ClrObjectProxy;
+        public bool IsClrObject => IsObject && !IsString && !IsLuaObject && !IsClrType && !IsClrGenericTypes;
 
         /// <summary>
         /// Creates a Lua value from the given <paramref name="boolean"/>.
@@ -188,35 +216,35 @@ namespace Triton
         public static LuaValue FromLightUserdata(IntPtr lightUserdata) => new LuaValue(lightUserdata);
 
         /// <summary>
-        /// Creates a Lua value from the given from the given <paramref name="integer"/>.
+        /// Creates a Lua value from the given <paramref name="integer"/>.
         /// </summary>
         /// <param name="integer">The integer.</param>
         /// <returns>The resulting Lua value.</returns>
         public static LuaValue FromInteger(long integer) => new LuaValue(integer);
 
         /// <summary>
-        /// Creates a Lua value from the given from the given <paramref name="number"/>.
+        /// Creates a Lua value from the given <paramref name="number"/>.
         /// </summary>
         /// <param name="number">The number.</param>
         /// <returns>The resulting Lua value.</returns>
         public static LuaValue FromNumber(double number) => new LuaValue(number);
 
         /// <summary>
-        /// Creates a Lua value from the given from the given <paramref name="str"/>.
+        /// Creates a Lua value from the given <paramref name="str"/>.
         /// </summary>
         /// <param name="str">The string.</param>
         /// <returns>The resulting Lua value.</returns>
         public static LuaValue FromString(string? str) => new LuaValue(str);
 
         /// <summary>
-        /// Creates a Lua value from the given from the given Lua <paramref name="object"/>.
+        /// Creates a Lua value from the given Lua <paramref name="obj"/>.
         /// </summary>
-        /// <param name="object">The Lua object.</param>
+        /// <param name="obj">The Lua object.</param>
         /// <returns>The resulting Lua value.</returns>
-        public static LuaValue FromLuaObject(LuaObject? @object) => new LuaValue(@object);
+        public static LuaValue FromLuaObject(LuaObject? obj) => new LuaValue(obj);
 
         /// <summary>
-        /// Creates a Lua value from the given from the given CLR <paramref name="type"/>.
+        /// Creates a Lua value from the given CLR <paramref name="type"/>.
         /// </summary>
         /// <param name="type">The CLR type.</param>
         /// <returns>The resulting Lua value.</returns>
@@ -229,7 +257,7 @@ namespace Triton
                 throw new ArgumentNullException(nameof(type));
             }
 
-            if (type.IsGenericParameter || type.IsGenericTypeDefinition)
+            if (type.IsGenericTypeDefinition)
             {
                 throw new ArgumentException("Type is generic", nameof(type));
             }
@@ -238,7 +266,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Creates a Lua value from the given from the given CLR generic <paramref name="types"/>.
+        /// Creates a Lua value from the given CLR generic <paramref name="types"/>.
         /// </summary>
         /// <param name="types">The CLR generic types.</param>
         /// <returns>The resulting Lua value.</returns>
@@ -262,19 +290,19 @@ namespace Triton
         }
 
         /// <summary>
-        /// Creates a Lua value from the given from the given CLR <paramref name="object"/>.
+        /// Creates a Lua value from the given CLR <paramref name="obj"/>.
         /// </summary>
-        /// <param name="object">The CLR object.</param>
+        /// <param name="obj">The CLR object.</param>
         /// <returns>The resulting Lua value.</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="object"/> is <see langword="null"/>.</exception>
-        public static LuaValue FromClrObject(object @object)
+        /// <exception cref="ArgumentNullException"><paramref name="obj"/> is <see langword="null"/>.</exception>
+        public static LuaValue FromClrObject(object obj)
         {
-            if (@object is null)
+            if (obj is null)
             {
-                throw new ArgumentNullException(nameof(@object));
+                throw new ArgumentNullException(nameof(obj));
             }
 
-            return new LuaValue(new ClrObjectProxy(@object));
+            return new LuaValue(obj);
         }
 
         /// <inheritdoc/>
@@ -311,7 +339,7 @@ namespace Triton
             _ when _objectOrTag == _lightUserdataTag => _lightUserdata.GetHashCode(),
             _ when _objectOrTag == _integerTag       => _integer.GetHashCode(),
             _ when _objectOrTag == _numberTag        => _number.GetHashCode(),
-            _                                        => _objectOrTag.GetHashCode(),
+            _                                        => _objectOrTag.GetHashCode()
         };
 
         /// <summary>
@@ -321,12 +349,16 @@ namespace Triton
         [ExcludeFromCodeCoverage]
         public override string ToString() => _objectOrTag switch
         {
-            null                                     => "<nil>",
-            _ when _objectOrTag == _booleanTag       => $"<boolean: {_boolean}>",
-            _ when _objectOrTag == _lightUserdataTag => $"<light userdata: 0x{_lightUserdata.ToInt64():x8}>",
-            _ when _objectOrTag == _integerTag       => $"<integer: {_integer}>",
-            _ when _objectOrTag == _numberTag        => $"<number: {_number}>",
-            _                                        => $"<object: {_objectOrTag}>"
+            null                                      => "<nil>",
+            _ when _objectOrTag == _booleanTag        => $"<boolean: {_boolean}>",
+            _ when _objectOrTag == _lightUserdataTag  => $"<light userdata: 0x{_lightUserdata.ToInt64():x8}>",
+            _ when _objectOrTag == _integerTag        => $"<integer: {_integer}>",
+            _ when _objectOrTag == _numberTag         => $"<number: {_number}>",
+            string str                                => $"<string: {str}>",
+            LuaObject obj                             => $"<{obj}>",
+            ClrTypeProxy { Type: var type }           => $"<CLR type: {type}>",
+            ClrGenericTypesProxy { Types: var types } => $"<CLR generic types: {types}>",
+            _                                         => $"<CLR object: {_objectOrTag}>",
         };
 
         /// <summary>
@@ -381,7 +413,7 @@ namespace Triton
         /// Converts the Lua value into a CLR object. <i>This is unchecked!</i>
         /// </summary>
         /// <returns>The Lua value as a CLR object.</returns>
-        public object? AsClrObject() => _objectOrTag is ClrObjectProxy { Object: var @object } ? @object : null;
+        public object? AsClrObject() => _objectOrTag;
 
         [ExcludeFromCodeCoverage]
         bool IEquatable<LuaValue>.Equals(LuaValue other) => Equals(other);

@@ -28,9 +28,6 @@ using static Triton.NativeMethods;
 
 namespace Triton.Interop
 {
-    /// <summary>
-    /// Provides extensions for the <see cref="ILGenerator"/> class.
-    /// </summary>
     internal static class ILGeneratorExtensions
     {
         private static readonly FieldInfo _environment =
@@ -57,8 +54,8 @@ namespace Triton.Interop
         private static readonly MethodInfo _pushLuaObject =
             typeof(ILGeneratorExtensions).GetMethod(nameof(PushLuaObject), NonPublic | Static)!;
 
-        private static readonly MethodInfo _pushClrObject =
-            typeof(ILGeneratorExtensions).GetMethod(nameof(PushClrObject), NonPublic | Static)!;
+        private static readonly MethodInfo _pushClrEntity =
+            typeof(ILGeneratorExtensions).GetMethod(nameof(PushClrEntity), NonPublic | Static)!;
 
         private static readonly MethodInfo _intPtrOpExplicit =
             typeof(IntPtr).GetMethod("op_Explicit", new[] { typeof(void*) });
@@ -71,12 +68,6 @@ namespace Triton.Interop
 
         private static readonly HashSet<Type> _numberTypes = new HashSet<Type> { typeof(float), typeof(double) };
 
-        /// <summary>
-        /// Defines <paramref name="count"/> labels.
-        /// </summary>
-        /// <param name="ilg">The IL generator.</param>
-        /// <param name="count">The count.</param>
-        /// <returns>The labels.</returns>
         public static Label[] DefineLabels(this ILGenerator ilg, int count)
         {
             var labels = new Label[count];
@@ -88,32 +79,22 @@ namespace Triton.Interop
             return labels;
         }
 
-        /// <summary>
-        /// Emits an indirect load for the given <paramref name="type"/>.
-        /// </summary>
-        /// <param name="ilg">The IL generator.</param>
-        /// <param name="type">The type.</param>
         public static void EmitLoadIndirect(this ILGenerator ilg, Type type)
         {
-            if (type == typeof(sbyte))        ilg.Emit(Ldind_I1);
-            else if (type == typeof(byte))    ilg.Emit(Ldind_U1);
-            else if (type == typeof(short))   ilg.Emit(Ldind_I2);
-            else if (type == typeof(ushort))  ilg.Emit(Ldind_U2);
-            else if (type == typeof(int))     ilg.Emit(Ldind_I4);
-            else if (type == typeof(uint))    ilg.Emit(Ldind_U4);
-            else if (type == typeof(long))    ilg.Emit(Ldind_I8);
-            else if (type == typeof(ulong))   ilg.Emit(Ldind_I8);
-            else if (type == typeof(float))   ilg.Emit(Ldind_R4);
-            else if (type == typeof(double))  ilg.Emit(Ldind_R8);
-            else if (type.IsValueType)        ilg.Emit(Ldobj, type);
-            else                              ilg.Emit(Ldind_Ref);
+            if (type == typeof(sbyte))       ilg.Emit(Ldind_I1);
+            else if (type == typeof(byte))   ilg.Emit(Ldind_U1);
+            else if (type == typeof(short))  ilg.Emit(Ldind_I2);
+            else if (type == typeof(ushort)) ilg.Emit(Ldind_U2);
+            else if (type == typeof(int))    ilg.Emit(Ldind_I4);
+            else if (type == typeof(uint))   ilg.Emit(Ldind_U4);
+            else if (type == typeof(long))   ilg.Emit(Ldind_I8);
+            else if (type == typeof(ulong))  ilg.Emit(Ldind_I8);
+            else if (type == typeof(float))  ilg.Emit(Ldind_R4);
+            else if (type == typeof(double)) ilg.Emit(Ldind_R8);
+            else if (type.IsValueType)       ilg.Emit(Ldobj, type);
+            else                             ilg.Emit(Ldind_Ref);
         }
 
-        /// <summary>
-        /// Emits a Lua error with the given <paramref name="message"/>, assuming that the Lua state is arg 1.
-        /// </summary>
-        /// <param name="ilg">The IL generator.</param>
-        /// <param name="message">The message.</param>
         public static void EmitLuaError(this ILGenerator ilg, string message)
         {
             ilg.Emit(Ldarg_1);
@@ -121,12 +102,6 @@ namespace Triton.Interop
             ilg.Emit(Call, _luaL_error);
         }
 
-        /// <summary>
-        /// Emits a Lua push for the given <paramref name="type"/>, assuming that the metamethod context is arg 0, and
-        /// that the state and value are pushed on the stack.
-        /// </summary>
-        /// <param name="ilg">The IL generator.</param>
-        /// <param name="type">The type.</param>
         public static void EmitLuaPush(this ILGenerator ilg, Type type)
         {
             if (type == typeof(bool))
@@ -188,7 +163,7 @@ namespace Triton.Interop
 
                 ilg.Emit(Ldarg_0);
                 ilg.Emit(Ldfld, _environment);
-                ilg.Emit(Call, _pushClrObject);
+                ilg.Emit(Call, _pushClrEntity);
             }
         }
 
@@ -204,15 +179,15 @@ namespace Triton.Interop
             }
         }
 
-        private static void PushClrObject(IntPtr state, object? obj, LuaEnvironment environment)
+        private static void PushClrEntity(IntPtr state, object? entity, LuaEnvironment environment)
         {
-            if (obj is null)
+            if (entity is null)
             {
                 lua_pushnil(state);
             }
             else
             {
-                environment.PushClrObject(state, obj);
+                environment.PushClrEntity(state, entity);
             }
         }
     }

@@ -20,33 +20,31 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
+using static Triton.LuaValue;
 using static Triton.NativeMethods;
 
 namespace Triton.Interop
 {
-    // Manages CLR objects.
+    // Manages CLR entities: types, generic types, and objects.
     //
-    internal sealed class ClrObjectManager
+    internal sealed class ClrEntityManager
     {
         private const string GcMetamethodField = "<>__gc";
         private const string ToStringMetamethodField = "<>__tostring";
-        private const string ObjectCacheField = "<>__objectCache";
+        private const string EntityCacheField = "<>__entityCache";
 
         private readonly ClrMetavalueGenerator _metavalueGenerator;
         private readonly lua_CFunction _gcMetamethod;
         private readonly lua_CFunction _tostringMetamethod;
-        private readonly Dictionary<IntPtr, object> _objects;
-        private readonly Dictionary<object, IntPtr> _objectPtrs;
+        private readonly Dictionary<IntPtr, object> _entities;
+        private readonly Dictionary<object, IntPtr> _entityPtrs;
 
-        internal ClrObjectManager(IntPtr state, LuaEnvironment environment)
+        internal ClrEntityManager(IntPtr state, LuaEnvironment environment)
         {
             _metavalueGenerator = new ClrMetavalueGenerator(environment);
 
-            // Set up the `__gc` and `__tostring` metamethods in the registry to lower the amount of allocations.
+            // Set up the `__gc` and `__tostring` metamethods in the registry to lower the number of allocations.
             //
             _gcMetamethod = GcMetamethod;
             lua_pushcfunction(state, _gcMetamethod);
@@ -56,8 +54,8 @@ namespace Triton.Interop
             lua_pushcfunction(state, _tostringMetamethod);
             lua_setfield(state, LUA_REGISTRYINDEX, ToStringMetamethodField);
 
-            // Set up the object cache in the registry to lower the amount of allocations. The caches need to have weak
-            // values, as otherwise the objects will never get garbage collected.
+            // Set up the entity cache in the registry to lower the number of allocations. The caches need to have weak
+            // values, as otherwise the entities will never get garbage collected.
             //
             lua_newtable(state);
             lua_newtable(state);
@@ -65,74 +63,71 @@ namespace Triton.Interop
             lua_setfield(state, -2, "__mode");
             lua_pushvalue(state, -1);
             lua_setmetatable(state, -2);
-            lua_setfield(state, LUA_REGISTRYINDEX, ObjectCacheField);
+            lua_setfield(state, LUA_REGISTRYINDEX, EntityCacheField);
 
-            _objects = new Dictionary<IntPtr, object>();
-            _objectPtrs = new Dictionary<object, IntPtr>();
+            _entities = new Dictionary<IntPtr, object>();
+            _entityPtrs = new Dictionary<object, IntPtr>();
         }
 
-        internal void Push(IntPtr state, object obj)
+        internal void Push(IntPtr state, object entity)
         {
-            lua_getfield(state, LUA_REGISTRYINDEX, ObjectCacheField);
+            lua_getfield(state, LUA_REGISTRYINDEX, EntityCacheField);
 
-            if (_objectPtrs.TryGetValue(obj, out var ptr))
+            if (_entityPtrs.TryGetValue(entity, out var ptr))
             {
                 // Note that the value might have been garbage collected, but the `__gc` metamethod might not have run
                 // yet. We need to account for this here!
                 //
                 if (lua_rawgetp(state, -1, ptr) != LuaType.Nil)
                 {
-                    lua_remove(state, -2);  // Remove the object cache from the stack
+                    lua_remove(state, -2);  // Remove the entity cache from the stack
                     return;
                 }
 
                 lua_pop(state, 1);  // Remove nil from the stack
-                RemoveObject(obj, ptr);  // Remove the object since the pointer has been invalidated
+                Remove(ptr, entity);  // Remove the entity from the cache since the pointer has been invalidated
             }
 
             ptr = lua_newuserdatauv(state, UIntPtr.Zero, 0);
-            PushMetatable(state, obj);
+            PushMetatable(state, entity);
             lua_setmetatable(state, -2);
             lua_pushvalue(state, -1);
             lua_rawsetp(state, -3, ptr);
 
-            _objectPtrs.Add(obj, ptr);
-            _objects.Add(ptr, obj);
+            _entityPtrs.Add(entity, ptr);
+            _entities.Add(ptr, entity);
 
-            lua_remove(state, -2);  // Remove the object cache from the stack
+            lua_remove(state, -2);  // Remove the entity cache from the stack
         }
 
-        internal object ToClrObject(IntPtr state, int index)
+        internal object ToClrEntity(IntPtr state, int index)
         {
             var ptr = lua_touserdata(state, index);
-            return _objects[ptr];
+            return _entities[ptr];
         }
 
         internal void ToValue(IntPtr state, int index, out LuaValue value)
         {
             value = default;
-            ref var obj = ref Unsafe.AsRef(in value._objectOrTag);
+            ref var entity = ref Unsafe.AsRef(in value._objectOrTag);
 
             var ptr = lua_touserdata(state, index);
-            if (_objects.TryGetValue(ptr, out obj))
-            {
-                Unsafe.AsRef(in value._integer) = 3;
-            }
+            _ = _entities.TryGetValue(ptr, out entity);
         }
 
-        private void PushMetatable(IntPtr state, object obj)
+        private void PushMetatable(IntPtr state, object entity)
         {
-            if (obj is LuaValue.ClrTypeProxy { Type: var type })
+            if (entity is ClrTypeProxy { Type: var type })
             {
                 PushTypeMetatable(state, type);
             }
-            else if (obj is LuaValue.ClrGenericTypesProxy { Types: var types })
+            else if (entity is ClrGenericTypesProxy { Types: var types })
             {
-                PushGenericTypeMetatable(state, types);
+                PushGenericTypesMetatable(state, types);
             }
             else
             {
-                PushObjectMetatable(state, obj);
+                PushObjectMetatable(state, entity);
             }
 
             void PushTypeMetatable(IntPtr state, Type type)
@@ -146,7 +141,7 @@ namespace Triton.Interop
                 lua_setfield(state, -2, "__index");
             }
 
-            void PushGenericTypeMetatable(IntPtr state, Type[] types)
+            void PushGenericTypesMetatable(IntPtr state, Type[] types)
             {
                 lua_newtable(state);
                 lua_getfield(state, LUA_REGISTRYINDEX, GcMetamethodField);
@@ -157,7 +152,7 @@ namespace Triton.Interop
                 throw new NotImplementedException();
             }
 
-            void PushObjectMetatable(IntPtr state, object obj)
+            void PushObjectMetatable(IntPtr state, object entity)
             {
                 throw new NotImplementedException();
             }
@@ -166,17 +161,21 @@ namespace Triton.Interop
         private int GcMetamethod(IntPtr state)
         {
             var ptr = lua_touserdata(state, 1);
-            RemoveObject(ptr);
+            if (_entities.TryGetValue(ptr, out var entity))
+            {
+                Remove(ptr, entity);
+            }
+
             return 0;
         }
 
         private int ToStringMetamethod(IntPtr state)
         {
-            var obj = ToClrObject(state, 1);
+            var entity = ToClrEntity(state, 1);
 
             try
             {
-                lua_pushstring(state, obj.ToString());
+                lua_pushstring(state, entity.ToString());
                 return 1;
             }
             catch (Exception ex)
@@ -185,18 +184,10 @@ namespace Triton.Interop
             }
         }
 
-        private void RemoveObject(IntPtr ptr)
+        private void Remove(IntPtr ptr, object entity)
         {
-            if (_objects.TryGetValue(ptr, out var obj))
-            {
-                RemoveObject(obj, ptr);
-            }
-        }
-
-        private void RemoveObject(object obj, IntPtr ptr)
-        {
-            _objects.Remove(ptr);
-            _objectPtrs.Remove(obj);
+            _entities.Remove(ptr);
+            _entityPtrs.Remove(entity);
         }
     }
 }

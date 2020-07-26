@@ -25,23 +25,16 @@ using static Triton.NativeMethods;
 
 namespace Triton
 {
-    /// <summary>
-    /// Manages Lua objects.
-    /// </summary>
+    // Manages Lua objects.
+    //
     internal sealed class LuaObjectManager
     {
-        private const string GcHelperMetatable = "<>__gcHelper";
+        private const string GcHelperMetatableField = "<>__gcHelper";
 
         private readonly LuaEnvironment _environment;
         private readonly Dictionary<IntPtr, (int reference, WeakReference<LuaObject> weakReference)> _objects;
         private readonly lua_CFunction _gcMetamethod;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="LuaObjectManager"/> class with the specified Lua
-        /// <paramref name="state"/> and <paramref name="environment"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="environment">The Lua environment.</param>
         internal LuaObjectManager(IntPtr state, LuaEnvironment environment)
         {
             _environment = environment;
@@ -59,32 +52,25 @@ namespace Triton
             // To prevent garbage collection of the delegate, it needs to be stored as a field.
             //
             _gcMetamethod = GcMetamethod;
-            lua_newtable(state);
-            luaL_newmetatable(state, GcHelperMetatable);
 
+            lua_newtable(state);
+            lua_newtable(state);
             lua_pushcfunction(state, _gcMetamethod);
             lua_setfield(state, -2, "__gc");
-
+            lua_pushvalue(state, -1);
+            lua_setfield(state, LUA_REGISTRYINDEX, GcHelperMetatableField);
             lua_setmetatable(state, -2);
             lua_pop(state, 1);
         }
 
-        /// <summary>
-        /// Interns the given Lua <paramref name="obj"/>.
-        /// </summary>
-        /// <param name="obj">The Lua object.</param>
-        /// <param name="ptr">The pointer to the Lua object.</param>
-        internal void Intern(LuaObject obj, IntPtr ptr) =>
+        internal void Intern(IntPtr ptr, LuaObject obj)
+        {
             _objects[ptr] = (obj._reference, new WeakReference<LuaObject>(obj));
+        }
 
-        /// <summary>
-        /// Pushes the given Lua <paramref name="obj"/> onto the stack of the Lua <paramref name="state"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="obj">The Lua object.</param>
         internal void Push(IntPtr state, LuaObject obj)
         {
-            if (obj._environment != _environment)  // Ensure that the environments match
+            if (obj._environment != _environment)
             {
                 throw new InvalidOperationException("Lua object does not belong to the given state's environment");
             }
@@ -92,18 +78,9 @@ namespace Triton
             lua_rawgeti(state, LUA_REGISTRYINDEX, obj._reference);
         }
 
-        /// <summary>
-        /// Converts the Lua object on the stack of the Lua <paramref name="state"/> at the given
-        /// <paramref name="index"/> into a Lua <paramref name="value"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="index">The index of the Lua object on the stack.</param>
-        /// <param name="value">The resulting Lua value.</param>
-        /// <param name="type">The type of the Lua object.</param>
         internal void ToValue(IntPtr state, int index, out LuaValue value, LuaType type)
         {
             value = default;
-            Unsafe.AsRef(in value._integer) = 2;
             ref var obj = ref Unsafe.As<object?, LuaObject>(ref Unsafe.AsRef(in value._objectOrTag));
 
             var ptr = lua_topointer(state, index);
@@ -152,10 +129,11 @@ namespace Triton
                 _objects.Remove(deadPtr);
             }
 
-            // Create a new table which triggers `GcCallback` upon being garbage collected.
+            // Create a new table which triggers `GcMetamethod` upon being garbage collected.
             //
             lua_newtable(state);
-            luaL_setmetatable(state, GcHelperMetatable);
+            lua_getfield(state, LUA_REGISTRYINDEX, GcHelperMetatableField);
+            lua_setmetatable(state, -1);
             lua_pop(state, 1);
             return 0;
         }

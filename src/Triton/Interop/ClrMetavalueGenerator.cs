@@ -100,7 +100,7 @@ namespace Triton.Interop
 
             foreach (var nestedType in type.GetPublicNestedTypes())
             {
-                _environment.PushClrObject(state, new ClrTypeProxy(nestedType));
+                _environment.PushClrEntity(state, new ClrTypeProxy(nestedType));
                 lua_setfield(state, -2, nestedType.Name);
             }
 

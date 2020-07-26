@@ -33,12 +33,6 @@ namespace Triton
 
         private int _index;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="LuaResults"/> structure with the given Lua
-        /// <paramref name="state"/> and <paramref name="environment"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="environment">The Lua environment.</param>
         internal LuaResults(IntPtr state, LuaEnvironment environment)
         {
             _state = state;

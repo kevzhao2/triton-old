@@ -19,6 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using static Triton.NativeMethods;
 
 namespace Triton
@@ -28,17 +29,14 @@ namespace Triton
     /// </summary>
     public sealed class LuaFunction : LuaObject
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="LuaFunction"/> class with the specified Lua
-        /// <paramref name="state"/>, <paramref name="environment"/>, and <paramref name="reference"/>.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="environment">The Lua environment.</param>
-        /// <param name="reference">The reference.</param>
         internal LuaFunction(IntPtr state, LuaEnvironment environment, int reference) :
             base(state, environment, reference)
         {
         }
+
+        /// <inheritdoc/>
+        [ExcludeFromCodeCoverage]
+        public override string ToString() => $"Lua function: {_reference}";
 
         /// <summary>
         /// Calls the Lua function with no arguments.

@@ -26,34 +26,16 @@ using static System.Reflection.BindingFlags;
 
 namespace Triton.Interop
 {
-    /// <summary>
-    /// Provides extensions for the <see cref="Type"/> class.
-    /// </summary>
     internal static class TypeExtensions
     {
-        /// <summary>
-        /// Gets the <see langword="public"/> <see langword="static"/> fields.
-        /// </summary>
-        /// <param name="type">The type.</param>
-        /// <returns>The <see langword="public"/> <see langword="static"/> fields.</returns>
         public static IEnumerable<FieldInfo> GetPublicStaticFields(this Type type) =>
             type.GetFields(Public | Static | FlattenHierarchy)
                 .Where(f => !f.IsSpecialName);
 
-        /// <summary>
-        /// Gets the <see langword="public"/> <see langword="static"/> properties.
-        /// </summary>
-        /// <param name="type">The type.</param>
-        /// <returns>The <see langword="public"/> <see langword="static"/> properties.</returns>
         public static IEnumerable<PropertyInfo> GetPublicStaticProperties(this Type type) =>
             type.GetProperties(Public | Static | FlattenHierarchy)
                 .Where(p => !p.IsSpecialName);
 
-        /// <summary>
-        /// Gets the <see langword="public"/> nested types.
-        /// </summary>
-        /// <param name="type">The type.</param>
-        /// <returns>The <see langword="public"/> nested types.</returns>
         public static IEnumerable<Type> GetPublicNestedTypes(this Type type) =>
             type.BaseType is null
                 ? Enumerable.Empty<Type>()
