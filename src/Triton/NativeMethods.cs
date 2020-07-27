@@ -36,6 +36,30 @@ namespace Triton
     [SuppressUnmanagedCodeSecurity]
     internal static class NativeMethods
     {
+        public enum LuaStatus
+        {
+            Ok = 0,
+            Yield = 1,
+            ErrRun = 2,
+            ErrSyntax = 3,
+            ErrMem = 4,
+            ErrErr = 5
+        }
+
+        public enum LuaType
+        {
+            None = -1,
+            Nil = 0,
+            Boolean = 1,
+            LightUserdata = 2,
+            Number = 3,
+            String = 4,
+            Table = 5,
+            Function = 6,
+            Userdata = 7,
+            Thread = 8
+        }
+
         public const int LUAI_MAXSTACK = 1000000;
 
         public const int LUA_REGISTRYINDEX = -LUAI_MAXSTACK - 1000;
@@ -314,34 +338,6 @@ namespace Triton
             }
         }
 
-        public static unsafe bool luaL_newmetatable(IntPtr L, string tname)
-        {
-            var maxLength = Encoding.UTF8.GetMaxByteCount(tname.Length) + 1;
-
-            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
-            var length = Encoding.UTF8.GetBytes(tname, span);
-            span[length] = 0;  // Null terminator
-
-            fixed (byte* buffer = span)
-            {
-                return luaL_newmetatable(L, (IntPtr)buffer);
-            }
-        }
-
-        public static unsafe void luaL_setmetatable(IntPtr L, string tname)
-        {
-            var maxLength = Encoding.UTF8.GetMaxByteCount(tname.Length) + 1;
-
-            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
-            var length = Encoding.UTF8.GetBytes(tname, span);
-            span[length] = 0;  // Null terminator
-
-            fixed (byte* buffer = span)
-            {
-                luaL_setmetatable(L, (IntPtr)buffer);
-            }
-        }
-
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr luaL_newstate();
 
@@ -358,36 +354,6 @@ namespace Triton
         private static extern int luaL_error(IntPtr L, IntPtr fmt);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        private static extern bool luaL_newmetatable(IntPtr L, IntPtr tname);
-
-        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        private static extern void luaL_setmetatable(IntPtr L, IntPtr tname);
-
-        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         private static extern LuaStatus luaL_loadstring(IntPtr L, IntPtr s);
-
-        public enum LuaStatus
-        {
-            Ok = 0,
-            Yield = 1,
-            ErrRun = 2,
-            ErrSyntax = 3,
-            ErrMem = 4,
-            ErrErr = 5
-        }
-
-        public enum LuaType
-        {
-            None = -1,
-            Nil = 0,
-            Boolean = 1,
-            LightUserdata = 2,
-            Number = 3,
-            String = 4,
-            Table = 5,
-            Function = 6,
-            Userdata = 7,
-            Thread = 8
-        }
     }
 }

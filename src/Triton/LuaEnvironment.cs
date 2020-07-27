@@ -179,7 +179,7 @@ namespace Triton
 
             var ptr = lua_newthread(_state);
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
-            var thread = new LuaThread(_state, this, reference);
+            var thread = new LuaThread(ptr, this, reference);
 
             _luaObjects.Intern(ptr, thread);
             return thread;

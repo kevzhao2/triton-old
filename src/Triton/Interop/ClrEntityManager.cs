@@ -30,15 +30,16 @@ namespace Triton.Interop
     //
     internal sealed class ClrEntityManager
     {
-        private const string GcMetamethodField = "<>__gc";
-        private const string ToStringMetamethodField = "<>__tostring";
-        private const string EntityCacheField = "<>__entityCache";
-
         private readonly ClrMetavalueGenerator _metavalueGenerator;
+
         private readonly lua_CFunction _gcMetamethod;
+        private readonly int _gcMetamethodReference;
         private readonly lua_CFunction _tostringMetamethod;
-        private readonly Dictionary<IntPtr, object> _entities;
+        private readonly int _tostringMetamethodReference;
+
         private readonly Dictionary<object, IntPtr> _entityPtrs;
+        private readonly Dictionary<IntPtr, object> _entityCache;
+        private readonly int _entityCacheReference;
 
         internal ClrEntityManager(IntPtr state, LuaEnvironment environment)
         {
@@ -48,11 +49,11 @@ namespace Triton.Interop
             //
             _gcMetamethod = GcMetamethod;
             lua_pushcfunction(state, _gcMetamethod);
-            lua_setfield(state, LUA_REGISTRYINDEX, GcMetamethodField);
+            _gcMetamethodReference = luaL_ref(state, LUA_REGISTRYINDEX);
 
             _tostringMetamethod = ToStringMetamethod;
             lua_pushcfunction(state, _tostringMetamethod);
-            lua_setfield(state, LUA_REGISTRYINDEX, ToStringMetamethodField);
+            _tostringMetamethodReference = luaL_ref(state, LUA_REGISTRYINDEX);
 
             // Set up the entity cache in the registry to lower the number of allocations. The caches need to have weak
             // values, as otherwise the entities will never get garbage collected.
@@ -63,20 +64,20 @@ namespace Triton.Interop
             lua_setfield(state, -2, "__mode");
             lua_pushvalue(state, -1);
             lua_setmetatable(state, -2);
-            lua_setfield(state, LUA_REGISTRYINDEX, EntityCacheField);
 
-            _entities = new Dictionary<IntPtr, object>();
             _entityPtrs = new Dictionary<object, IntPtr>();
+            _entityCache = new Dictionary<IntPtr, object>();
+            _entityCacheReference = luaL_ref(state, LUA_REGISTRYINDEX);
         }
 
         internal void Push(IntPtr state, object entity)
         {
-            lua_getfield(state, LUA_REGISTRYINDEX, EntityCacheField);
+            lua_rawgeti(state, LUA_REGISTRYINDEX, _entityCacheReference);
 
             if (_entityPtrs.TryGetValue(entity, out var ptr))
             {
-                // Note that the value might have been garbage collected, but the `__gc` metamethod might not have run
-                // yet. We need to account for this here!
+                // Note that the value might have been garbage collected, but the `__gc` metamethod not yet run, meaning
+                // `_entityPtrs` contains a garbage collected pointer. We need to account for this!!
                 //
                 if (lua_rawgetp(state, -1, ptr) != LuaType.Nil)
                 {
@@ -85,7 +86,7 @@ namespace Triton.Interop
                 }
 
                 lua_pop(state, 1);  // Remove nil from the stack
-                Remove(ptr, entity);  // Remove the entity from the cache since the pointer has been invalidated
+                Remove(ptr, entity);  // Remove the entity from the cache since the pointer is garbage collected
             }
 
             ptr = lua_newuserdatauv(state, UIntPtr.Zero, 0);
@@ -94,8 +95,8 @@ namespace Triton.Interop
             lua_pushvalue(state, -1);
             lua_rawsetp(state, -3, ptr);
 
+            _entityCache.Add(ptr, entity);
             _entityPtrs.Add(entity, ptr);
-            _entities.Add(ptr, entity);
 
             lua_remove(state, -2);  // Remove the entity cache from the stack
         }
@@ -103,7 +104,7 @@ namespace Triton.Interop
         internal object ToClrEntity(IntPtr state, int index)
         {
             var ptr = lua_touserdata(state, index);
-            return _entities[ptr];
+            return _entityCache[ptr];
         }
 
         internal void ToValue(IntPtr state, int index, out LuaValue value)
@@ -112,7 +113,7 @@ namespace Triton.Interop
             ref var entity = ref Unsafe.AsRef(in value._objectOrTag);
 
             var ptr = lua_touserdata(state, index);
-            _ = _entities.TryGetValue(ptr, out entity);
+            _ = _entityCache.TryGetValue(ptr, out entity);
         }
 
         private void PushMetatable(IntPtr state, object entity)
@@ -133,9 +134,9 @@ namespace Triton.Interop
             void PushTypeMetatable(IntPtr state, Type type)
             {
                 lua_newtable(state);
-                lua_getfield(state, LUA_REGISTRYINDEX, GcMetamethodField);
+                lua_rawgeti(state, LUA_REGISTRYINDEX, _gcMetamethodReference);
                 lua_setfield(state, -2, "__gc");
-                lua_getfield(state, LUA_REGISTRYINDEX, ToStringMetamethodField);
+                lua_rawgeti(state, LUA_REGISTRYINDEX, _tostringMetamethodReference);
                 lua_setfield(state, -2, "__tostring");
                 _metavalueGenerator.PushTypeIndex(state, type);
                 lua_setfield(state, -2, "__index");
@@ -144,9 +145,9 @@ namespace Triton.Interop
             void PushGenericTypesMetatable(IntPtr state, Type[] types)
             {
                 lua_newtable(state);
-                lua_getfield(state, LUA_REGISTRYINDEX, GcMetamethodField);
+                lua_rawgeti(state, LUA_REGISTRYINDEX, _gcMetamethodReference);
                 lua_setfield(state, -2, "__gc");
-                lua_getfield(state, LUA_REGISTRYINDEX, ToStringMetamethodField);
+                lua_rawgeti(state, LUA_REGISTRYINDEX, _tostringMetamethodReference);
                 lua_setfield(state, -2, "__tostring");
 
                 throw new NotImplementedException();
@@ -161,7 +162,7 @@ namespace Triton.Interop
         private int GcMetamethod(IntPtr state)
         {
             var ptr = lua_touserdata(state, 1);
-            if (_entities.TryGetValue(ptr, out var entity))
+            if (_entityCache.TryGetValue(ptr, out var entity))
             {
                 Remove(ptr, entity);
             }
@@ -186,7 +187,7 @@ namespace Triton.Interop
 
         private void Remove(IntPtr ptr, object entity)
         {
-            _entities.Remove(ptr);
+            _entityCache.Remove(ptr);
             _entityPtrs.Remove(entity);
         }
     }

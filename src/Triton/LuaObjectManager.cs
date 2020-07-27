@@ -29,11 +29,12 @@ namespace Triton
     //
     internal sealed class LuaObjectManager
     {
-        private const string GcHelperMetatableField = "<>__gcHelper";
-
         private readonly LuaEnvironment _environment;
+
         private readonly Dictionary<IntPtr, (int reference, WeakReference<LuaObject> weakReference)> _objects;
+
         private readonly lua_CFunction _gcMetamethod;
+        private readonly int _gcMetatableReference;
 
         internal LuaObjectManager(IntPtr state, LuaEnvironment environment)
         {
@@ -58,7 +59,7 @@ namespace Triton
             lua_pushcfunction(state, _gcMetamethod);
             lua_setfield(state, -2, "__gc");
             lua_pushvalue(state, -1);
-            lua_setfield(state, LUA_REGISTRYINDEX, GcHelperMetatableField);
+            _gcMetatableReference = luaL_ref(state, LUA_REGISTRYINDEX);
             lua_setmetatable(state, -2);
             lua_pop(state, 1);
         }
@@ -132,7 +133,7 @@ namespace Triton
             // Create a new table which triggers `GcMetamethod` upon being garbage collected.
             //
             lua_newtable(state);
-            lua_getfield(state, LUA_REGISTRYINDEX, GcHelperMetatableField);
+            lua_rawgeti(state, LUA_REGISTRYINDEX, _gcMetatableReference);
             lua_setmetatable(state, -1);
             lua_pop(state, 1);
             return 0;
