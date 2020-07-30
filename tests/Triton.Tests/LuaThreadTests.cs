@@ -26,7 +26,7 @@ namespace Triton
     public class LuaThreadTests
     {
         [Fact]
-        public void CanStart_EnvironmentDisposed_ThrowsObjectDisposedException()
+        public void CanStart_GetEnvironmentDisposed_ThrowsObjectDisposedException()
         {
             var environment = new LuaEnvironment();
             var thread = environment.CreateThread();
@@ -36,7 +36,7 @@ namespace Triton
         }
 
         [Fact]
-        public void CanStart_ReturnsTrue()
+        public void CanStart_Get_ReturnsTrue()
         {
             using var environment = new LuaEnvironment();
             var thread = environment.CreateThread();
@@ -45,7 +45,7 @@ namespace Triton
         }
 
         [Fact]
-        public void CanStart_ReturnsFalse()
+        public void CanStart_Get_ReturnsFalse()
         {
             using var environment = new LuaEnvironment();
             var function = environment.CreateFunction("coroutine.yield()");
@@ -56,7 +56,7 @@ namespace Triton
         }
 
         [Fact]
-        public void CanResume_EnvironmentDisposed_ThrowsObjectDisposedException()
+        public void CanResume_GetEnvironmentDisposed_ThrowsObjectDisposedException()
         {
             var environment = new LuaEnvironment();
             var thread = environment.CreateThread();
@@ -66,7 +66,7 @@ namespace Triton
         }
 
         [Fact]
-        public void CanResume_ReturnsTrue()
+        public void CanResume_Get_ReturnsTrue()
         {
             using var environment = new LuaEnvironment();
             var function = environment.CreateFunction("coroutine.yield()");
@@ -77,7 +77,7 @@ namespace Triton
         }
 
         [Fact]
-        public void CanResume_ReturnsFalse()
+        public void CanResume_Get_ReturnsFalse()
         {
             using var environment = new LuaEnvironment();
             var thread = environment.CreateThread();

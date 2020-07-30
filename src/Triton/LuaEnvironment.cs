@@ -53,7 +53,7 @@ namespace Triton
         // transition (which is possible since finalizers run on a separate thread), we'll never be able to make the
         // managed -> unmanaged transition successfully.
         //
-        // Thus, you must ensure that `LuaEnvironment` instances are properly disposed of!!
+        // Thus, you must ensure that `LuaEnvironment` instances are properly disposed of!
         //
 
         /// <summary>
@@ -77,8 +77,7 @@ namespace Triton
                 lua_settop(_state, 0);  // Reset stack
 
                 var type = lua_getglobal(_state, global);
-                ToValue(_state, -1, out var value, type);
-                return value;
+                return ToValue(_state, -1, type);
             }
 
             set
@@ -156,7 +155,14 @@ namespace Triton
         /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaFunction CreateFunction(string chunk)
         {
-            Load(chunk);  // Performs validation
+            if (chunk is null)
+            {
+                throw new ArgumentNullException(nameof(chunk));
+            }
+
+            ThrowIfDisposed();
+
+            LoadString(_state, chunk);
 
             var ptr = lua_topointer(_state, -1);
             var reference = luaL_ref(_state, LUA_REGISTRYINDEX);
@@ -195,38 +201,48 @@ namespace Triton
         /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaResults Eval(string chunk)
         {
-            Load(chunk);  // Performs validation
+            if (chunk is null)
+            {
+                throw new ArgumentNullException(nameof(chunk));
+            }
+
+            ThrowIfDisposed();
+
+            LoadString(_state, chunk);  // Performs validation
             return Call(_state, 0);
         }
 
-        internal void PushObject(IntPtr state, object? value)
+        internal void PushObject(IntPtr state, object? obj)
         {
-            if (value is null)               lua_pushnil(state);
-            else if (value is bool b)        lua_pushboolean(state, b);
-            else if (value is IntPtr p)      lua_pushlightuserdata(state, p);
-            else if (value is sbyte i1)      lua_pushinteger(state, i1);
-            else if (value is byte u1)       lua_pushinteger(state, u1);
-            else if (value is short i2)      lua_pushinteger(state, i2);
-            else if (value is ushort u2)     lua_pushinteger(state, u2);
-            else if (value is int i4)        lua_pushinteger(state, i4);
-            else if (value is uint u4)       lua_pushinteger(state, u4);
-            else if (value is long i8)       lua_pushinteger(state, i8);
-            else if (value is ulong u8)      lua_pushinteger(state, (long)u8);
-            else if (value is float r4)      lua_pushnumber(state, r4);
-            else if (value is double r8)     lua_pushnumber(state, r8);
-            else if (value is string s)      lua_pushstring(state, s);
-            else if (value is LuaObject obj) PushLuaObject(state, obj);
-            else                             PushClrEntity(state, value);
+            if (obj is null)                  lua_pushnil(state);
+            else if (obj is bool b)           lua_pushboolean(state, b);
+            else if (obj is IntPtr p)         lua_pushlightuserdata(state, p);
+            else if (obj is sbyte i1)         lua_pushinteger(state, i1);
+            else if (obj is byte u1)          lua_pushinteger(state, u1);
+            else if (obj is short i2)         lua_pushinteger(state, i2);
+            else if (obj is ushort u2)        lua_pushinteger(state, u2);
+            else if (obj is int i4)           lua_pushinteger(state, i4);
+            else if (obj is uint u4)          lua_pushinteger(state, u4);
+            else if (obj is long i8)          lua_pushinteger(state, i8);
+            else if (obj is ulong u8)         lua_pushinteger(state, (long)u8);
+            else if (obj is float r4)         lua_pushnumber(state, r4);
+            else if (obj is double r8)        lua_pushnumber(state, r8);
+            else if (obj is string s)         lua_pushstring(state, s);
+            else if (obj is LuaObject luaObj) PushLuaObject(state, luaObj);
+            else                              PushClrEntity(state, obj);
         }
 
         internal void PushLuaObject(IntPtr state, LuaObject obj) => _luaObjects.Push(state, obj);
 
-        internal void PushClrEntity(IntPtr state, object obj) => _clrEntities.Push(state, obj);
+        internal void PushClrEntity(IntPtr state, object entity) => _clrEntities.Push(state, entity);
 
         internal void PushValue(IntPtr state, in LuaValue value)
         {
             var objectOrTag = value._objectOrTag;
-            if (objectOrTag is null)               lua_pushnil(state);
+            if (objectOrTag is null)
+            {
+                lua_pushnil(state);
+            }
             else if (objectOrTag is PrimitiveTag { PrimitiveType: var primitiveType })
             {
                 switch (primitiveType)
@@ -248,12 +264,34 @@ namespace Triton
                     break;
                 }
             }
-            else if (objectOrTag is string str)    lua_pushstring(state, str);
-            else if (objectOrTag is LuaObject obj) PushLuaObject(state, obj);
-            else                                   PushClrEntity(state, objectOrTag);
+            else
+            {
+                switch (value._objectType)
+                {
+                case ObjectType.String:
+                    lua_pushstring(state, (string)objectOrTag);
+                    break;
+
+                case ObjectType.LuaObject:
+                    PushLuaObject(state, (LuaObject)objectOrTag);
+                    break;
+
+                default:
+                    PushClrEntity(state, objectOrTag);
+                    break;
+                }
+            }
         }
 
-        internal void ToValue(IntPtr state, int index, out LuaValue value, LuaType type)
+        internal object ToClrEntity(IntPtr state, int index) => _clrEntities.ToClrEntity(state, index);
+
+        internal LuaValue ToValue(IntPtr state, int index, LuaType type)
+        {
+            ToValue(state, index, type, out var value);
+            return value;
+        }
+
+        internal void ToValue(IntPtr state, int index, LuaType type, out LuaValue value)
         {
             // The following code is unsafe and ignores the `readonly` aspect of `LuaValue`. However, it results in
             // significantly improved code generation: ~10% speed improvement in getting globals.
@@ -292,6 +330,7 @@ namespace Triton
 
             case LuaType.String:
                 value = default;
+                Unsafe.AsRef(in value._objectType) = ObjectType.String;
                 Unsafe.AsRef(in value._objectOrTag) = lua_tostring(state, index);
                 break;
 
@@ -313,11 +352,9 @@ namespace Triton
             }
         }
 
-        internal LuaResults Call(IntPtr state, int numArgs) =>
-            CallOrResume(state, lua_pcall(_state, numArgs, -1, 0));
+        internal LuaResults Call(IntPtr state, int args) => CallOrResume(state, lua_pcall(_state, args, -1, 0));
 
-        internal LuaResults Resume(IntPtr state, int numArgs) =>
-            CallOrResume(state, lua_resume(state, IntPtr.Zero, numArgs, out _));
+        internal LuaResults Resume(IntPtr state, int args) => CallOrResume(state, lua_resume(state, default, args));
 
         internal void ThrowIfDisposed()
         {
@@ -327,21 +364,14 @@ namespace Triton
             }
         }
 
-        private void Load(string chunk)
+        private void LoadString(IntPtr state, string chunk)
         {
-            if (chunk is null)
-            {
-                throw new ArgumentNullException(nameof(chunk));
-            }
+            lua_settop(state, 0);  // Reset stack
 
-            ThrowIfDisposed();
-
-            lua_settop(_state, 0);  // Reset stack
-
-            var status = luaL_loadstring(_state, chunk);
+            var status = luaL_loadstring(state, chunk);
             if (status != LuaStatus.Ok)
             {
-                var message = lua_tostring(_state, -1);
+                var message = lua_tostring(state, -1);
                 throw new LuaLoadException(message);
             }
         }

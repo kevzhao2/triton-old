@@ -18,16 +18,20 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
+using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Reflection;
+using static Triton.LuaValue;
 
 namespace Triton.Interop
 {
-    // Provides context for a generated metamethod.
-    //
     internal sealed class MetamethodContext
     {
-        [SuppressMessage("CodeQuality", "IDE0052:Remove unread private members", Justification = "Implicitly used")]
+        internal static readonly MethodInfo _matchMemberName = typeof(MetamethodContext).GetMethod(nameof(MatchMemberName))!;
+        internal static readonly MethodInfo _pushClrType = typeof(MetamethodContext).GetMethod(nameof(PushClrType))!;
+        internal static readonly MethodInfo _toClrType = typeof(MetamethodContext).GetMethod(nameof(ToClrType))!;
+
         private readonly LuaEnvironment _environment;
         private readonly Dictionary<string, int> _memberNames;
 
@@ -42,7 +46,23 @@ namespace Triton.Interop
             }
         }
 
-        [SuppressMessage("CodeQuality", "IDE0051:Remove unread private members", Justification = "Implicitly used")]
-        private int MatchMemberName(string memberName) => _memberNames.TryGetValue(memberName, out var i) ? i : -1;
+        public int MatchMemberName(string memberName) => _memberNames.TryGetValue(memberName, out var i) ? i : -1;
+
+        public void PushLuaObject(IntPtr state, LuaObject obj) =>
+            _environment.PushLuaObject(state, obj);
+
+        public void PushClrEntity(IntPtr state, object entity) =>
+            _environment.PushClrEntity(state, entity);
+
+        public void PushClrType(IntPtr state, Type type) =>
+            _environment.PushClrEntity(state, new ClrTypeProxy(type));
+
+        public Type? ToClrType(IntPtr state, int index) =>
+            _environment.ToClrEntity(state, index) switch
+            {
+                ClrTypeProxy { Type: var type } => type,
+                ClrGenericTypesProxy { Types: var types } => types.FirstOrDefault(t => !t.IsGenericTypeDefinition),
+                _ => null
+            };
     }
 }

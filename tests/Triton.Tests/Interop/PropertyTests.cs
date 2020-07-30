@@ -56,9 +56,10 @@ namespace Triton.Interop
         public void GetStaticNonReadable_RaisesLuaError()
         {
             using var environment = new LuaEnvironment();
-            environment["StaticNonReadable"] = LuaValue.FromClrType(typeof(StaticByRefLike));
+            environment["StaticNonReadable"] = LuaValue.FromClrType(typeof(StaticNonReadable));
 
-            Assert.Throws<LuaEvalException>(() => environment.Eval("i4 = StaticNonReadable.I4"));
+            var exception = Assert.Throws<LuaEvalException>(() => environment.Eval("i4 = StaticNonReadable.I4"));
+            Assert.Contains("non-readable property", exception.Message);
         }
 
         [Fact]
@@ -67,7 +68,8 @@ namespace Triton.Interop
             using var environment = new LuaEnvironment();
             environment["StaticByRefLike"] = LuaValue.FromClrType(typeof(StaticByRefLike));
 
-            Assert.Throws<LuaEvalException>(() => environment.Eval("span = StaticByRefLike.Span"));
+            var exception = Assert.Throws<LuaEvalException>(() => environment.Eval("span = StaticByRefLike.Span"));
+            Assert.Contains("byref-like property", exception.Message);
         }
 
         private static class Static
@@ -89,9 +91,12 @@ namespace Triton.Interop
             public static ref string? String => ref _string;
         }
 
+        [SuppressMessage("CodeQuality", "IDE0052:Remove unread private members", Justification = "Testing")]
         private static class StaticNonReadable
         {
-            public static int I4 { private get; set; }
+            private static int _i4;
+
+            public static int I4 { set => _i4 = value; }
         }
 
         private static class StaticByRefLike

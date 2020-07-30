@@ -19,17 +19,25 @@
 // IN THE SOFTWARE.
 
 using System;
-using BenchmarkDotNet.Running;
-using Triton.Benchmarks.Interop;
+using Xunit;
 
-namespace Triton.Benchmarks
+namespace Triton.Interop
 {
-    class Program
+    public class GenericTests
     {
-        static void Main()
+        public class StructList<T> where T : struct
         {
-            BenchmarkRunner.Run<StaticProperty>();
-            Console.ReadKey(true);
+        }
+
+        [Fact]
+        public void ConstructGenericType_InvalidConstraints_RaisesLuaError()
+        {
+            using var environment = new LuaEnvironment();
+            environment["String"] = LuaValue.FromClrType(typeof(string));
+            environment["StructList"] = LuaValue.FromClrGenericTypes(typeof(StructList<>));
+
+            var exception = Assert.Throws<LuaEvalException>(() => environment.Eval("list = StructList[String]()"));
+            Assert.Contains("invalid constraints", exception.Message);
         }
     }
 }

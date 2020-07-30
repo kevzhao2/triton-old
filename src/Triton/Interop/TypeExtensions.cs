@@ -40,5 +40,12 @@ namespace Triton.Interop
             type.BaseType is null
                 ? Enumerable.Empty<Type>()
                 : type.GetNestedTypes().Concat(GetPublicNestedTypes(type.BaseType)).Where(t => !t.IsSpecialName);
+
+        public static Type Simplify(this Type type) => true switch
+        {
+            _ when type.IsEnum => type.GetEnumUnderlyingType(),
+            _ when type.IsPointer => typeof(IntPtr),
+            _ => type
+        };
     }
 }

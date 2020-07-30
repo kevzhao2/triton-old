@@ -37,7 +37,6 @@ namespace Triton
         /// <summary>
         /// Gets a value indicating whether the Lua thread can be started.
         /// </summary>
-        /// <value><see langword="true"/> if the Lua thread can be started; otherwise, <see langword="false"/>.</value>
         /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public bool CanStart
         {
@@ -51,7 +50,6 @@ namespace Triton
         /// <summary>
         /// Gets a value indicating whether the Lua thread can be resumed.
         /// </summary>
-        /// <value><see langword="true"/> if the Lua thread can be resumed; otherwise, <see langword="false"/>.</value>
         /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public bool CanResume
         {

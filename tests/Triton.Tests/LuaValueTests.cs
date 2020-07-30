@@ -163,8 +163,7 @@ namespace Triton
         [Fact]
         public void IsClrGenericTypes_Get_ReturnsTrue()
         {
-            var types = new[] { typeof(Task), typeof(Task<>) };
-            var value = LuaValue.FromClrGenericTypes(types);
+            var value = LuaValue.FromClrGenericTypes(typeof(Task), typeof(Task<>));
 
             Assert.True(value.IsClrGenericTypes);
         }
@@ -231,8 +230,7 @@ namespace Triton
         [Fact]
         public void IsClrObject_Get_ReturnsFalse_ClrGenericTypes()
         {
-            var types = new[] { typeof(Task), typeof(Task<>) };
-            var value = LuaValue.FromClrGenericTypes(types);
+            var value = LuaValue.FromClrGenericTypes(typeof(Task), typeof(Task<>));
 
             Assert.False(value.IsClrObject);
         }
@@ -332,18 +330,17 @@ namespace Triton
         [Fact]
         public void FromClrGenericTypes_TypesContainsMoreThanOneNonGenericType_ThrowsArgumentxception()
         {
-            var types = new[] { typeof(int), typeof(int) };
-
-            Assert.Throws<ArgumentException>(() => LuaValue.FromClrGenericTypes(types));
+            Assert.Throws<ArgumentException>(() => LuaValue.FromClrGenericTypes(typeof(int), typeof(string)));
         }
 
         [Fact]
         public void FromClrGenericTypes_AsClrGenericTypes()
         {
-            var types = new[] { typeof(Task), typeof(Task<>) };
-            var value = LuaValue.FromClrGenericTypes(types);
+            var value = LuaValue.FromClrGenericTypes(typeof(Task), typeof(Task<>));
 
-            Assert.Same(types, value.AsClrGenericTypes());
+            Assert.Collection(value.AsClrGenericTypes(),
+                item => Assert.Equal(typeof(Task), item),
+                item => Assert.Equal(typeof(Task<>), item));
         }
 
         [Fact]
@@ -513,20 +510,17 @@ namespace Triton
         [Fact]
         public void Equals_LuaValue_ReturnsTrue_ClrGenericTypes()
         {
-            var types = new Type[] { typeof(Task), typeof(Task<>) };
-            var value = LuaValue.FromClrGenericTypes(types);
+            var value = LuaValue.FromClrGenericTypes(typeof(Task), typeof(Task<>));
 
-            Assert.True(value.Equals(LuaValue.FromClrGenericTypes(types)));
+            Assert.True(value.Equals(LuaValue.FromClrGenericTypes(typeof(Task), typeof(Task<>))));
         }
 
         [Fact]
         public void Equals_LuaValue_ReturnsFalse_ClrGenericTypes()
         {
-            var types = new Type[] { typeof(Task), typeof(Task<>) };
-            var types2 = new Type[] { typeof(Action), typeof(Action<>) };
-            var value = LuaValue.FromClrGenericTypes(types);
+            var value = LuaValue.FromClrGenericTypes(typeof(Task), typeof(Task<>));
 
-            Assert.False(value.Equals(LuaValue.FromClrGenericTypes(types2)));
+            Assert.False(value.Equals(LuaValue.FromClrGenericTypes(typeof(Action), typeof(Action<>))));
         }
 
         [Fact]
@@ -625,9 +619,8 @@ namespace Triton
         [Fact]
         public void GetHashCode_Equals_ClrGenericTypes_AreSame()
         {
-            var types = new Type[] { typeof(Task), typeof(Task<>) };
-            var value = LuaValue.FromClrGenericTypes(types);
-            var value2 = LuaValue.FromClrGenericTypes(types);
+            var value = LuaValue.FromClrGenericTypes(typeof(Task), typeof(Task<>));
+            var value2 = LuaValue.FromClrGenericTypes(typeof(Task), typeof(Task<>));
 
             Assert.Equal(value.GetHashCode(), value2.GetHashCode());
         }

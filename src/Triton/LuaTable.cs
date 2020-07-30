@@ -55,7 +55,8 @@ namespace Triton
                 }
 
                 IndexerPrologue();  // Performs validation
-                return GetShared(lua_getfield(_state, -1, field));
+                var type = lua_getfield(_state, -1, field);
+                return _environment.ToValue(_state, -1, type);
             }
 
             set
@@ -82,7 +83,8 @@ namespace Triton
             get
             {
                 IndexerPrologue();  // Performs validation
-                return GetShared(lua_geti(_state, -1, index));
+                var type = lua_geti(_state, -1, index);
+                return _environment.ToValue(_state, -1, type);
             }
 
             set
@@ -98,18 +100,30 @@ namespace Triton
         /// </summary>
         /// <param name="key">The key.</param>
         /// <returns>The value of the given <paramref name="key"/>.</returns>
+        /// <exception cref="ArgumentException"><paramref name="key"/> is <see langword="nil"/>.</exception>
         /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
         public LuaValue this[in LuaValue key]
         {
             get
             {
+                if (key.IsNil)
+                {
+                    throw new ArgumentException("Key is nil", nameof(key));
+                }
+
                 IndexerPrologue();  // Performs validation
                 _environment.PushValue(_state, key);
-                return GetShared(lua_gettable(_state, -2));
+                var type = lua_gettable(_state, -2);
+                return _environment.ToValue(_state, -1, type);
             }
 
             set
             {
+                if (key.IsNil)
+                {
+                    throw new ArgumentException("Key is nil", nameof(key));
+                }
+
                 IndexerPrologue();  // Performs validation
                 _environment.PushValue(_state, key);
                 _environment.PushValue(_state, value);
@@ -124,12 +138,6 @@ namespace Triton
             lua_settop(_state, 0);  // Reset stack
 
             lua_rawgeti(_state, LUA_REGISTRYINDEX, _reference);
-        }
-
-        private LuaValue GetShared(LuaType type)
-        {
-            _environment.ToValue(_state, -1, out var value, type);
-            return value;
         }
     }
 }

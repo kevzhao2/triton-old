@@ -106,6 +106,15 @@ namespace Triton
         }
 
         [Fact]
+        public void Item_LuaValue_GetNil_ThrowsArgumentException()
+        {
+            using var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+
+            Assert.Throws<ArgumentException>(() => table[LuaValue.Nil]);
+        }
+
+        [Fact]
         public void Item_LuaValue_Get_EnvironmentDisposed_ThrowsObjectDisposedException()
         {
             var environment = new LuaEnvironment();
@@ -113,6 +122,15 @@ namespace Triton
             environment.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => table[true]);
+        }
+
+        [Fact]
+        public void Item_LuaValue_SetNil_ThrowsArgumentException()
+        {
+            using var environment = new LuaEnvironment();
+            var table = environment.CreateTable();
+
+            Assert.Throws<ArgumentException>(() => table[LuaValue.Nil] = 1234);
         }
 
         [Fact]

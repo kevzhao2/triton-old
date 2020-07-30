@@ -30,43 +30,17 @@ namespace Triton.Interop
 {
     internal static class ILGeneratorExtensions
     {
-        private static readonly FieldInfo _environment =
-            typeof(MetamethodContext).GetField("_environment", NonPublic | Instance)!;
+        private static readonly MethodInfo _charToString =
+            typeof(char).GetMethod(nameof(char.ToString), Public | Static);
 
-        private static readonly MethodInfo _lua_pushboolean
-            = typeof(NativeMethods).GetMethod(nameof(lua_pushboolean))!;
-
-        private static readonly MethodInfo _lua_pushlightuserdata
-            = typeof(NativeMethods).GetMethod(nameof(lua_pushlightuserdata))!;
-
-        private static readonly MethodInfo _lua_pushinteger
-            = typeof(NativeMethods).GetMethod(nameof(lua_pushinteger))!;
-
-        private static readonly MethodInfo _lua_pushnumber
-            = typeof(NativeMethods).GetMethod(nameof(lua_pushnumber))!;
-
-        private static readonly MethodInfo _lua_pushstring
-            = typeof(NativeMethods).GetMethod(nameof(lua_pushstring))!;
-
-        private static readonly MethodInfo _luaL_error
-            = typeof(NativeMethods).GetMethod(nameof(luaL_error))!;
+        private static readonly MethodInfo _pushString =
+            typeof(ILGeneratorExtensions).GetMethod(nameof(PushString), NonPublic | Static)!;
 
         private static readonly MethodInfo _pushLuaObject =
             typeof(ILGeneratorExtensions).GetMethod(nameof(PushLuaObject), NonPublic | Static)!;
 
         private static readonly MethodInfo _pushClrEntity =
             typeof(ILGeneratorExtensions).GetMethod(nameof(PushClrEntity), NonPublic | Static)!;
-
-        private static readonly MethodInfo _intPtrOpExplicit =
-            typeof(IntPtr).GetMethod("op_Explicit", new[] { typeof(void*) });
-
-        private static readonly HashSet<Type> _signedIntegerTypes =
-            new HashSet<Type> { typeof(sbyte), typeof(short), typeof(int), typeof(long) };
-
-        private static readonly HashSet<Type> _unsignedIntegerTypes =
-            new HashSet<Type> { typeof(byte), typeof(ushort), typeof(uint), typeof(ulong) };
-
-        private static readonly HashSet<Type> _numberTypes = new HashSet<Type> { typeof(float), typeof(double) };
 
         public static Label[] DefineLabels(this ILGenerator ilg, int count)
         {
@@ -79,95 +53,118 @@ namespace Triton.Interop
             return labels;
         }
 
-        public static void EmitLoadIndirect(this ILGenerator ilg, Type type)
+        public static void MarkLabels(this ILGenerator ilg, IEnumerable<Label> labels)
         {
-            if (type == typeof(sbyte))       ilg.Emit(Ldind_I1);
-            else if (type == typeof(byte))   ilg.Emit(Ldind_U1);
-            else if (type == typeof(short))  ilg.Emit(Ldind_I2);
-            else if (type == typeof(ushort)) ilg.Emit(Ldind_U2);
-            else if (type == typeof(int))    ilg.Emit(Ldind_I4);
-            else if (type == typeof(uint))   ilg.Emit(Ldind_U4);
-            else if (type == typeof(long))   ilg.Emit(Ldind_I8);
-            else if (type == typeof(ulong))  ilg.Emit(Ldind_I8);
-            else if (type == typeof(float))  ilg.Emit(Ldind_R4);
-            else if (type == typeof(double)) ilg.Emit(Ldind_R8);
-            else if (type.IsValueType)       ilg.Emit(Ldobj, type);
-            else                             ilg.Emit(Ldind_Ref);
+            foreach (var label in labels)
+            {
+                ilg.MarkLabel(label);
+            }
         }
 
-        public static void EmitLuaError(this ILGenerator ilg, string message)
+        public static void EmitLoadIndirect(this ILGenerator ilg, Type type)
         {
-            ilg.Emit(Ldarg_1);
-            ilg.Emit(Ldstr, message);
-            ilg.Emit(Call, _luaL_error);
+            type = type.Simplify();
+
+            if (!type.IsPrimitive && type.IsValueType)
+            {
+                ilg.Emit(Ldobj, type);
+                return;
+            }
+
+            ilg.Emit(true switch
+            {
+                _ when type == typeof(bool)    => Ldind_U1,
+                _ when type == typeof(byte)    => Ldind_U1,
+                _ when type == typeof(sbyte)   => Ldind_I1,
+                _ when type == typeof(short)   => Ldind_I2,
+                _ when type == typeof(ushort)  => Ldind_U2,
+                _ when type == typeof(int)     => Ldind_I4,
+                _ when type == typeof(uint)    => Ldind_U4,
+                _ when type == typeof(long)    => Ldind_I8,
+                _ when type == typeof(ulong)   => Ldind_I8,
+                _ when type == typeof(IntPtr)  => Ldind_I,
+                _ when type == typeof(UIntPtr) => Ldind_I,
+                _ when type == typeof(char)    => Ldind_U2,
+                _ when type == typeof(float)   => Ldind_R4,
+                _ when type == typeof(double)  => Ldind_R8,
+                _                              => Ldind_Ref
+            });
         }
 
         public static void EmitLuaPush(this ILGenerator ilg, Type type)
         {
-            if (type == typeof(bool))
-            {
-                ilg.Emit(Call, _lua_pushboolean);
-            }
-            else if (type.IsPointer)
-            {
-                ilg.Emit(Call, _intPtrOpExplicit);
-                ilg.Emit(Call, _lua_pushlightuserdata);
-            }
-            else if (_signedIntegerTypes.Contains(type))
-            {
-                // As an optimization, don't emit conv.i8 if the type is already the correct size.
-                if (type != typeof(long))
-                {
-                    ilg.Emit(Conv_I8);
-                }
+            type = type.Simplify();
 
-                ilg.Emit(Call, _lua_pushinteger);
-            }
-            else if (_unsignedIntegerTypes.Contains(type))
+            if (type == typeof(byte) || type == typeof(ushort) || type == typeof(uint))
             {
-                // As an optimization, don't emit conv.u8 if the type is already the correct size.
-                if (type != typeof(ulong))
-                {
-                    ilg.Emit(Conv_U8);
-                }
-
-                ilg.Emit(Call, _lua_pushinteger);
+                ilg.Emit(Conv_U8);
             }
-            else if (_numberTypes.Contains(type))
+            else if (type == typeof(sbyte) || type == typeof(short) || type == typeof(int))
             {
-                // As an optimization, don't emit conv.r8 if the type is already the correct size.
-                if (type != typeof(double))
-                {
-                    ilg.Emit(Conv_R8);
-                }
-
-                ilg.Emit(Call, _lua_pushnumber);
+                ilg.Emit(Conv_I8);
             }
-            else if (type == typeof(string))
+            else if (type == typeof(char))
             {
-                ilg.Emit(Call, _lua_pushstring);
-                ilg.Emit(Pop);
+                ilg.Emit(Call, _charToString);
+            }
+            else if (type == typeof(float))
+            {
+                ilg.Emit(Conv_R8);
             }
             else if (typeof(LuaObject).IsAssignableFrom(type))
             {
-                ilg.Emit(Ldarg_0);
-                ilg.Emit(Ldfld, _environment);
-                ilg.Emit(Call, _pushLuaObject);
+                ilg.Emit(Ldarg_0);  // Required for `MetamethodContext` parameter
             }
-            else
+            else if (!type.IsPrimitive && type.IsValueType)
             {
-                if (type.IsValueType)
-                {
-                    ilg.Emit(Box, type);
-                }
+                ilg.Emit(Box, type);
+                ilg.Emit(Ldarg_0);  // Required for `MetamethodContext` parameter
+            }
+            else if (!type.IsValueType && type != typeof(string))
+            {
+                ilg.Emit(Ldarg_0);  // Required for `MetamethodContext` parameter
+            }
 
-                ilg.Emit(Ldarg_0);
-                ilg.Emit(Ldfld, _environment);
-                ilg.Emit(Call, _pushClrEntity);
+            ilg.Emit(Call, true switch
+            {
+                _ when type == typeof(bool)                     => _lua_pushboolean,
+                _ when type == typeof(byte)                     => _lua_pushinteger,
+                _ when type == typeof(sbyte)                    => _lua_pushinteger,
+                _ when type == typeof(short)                    => _lua_pushinteger,
+                _ when type == typeof(ushort)                   => _lua_pushinteger,
+                _ when type == typeof(int)                      => _lua_pushinteger,
+                _ when type == typeof(uint)                     => _lua_pushinteger,
+                _ when type == typeof(long)                     => _lua_pushinteger,
+                _ when type == typeof(ulong)                    => _lua_pushinteger,
+                _ when type == typeof(IntPtr)                   => _lua_pushlightuserdata,
+                _ when type == typeof(UIntPtr)                  => _lua_pushlightuserdata,
+                _ when type == typeof(char)                     => _lua_pushstring,
+                _ when type == typeof(float)                    => _lua_pushnumber,
+                _ when type == typeof(double)                   => _lua_pushnumber,
+                _ when type == typeof(string)                   => _pushString,
+                _ when typeof(LuaObject).IsAssignableFrom(type) => _pushLuaObject,
+                _                                               => _pushClrEntity
+            });
+
+            if (type == typeof(char))
+            {
+                ilg.Emit(Pop);  // Required for `lua_pushstring` return value
             }
         }
 
-        private static void PushLuaObject(IntPtr state, LuaObject? obj, LuaEnvironment environment)
+        private static void PushString(IntPtr state, string? str)
+        {
+            if (str is null)
+            {
+                lua_pushnil(state);
+            }
+            else
+            {
+                lua_pushstring(state, str);
+            }
+        }
+
+        private static void PushLuaObject(IntPtr state, LuaObject? obj, MetamethodContext context)
         {
             if (obj is null)
             {
@@ -175,11 +172,11 @@ namespace Triton.Interop
             }
             else
             {
-                environment.PushLuaObject(state, obj);
+                context.PushLuaObject(state, obj);
             }
         }
 
-        private static void PushClrEntity(IntPtr state, object? entity, LuaEnvironment environment)
+        private static void PushClrEntity(IntPtr state, object? entity, MetamethodContext context)
         {
             if (entity is null)
             {
@@ -187,7 +184,7 @@ namespace Triton.Interop
             }
             else
             {
-                environment.PushClrEntity(state, entity);
+                context.PushClrEntity(state, entity);
             }
         }
     }

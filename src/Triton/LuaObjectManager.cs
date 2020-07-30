@@ -21,36 +21,26 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using static Triton.LuaValue;
 using static Triton.NativeMethods;
 
 namespace Triton
 {
-    // Manages Lua objects.
-    //
     internal sealed class LuaObjectManager
     {
         private readonly LuaEnvironment _environment;
 
-        private readonly Dictionary<IntPtr, (int reference, WeakReference<LuaObject> weakReference)> _objects;
-
-        private readonly lua_CFunction _gcMetamethod;
+        private readonly LuaCFunction _gcMetamethod;
         private readonly int _gcMetatableReference;
+
+        private readonly Dictionary<IntPtr, (int reference, WeakReference<LuaObject> weakReference)> _objects;
 
         internal LuaObjectManager(IntPtr state, LuaEnvironment environment)
         {
             _environment = environment;
 
-            // Create a cache of Lua objects, which maps a pointer (retrieved via `lua_topointer`) to the reference in
-            // the Lua registry along with a weak reference to the Lua object.
-            //
-            // The reference must be weak, as otherwise the Lua object can never be garbage collected.
-            //
-            _objects = new Dictionary<IntPtr, (int, WeakReference<LuaObject>)>();
-
             // Set up a metatable with a `__gc` metamethod. This allows us to clean up dead Lua objects whenever a Lua
             // garbage collection occurs.
-            //
-            // To prevent garbage collection of the delegate, it needs to be stored as a field.
             //
             _gcMetamethod = GcMetamethod;
 
@@ -62,6 +52,12 @@ namespace Triton
             _gcMetatableReference = luaL_ref(state, LUA_REGISTRYINDEX);
             lua_setmetatable(state, -2);
             lua_pop(state, 1);
+
+            // Set up the cache of Lua objects. This lowers the number of CLR object allocations, since the CLR object
+            // is reused, if possible. The cache needs to have weak values, as otherwise the objects will never get
+            // garbage collected!
+            //
+            _objects = new Dictionary<IntPtr, (int, WeakReference<LuaObject>)>();
         }
 
         internal void Intern(IntPtr ptr, LuaObject obj)
@@ -73,7 +69,7 @@ namespace Triton
         {
             if (obj._environment != _environment)
             {
-                throw new InvalidOperationException("Lua object does not belong to the given state's environment");
+                throw new InvalidOperationException("Lua object does not belong to the given environment");
             }
 
             lua_rawgeti(state, LUA_REGISTRYINDEX, obj._reference);
@@ -82,6 +78,7 @@ namespace Triton
         internal void ToValue(IntPtr state, int index, out LuaValue value, LuaType type)
         {
             value = default;
+            Unsafe.AsRef(in value._objectType) = ObjectType.LuaObject;
             ref var obj = ref Unsafe.As<object?, LuaObject>(ref Unsafe.AsRef(in value._objectOrTag));
 
             var ptr = lua_topointer(state, index);

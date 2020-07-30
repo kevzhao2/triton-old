@@ -20,7 +20,7 @@
 
 using System;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Text;
@@ -70,10 +70,22 @@ namespace Triton
         public const int LUA_REFNIL = -1;
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate int lua_CFunction(IntPtr L);
+        public delegate int LuaCFunction(IntPtr L);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate int lua_KFunction(IntPtr L, LuaStatus status, IntPtr ctx);
+        public delegate int LuaKFunction(IntPtr L, LuaStatus status, IntPtr ctx);
+
+        public static readonly MethodInfo _lua_pop = typeof(NativeMethods).GetMethod(nameof(lua_pop))!;
+        internal static readonly MethodInfo _lua_pushboolean = typeof(NativeMethods).GetMethod(nameof(lua_pushboolean))!;
+        internal static readonly MethodInfo _lua_pushlightuserdata = typeof(NativeMethods).GetMethod(nameof(lua_pushlightuserdata))!;
+        internal static readonly MethodInfo _lua_pushinteger = typeof(NativeMethods).GetMethod(nameof(lua_pushinteger))!;
+        internal static readonly MethodInfo _lua_pushnumber = typeof(NativeMethods).GetMethod(nameof(lua_pushnumber))!;
+        internal static readonly MethodInfo _lua_pushstring = typeof(NativeMethods).GetMethod(nameof(lua_pushstring))!;
+        internal static readonly MethodInfo _lua_rawgeti = typeof(NativeMethods).GetMethod(nameof(lua_rawgeti))!;
+        internal static readonly MethodInfo _lua_rawlen = typeof(NativeMethods).GetMethod(nameof(lua_rawlen))!;
+        internal static readonly MethodInfo _lua_tostring = typeof(NativeMethods).GetMethod(nameof(lua_tostring))!;
+        internal static readonly MethodInfo _lua_type = typeof(NativeMethods).GetMethod(nameof(lua_type))!;
+        internal static readonly MethodInfo _luaL_error = typeof(NativeMethods).GetMethod(nameof(luaL_error))!;
 
         // =============================================================================================================
         // lua.h functions
@@ -123,6 +135,9 @@ namespace Triton
         public static extern LuaType lua_gettable(IntPtr L, int index);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int lua_gettop(IntPtr L);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern bool lua_isinteger(IntPtr L, int index);
 
         public static void lua_newtable(IntPtr L) => lua_createtable(L, 0, 0);
@@ -141,7 +156,7 @@ namespace Triton
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern LuaStatus lua_pcallk(
-            IntPtr L, int nargs, int nresults, int msgh, IntPtr ctx, lua_KFunction? k);
+            IntPtr L, int nargs, int nresults, int msgh, IntPtr ctx, LuaKFunction? k);
 
         public static void lua_pop(IntPtr L, int n)
         {
@@ -155,9 +170,9 @@ namespace Triton
         public static extern void lua_pushboolean(IntPtr L, bool b);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void lua_pushcclosure(IntPtr L, lua_CFunction fn, int n);
+        public static extern void lua_pushcclosure(IntPtr L, LuaCFunction fn, int n);
 
-        public static void lua_pushcfunction(IntPtr L, lua_CFunction fn) => lua_pushcclosure(L, fn, 0);
+        public static void lua_pushcfunction(IntPtr L, LuaCFunction fn) => lua_pushcclosure(L, fn, 0);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_pushinteger(IntPtr L, long n);
@@ -194,21 +209,28 @@ namespace Triton
         public static extern LuaType lua_rawgetp(IntPtr L, int index, IntPtr p);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern UIntPtr lua_rawlen(IntPtr L, int index);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_rawseti(IntPtr L, int index, long n);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_rawsetp(IntPtr L, int index, IntPtr p);
 
-        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void lua_remove(IntPtr L, int index);
-
-        public static unsafe LuaStatus lua_resume(IntPtr L, IntPtr from, int nargs, out int nresults)
+        public static void lua_remove(IntPtr L, int index)
         {
-            fixed (int* nresultsPtr = &nresults)
-            {
-                return lua_resume(L, from, nargs, (IntPtr)nresultsPtr);
-            }
+            lua_rotate(L, index, -1);
+            lua_pop(L, 1);
         }
+
+        public static unsafe LuaStatus lua_resume(IntPtr L, IntPtr from, int nargs)
+        {
+            int nresults;
+            return lua_resume(L, from, nargs, (IntPtr)(&nresults));
+        }
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void lua_rotate(IntPtr L, int index, int n);
 
         public static unsafe void lua_setfield(IntPtr L, int index, string k)
         {
@@ -310,6 +332,7 @@ namespace Triton
         // lauxlib.h functions
         //
 
+        [DoesNotReturn]
         public static unsafe int luaL_error(IntPtr L, string fmt)
         {
             var maxLength = Encoding.UTF8.GetMaxByteCount(fmt.Length) + 1;
@@ -350,6 +373,7 @@ namespace Triton
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void luaL_unref(IntPtr L, int t, int @ref);
 
+        [DoesNotReturn]
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         private static extern int luaL_error(IntPtr L, IntPtr fmt);
 

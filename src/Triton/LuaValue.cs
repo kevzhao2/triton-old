@@ -33,8 +33,6 @@ namespace Triton
     [StructLayout(LayoutKind.Explicit, Size = 16)]
     public readonly struct LuaValue : IEquatable<LuaValue>
     {
-        // Signals a primitive.
-        //
         internal sealed class PrimitiveTag
         {
             internal PrimitiveTag(PrimitiveType primitiveType)
@@ -45,19 +43,6 @@ namespace Triton
             public PrimitiveType PrimitiveType { get; }
         }
 
-        // Signals the type of a primitive.
-        //
-        internal enum PrimitiveType
-        {
-            Boolean,
-            LightUserdata,
-            Integer,
-            Number
-        }
-
-        // Signals that a CLR entity should be treated as a CLR type, providing access to the type's static members
-        // and constructors.
-        //
         internal class ClrTypeProxy
         {
             internal ClrTypeProxy(Type type)
@@ -65,7 +50,7 @@ namespace Triton
                 Type = type;
             }
 
-            internal Type Type { get; }
+            public Type Type { get; }
 
             public override bool Equals(object obj) => obj is ClrTypeProxy { Type: var type } && Type.Equals(type);
             public override int GetHashCode() => Type.GetHashCode();
@@ -74,9 +59,6 @@ namespace Triton
             public override string ToString() => Type.ToString();
         }
 
-        // Signals that a CLR entity should be treated as CLR generic types, providing access to the types' generic
-        // constructors (and if there exists a non-generic type, that type's static members and constructors).
-        //
         internal class ClrGenericTypesProxy
         {
             internal ClrGenericTypesProxy(Type[] types)
@@ -84,7 +66,7 @@ namespace Triton
                 Types = types;
             }
 
-            internal Type[] Types { get; }
+            public Type[] Types { get; }
 
             public override bool Equals(object obj) =>
                 obj is ClrGenericTypesProxy { Types: var types } && Types.SequenceEqual(types);
@@ -96,6 +78,21 @@ namespace Triton
             public override string ToString() => string.Join(", ", (IEnumerable<Type>)Types);
         }
 
+        internal enum PrimitiveType
+        {
+            Boolean,
+            LightUserdata,
+            Integer,
+            Number
+        }
+
+        internal enum ObjectType
+        {
+            String,
+            LuaObject,
+            ClrEntity
+        }
+
         internal static readonly PrimitiveTag _booleanTag = new PrimitiveTag(PrimitiveType.Boolean);
         internal static readonly PrimitiveTag _lightUserdataTag = new PrimitiveTag(PrimitiveType.LightUserdata);
         internal static readonly PrimitiveTag _integerTag = new PrimitiveTag(PrimitiveType.Integer);
@@ -105,6 +102,7 @@ namespace Triton
         [FieldOffset(0)] internal readonly IntPtr _lightUserdata;
         [FieldOffset(0)] internal readonly long _integer;
         [FieldOffset(0)] internal readonly double _number;
+        [FieldOffset(0)] internal readonly ObjectType _objectType;
         [FieldOffset(8)] internal readonly object? _objectOrTag;
 
         private LuaValue(bool boolean) : this()
@@ -131,8 +129,9 @@ namespace Triton
             _objectOrTag = _numberTag;
         }
 
-        private LuaValue(object? obj) : this()
+        private LuaValue(ObjectType objectType, object? obj) : this()
         {
+            _objectType = objectType;
             _objectOrTag = obj;
         }
 
@@ -234,14 +233,14 @@ namespace Triton
         /// </summary>
         /// <param name="str">The string.</param>
         /// <returns>The resulting Lua value.</returns>
-        public static LuaValue FromString(string? str) => new LuaValue(str);
+        public static LuaValue FromString(string? str) => new LuaValue(ObjectType.String, str);
 
         /// <summary>
         /// Creates a Lua value from the given Lua <paramref name="obj"/>.
         /// </summary>
         /// <param name="obj">The Lua object.</param>
         /// <returns>The resulting Lua value.</returns>
-        public static LuaValue FromLuaObject(LuaObject? obj) => new LuaValue(obj);
+        public static LuaValue FromLuaObject(LuaObject? obj) => new LuaValue(ObjectType.LuaObject, obj);
 
         /// <summary>
         /// Creates a Lua value from the given CLR <paramref name="type"/>.
@@ -262,7 +261,7 @@ namespace Triton
                 throw new ArgumentException("Type is generic", nameof(type));
             }
 
-            return new LuaValue(new ClrTypeProxy(type));
+            return new LuaValue(ObjectType.ClrEntity, new ClrTypeProxy(type));
         }
 
         /// <summary>
@@ -274,7 +273,7 @@ namespace Triton
         /// <paramref name="types"/> contains more than one non-generic type.
         /// </exception>
         /// <exception cref="ArgumentNullException"><paramref name="types"/> is <see langword="null"/>.</exception>
-        public static LuaValue FromClrGenericTypes(Type[] types)
+        public static LuaValue FromClrGenericTypes(params Type[] types)
         {
             if (types is null)
             {
@@ -286,7 +285,7 @@ namespace Triton
                 throw new ArgumentException("Types contains more than one non-generic type", nameof(types));
             }
 
-            return new LuaValue(new ClrGenericTypesProxy(types));
+            return new LuaValue(ObjectType.ClrEntity, new ClrGenericTypesProxy(types));
         }
 
         /// <summary>
@@ -302,7 +301,7 @@ namespace Triton
                 throw new ArgumentNullException(nameof(obj));
             }
 
-            return new LuaValue(obj);
+            return new LuaValue(ObjectType.ClrEntity, obj);
         }
 
         /// <inheritdoc/>
