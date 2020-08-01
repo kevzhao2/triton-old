@@ -32,8 +32,16 @@ namespace Triton.Interop
             type.GetFields(Public | Static | FlattenHierarchy)
                 .Where(f => !f.IsSpecialName);
 
+        public static IEnumerable<FieldInfo> GetPublicInstanceFields(this Type type) =>
+            type.GetFields(Public | Instance)
+                .Where(f => !f.IsSpecialName);
+
         public static IEnumerable<PropertyInfo> GetPublicStaticProperties(this Type type) =>
             type.GetProperties(Public | Static | FlattenHierarchy)
+                .Where(p => !p.IsSpecialName);
+
+        public static IEnumerable<PropertyInfo> GetPublicInstanceProperties(this Type type) =>
+            type.GetProperties(Public | Instance)
                 .Where(p => !p.IsSpecialName);
 
         public static IEnumerable<Type> GetPublicNestedTypes(this Type type) =>

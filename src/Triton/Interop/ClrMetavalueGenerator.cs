@@ -59,6 +59,8 @@ namespace Triton.Interop
         internal void PushObjectMetatable(IntPtr state, Type objType)
         {
             lua_newtable(state);
+            PushObjectIndexMetavalue(state, objType);
+            lua_setfield(state, -2, "__index");
         }
 
         private void PushTypeIndexMetavalue(IntPtr state, Type? nonGenericType, Type[]? maybeGenericTypes)
@@ -88,7 +90,7 @@ namespace Triton.Interop
                 lua_newtable(state);
             }
 
-            var indexMetamethod = ProtectedCall(GenerateTypeIndexMetamethod(nonGenericType, maybeGenericTypes));
+            var indexMetamethod = ProtectedCall(GenerateIndexMetamethod(nonGenericType, maybeGenericTypes));
             _generatedMetamethods.Add(indexMetamethod);
             lua_pushcfunction(state, indexMetamethod);
 
@@ -99,7 +101,7 @@ namespace Triton.Interop
                 lua_setmetatable(state, -2);
             }
 
-            LuaCFunction GenerateTypeIndexMetamethod(Type? nonGenericType, Type[]? maybeGenericTypes)
+            LuaCFunction GenerateIndexMetamethod(Type? nonGenericType, Type[]? maybeGenericTypes)
             {
                 var metamethod = new DynamicMethod(
                     "__index", typeof(int), new[] { typeof(MetamethodContext), typeof(IntPtr) }, typeof(MetamethodContext));
@@ -242,65 +244,65 @@ namespace Triton.Interop
                         ilg.Emit(Ldarg_1);
                         ilg.Emit(Ldloc, length);
                         ilg.Emit(Call, _lua_pop);
-                    }
 
-                    ilg.MarkLabel(constructGenericType);
+                        ilg.MarkLabel(constructGenericType);
 
-                    var exit = ilg.BeginExceptionBlock();
-                    {
-                        var arityToType = maybeGenericTypes
-                            .Where(t => t.IsGenericTypeDefinition)
-                            .ToDictionary(t => t.GetGenericArguments().Length);
-                        var minArity = arityToType.Keys.Min();
-                        var maxArity = arityToType.Keys.Max();
-
-                        var cases = ilg.DefineLabels(maxArity - minArity + 1);
-
-                        ilg.Emit(Ldloc, typeArguments);
-                        ilg.Emit(Ldlen);
-                        ilg.Emit(Ldc_I4, minArity);
-                        ilg.Emit(Sub);
-                        ilg.Emit(Switch, cases);
-
-                        ilg.MarkLabels(cases.Where((_, i) => !arityToType.ContainsKey(i + minArity)));
-
-                        ilg.Emit(Ldarg_1);
-                        ilg.Emit(Ldstr, "attempt to construct generic type with invalid arity");
-                        ilg.Emit(Call, _luaL_error);
-                        ilg.Emit(Pop);
-                        ilg.Emit(Leave, exit);  // Not short form since it branches over variable-length code
-
-                        foreach (var (@case, type) in cases
-                            .Select((@case, i) => (@case, type: arityToType.GetValueOrDefault(i + minArity)))
-                            .Where(t => t.type is { }))
+                        var exit = ilg.BeginExceptionBlock();
                         {
-                            ilg.MarkLabel(@case);
+                            var arityToType = maybeGenericTypes
+                                .Where(t => t.IsGenericTypeDefinition)
+                                .ToDictionary(t => t.GetGenericArguments().Length);
+                            var minArity = arityToType.Keys.Min();
+                            var maxArity = arityToType.Keys.Max();
 
-                            ilg.Emit(Ldarg_0);
-                            ilg.Emit(Ldarg_1);
-                            ilg.Emit(Ldtoken, type);
-                            ilg.Emit(Call, typeof(Type).GetMethod(nameof(Type.GetTypeFromHandle)));
+                            var cases = ilg.DefineLabels(maxArity - minArity + 1);
+
                             ilg.Emit(Ldloc, typeArguments);
-                            ilg.Emit(Callvirt, typeof(Type).GetMethod(nameof(Type.MakeGenericType)));
-                            ilg.Emit(Call, MetamethodContext._pushClrType);
+                            ilg.Emit(Ldlen);
+                            ilg.Emit(Ldc_I4, minArity);
+                            ilg.Emit(Sub);
+                            ilg.Emit(Switch, cases);
+
+                            ilg.MarkLabels(cases.Where((_, i) => !arityToType.ContainsKey(i + minArity)));
+
+                            ilg.Emit(Ldarg_1);
+                            ilg.Emit(Ldstr, "attempt to construct generic type with invalid arity");
+                            ilg.Emit(Call, _luaL_error);
+                            ilg.Emit(Pop);
                             ilg.Emit(Leave, exit);  // Not short form since it branches over variable-length code
+
+                            foreach (var (@case, type) in cases
+                                .Select((@case, i) => (@case, type: arityToType.GetValueOrDefault(i + minArity)))
+                                .Where(t => t.type is { }))
+                            {
+                                ilg.MarkLabel(@case);
+
+                                ilg.Emit(Ldarg_0);
+                                ilg.Emit(Ldarg_1);
+                                ilg.Emit(Ldtoken, type);
+                                ilg.Emit(Call, typeof(Type).GetMethod(nameof(Type.GetTypeFromHandle)));
+                                ilg.Emit(Ldloc, typeArguments);
+                                ilg.Emit(Callvirt, typeof(Type).GetMethod(nameof(Type.MakeGenericType)));
+                                ilg.Emit(Call, MetamethodContext._pushClrType);
+                                ilg.Emit(Leave, exit);  // Not short form since it branches over variable-length code
+                            }
                         }
+
+                        ilg.BeginCatchBlock(typeof(ArgumentException));
+                        {
+                            ilg.Emit(Pop);
+                            ilg.Emit(Ldarg_1);
+                            ilg.Emit(Ldstr, "attempt to construct generic type with invalid constraints");
+                            ilg.Emit(Call, _luaL_error);
+                            ilg.Emit(Pop);
+                            ilg.Emit(Leave_S, exit);
+                        }
+
+                        ilg.EndExceptionBlock();
+
+                        ilg.Emit(Ldc_I4_1);
+                        ilg.Emit(Ret);
                     }
-
-                    ilg.BeginCatchBlock(typeof(ArgumentException));
-                    {
-                        ilg.Emit(Pop);
-                        ilg.Emit(Ldarg_1);
-                        ilg.Emit(Ldstr, "attempt to construct generic type with invalid constraints");
-                        ilg.Emit(Call, _luaL_error);
-                        ilg.Emit(Pop);
-                        ilg.Emit(Leave_S, exit);
-                    }
-
-                    ilg.EndExceptionBlock();
-
-                    ilg.Emit(Ldc_I4_1);
-                    ilg.Emit(Ret);
 
                     ilg.MarkLabel(isNotTable);
                 }
@@ -316,71 +318,72 @@ namespace Triton.Interop
                     ilg.Emit(Ldloc, keyType);
                     ilg.Emit(Ldc_I4_4);
                     ilg.Emit(Bne_Un, isNotString);  // Not short form since it branches over variable-length code
-
-                    var fields = nonGenericType.GetPublicStaticFields().Where(f => !f.IsLiteral && !f.IsInitOnly);
-                    var properties = nonGenericType.GetPublicStaticProperties();
-                    var members = fields.Cast<MemberInfo>().Concat(properties).ToList();
-                    memberNames = members.Select(m => m.Name).ToList();
-
-                    var cases = ilg.DefineLabels(members.Count);
-
-                    ilg.Emit(Ldarg_0);
-                    ilg.Emit(Ldarg_1);
-                    ilg.Emit(Ldc_I4_2);
-                    ilg.Emit(Call, _lua_tostring);
-                    ilg.Emit(Call, MetamethodContext._matchMemberName);
-                    ilg.Emit(Switch, cases);
-
-                    ilg.Emit(Ldarg_1);
-                    ilg.Emit(Ldstr, "attempt to get invalid member");
-                    ilg.Emit(Call, _luaL_error);
-                    ilg.Emit(Ret);
-
-                    for (var i = 0; i < members.Count; ++i)
                     {
-                        ilg.MarkLabel(cases[i]);
+                        var fields = nonGenericType.GetPublicStaticFields().Where(f => !f.IsLiteral && !f.IsInitOnly);
+                        var properties = nonGenericType.GetPublicStaticProperties();
+                        var members = fields.Cast<MemberInfo>().Concat(properties).ToList();
+                        memberNames = members.Select(m => m.Name).ToList();
 
-                        var member = members[i];
-                        if (member is FieldInfo { FieldType: var fieldType } field)
+                        var cases = ilg.DefineLabels(members.Count);
+
+                        ilg.Emit(Ldarg_0);
+                        ilg.Emit(Ldarg_1);
+                        ilg.Emit(Ldc_I4_2);
+                        ilg.Emit(Call, _lua_tostring);
+                        ilg.Emit(Call, MetamethodContext._matchMemberName);
+                        ilg.Emit(Switch, cases);
+
+                        ilg.Emit(Ldarg_1);
+                        ilg.Emit(Ldstr, "attempt to get invalid member");
+                        ilg.Emit(Call, _luaL_error);
+                        ilg.Emit(Ret);
+
+                        for (var i = 0; i < members.Count; ++i)
                         {
-                            ilg.Emit(Ldarg_1);
-                            ilg.Emit(Ldsfld, field);
-                            ilg.EmitLuaPush(fieldType);
-                            ilg.Emit(Ldc_I4_1);
-                            ilg.Emit(Ret);
-                        }
-                        else if (member is PropertyInfo { PropertyType: var propertyType } property)
-                        {
-                            if (!property.CanRead || !property.GetMethod.IsPublic)
+                            ilg.MarkLabel(cases[i]);
+
+                            var member = members[i];
+                            if (member is FieldInfo { FieldType: var fieldType } field)
                             {
                                 ilg.Emit(Ldarg_1);
-                                ilg.Emit(Ldstr, "attempt to get non-readable property");
-                                ilg.Emit(Call, _luaL_error);
+                                ilg.Emit(Ldsfld, field);
+                                ilg.EmitLuaPush(fieldType);
+                                ilg.Emit(Ldc_I4_1);
                                 ilg.Emit(Ret);
-                                continue;
                             }
-
-                            if (propertyType.IsByRefLike)
+                            else if (member is PropertyInfo { PropertyType: var propertyType } property)
                             {
+                                if (!property.CanRead || !property.GetMethod.IsPublic)
+                                {
+                                    ilg.Emit(Ldarg_1);
+                                    ilg.Emit(Ldstr, "attempt to get non-readable property");
+                                    ilg.Emit(Call, _luaL_error);
+                                    ilg.Emit(Ret);
+                                    continue;
+                                }
+
+                                if (propertyType.IsByRefLike)
+                                {
+                                    ilg.Emit(Ldarg_1);
+                                    ilg.Emit(Ldstr, "attempt to get byref-like property");
+                                    ilg.Emit(Call, _luaL_error);
+                                    ilg.Emit(Ret);
+                                    continue;
+                                }
+
                                 ilg.Emit(Ldarg_1);
-                                ilg.Emit(Ldstr, "attempt to get byref-like property");
-                                ilg.Emit(Call, _luaL_error);
+                                ilg.Emit(Call, property.GetMethod);
+
+                                if (propertyType.IsByRef)
+                                {
+                                    propertyType = propertyType.GetElementType();
+                                    ilg.EmitLoadIndirect(propertyType);
+                                }
+
+                                ilg.EmitLuaPush(propertyType);
+                                ilg.Emit(Ldc_I4_1);
                                 ilg.Emit(Ret);
-                                continue;
                             }
-
-                            ilg.Emit(Ldarg_1);
-                            ilg.Emit(Call, property.GetMethod);
-
-                            if (propertyType.IsByRef)
-                            {
-                                propertyType = propertyType.GetElementType();
-                                ilg.EmitLoadIndirect(propertyType);
-                            }
-
-                            ilg.EmitLuaPush(propertyType);
-                            ilg.Emit(Ldc_I4_1);
-                            ilg.Emit(Ret);
                         }
                     }
 
@@ -393,6 +396,137 @@ namespace Triton.Interop
                 ilg.Emit(Ret);
 
                 var context = new MetamethodContext(_environment, memberNames);
+                return (LuaCFunction)metamethod.CreateDelegate(typeof(LuaCFunction), context);
+            }
+        }
+
+        private void PushObjectIndexMetavalue(IntPtr state, Type objType)
+        {
+            lua_newtable(state);
+
+            // TODO: methods
+
+            lua_newtable(state);
+
+            var indexMetamethod = ProtectedCall(GenerateIndexMetamethod(objType));
+            _generatedMetamethods.Add(indexMetamethod);
+            lua_pushcfunction(state, indexMetamethod);
+            lua_setfield(state, -2, "__index");
+
+            lua_setmetatable(state, -2);
+
+            LuaCFunction GenerateIndexMetamethod(Type objType)
+            {
+                var metamethod = new DynamicMethod(
+                    "__index", typeof(int), new[] { typeof(MetamethodContext), typeof(IntPtr) }, typeof(MetamethodContext));
+                var ilg = metamethod.GetILGenerator();
+
+                var instance = ilg.DeclareLocal(objType);
+                var keyType = ilg.DeclareLocal(typeof(LuaType));
+
+                ilg.Emit(Ldarg_0);
+                ilg.Emit(Ldarg_1);
+                ilg.Emit(Ldc_I4_1);
+                ilg.Emit(Call, MetamethodContext._toClrEntity);
+                ilg.Emit(Castclass, objType);
+                ilg.Emit(Stloc, instance);
+
+                ilg.Emit(Ldarg_1);
+                ilg.Emit(Ldc_I4_2);
+                ilg.Emit(Call, _lua_type);
+                ilg.Emit(Stloc, keyType);
+
+                IReadOnlyList<string> memberNames = Array.Empty<string>();
+
+                {
+                    var isNotString = ilg.DefineLabel();
+
+                    ilg.Emit(Ldloc, keyType);
+                    ilg.Emit(Ldc_I4_4);
+                    ilg.Emit(Bne_Un, isNotString);  // Not short form since it branches over variable-length code
+                    {
+                        var fields = objType.GetPublicInstanceFields().Where(f => !f.IsLiteral && !f.IsInitOnly);
+                        var properties = objType.GetPublicInstanceProperties();
+                        var members = fields.Cast<MemberInfo>().Concat(properties).ToList();
+                        memberNames = members.Select(m => m.Name).ToList();
+
+                        var cases = ilg.DefineLabels(members.Count);
+
+                        ilg.Emit(Ldarg_0);
+                        ilg.Emit(Ldarg_1);
+                        ilg.Emit(Ldc_I4_2);
+                        ilg.Emit(Call, _lua_tostring);
+                        ilg.Emit(Call, MetamethodContext._matchMemberName);
+                        ilg.Emit(Switch, cases);
+
+                        ilg.Emit(Ldarg_1);
+                        ilg.Emit(Ldstr, "attempt to get invalid member");
+                        ilg.Emit(Call, _luaL_error);
+                        ilg.Emit(Ret);
+
+                        for (var i = 0; i < members.Count; ++i)
+                        {
+                            ilg.MarkLabel(cases[i]);
+
+                            var member = members[i];
+                            if (member is FieldInfo { FieldType: var fieldType } field)
+                            {
+                                ilg.Emit(Ldarg_1);
+                                ilg.Emit(Ldloc, instance);
+                                ilg.Emit(Ldfld, field);
+                                ilg.EmitLuaPush(fieldType);
+                                ilg.Emit(Ldc_I4_1);
+                                ilg.Emit(Ret);
+                            }
+                            else if (member is PropertyInfo { PropertyType: var propertyType } property)
+                            {
+                                if (!property.CanRead || !property.GetMethod.IsPublic)
+                                {
+                                    ilg.Emit(Ldarg_1);
+                                    ilg.Emit(Ldstr, "attempt to get non-readable property");
+                                    ilg.Emit(Call, _luaL_error);
+                                    ilg.Emit(Ret);
+                                    continue;
+                                }
+
+                                if (propertyType.IsByRefLike)
+                                {
+                                    ilg.Emit(Ldarg_1);
+                                    ilg.Emit(Ldstr, "attempt to get byref-like property");
+                                    ilg.Emit(Call, _luaL_error);
+                                    ilg.Emit(Ret);
+                                    continue;
+                                }
+
+                                ilg.Emit(Ldarg_1);
+                                ilg.Emit(Ldloc, instance);
+                                ilg.Emit(Callvirt, property.GetMethod);
+
+                                if (propertyType.IsByRef)
+                                {
+                                    propertyType = propertyType.GetElementType();
+                                    ilg.EmitLoadIndirect(propertyType);
+                                }
+
+                                ilg.EmitLuaPush(propertyType);
+                                ilg.Emit(Ldc_I4_1);
+                                ilg.Emit(Ret);
+                            }
+                        }
+                    }
+
+                    // TODO: support indexers (with overloading included)
+                    // TODO: support array indexers
+
+                    ilg.MarkLabel(isNotString);
+                }
+
+                ilg.Emit(Ldarg_1);
+                ilg.Emit(Ldstr, "attempt to index with invalid key");
+                ilg.Emit(Call, _luaL_error);
+                ilg.Emit(Ret);
+
+                var context = new MetamethodContext(_environment, Array.Empty<string>());
                 return (LuaCFunction)metamethod.CreateDelegate(typeof(LuaCFunction), context);
             }
         }

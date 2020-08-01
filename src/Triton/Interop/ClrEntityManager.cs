@@ -20,6 +20,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using static Triton.LuaValue;
 using static Triton.NativeMethods;
@@ -145,8 +146,10 @@ namespace Triton.Interop
 
         internal object ToClrEntity(IntPtr state, int index)
         {
-            var ptr = lua_touserdata(state, index);
-            return _entityCache[ptr];
+            throw new Exception(lua_type(state, index).ToString());
+
+            //var ptr = lua_touserdata(state, index);
+            //return _entityCache[ptr];
         }
 
         internal void ToValue(IntPtr state, int index, out LuaValue value)

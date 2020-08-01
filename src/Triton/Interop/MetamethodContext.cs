@@ -30,6 +30,7 @@ namespace Triton.Interop
     {
         internal static readonly MethodInfo _matchMemberName = typeof(MetamethodContext).GetMethod(nameof(MatchMemberName))!;
         internal static readonly MethodInfo _pushClrType = typeof(MetamethodContext).GetMethod(nameof(PushClrType))!;
+        internal static readonly MethodInfo _toClrEntity = typeof(MetamethodContext).GetMethod(nameof(ToClrEntity))!;
         internal static readonly MethodInfo _toClrType = typeof(MetamethodContext).GetMethod(nameof(ToClrType))!;
 
         private readonly LuaEnvironment _environment;
@@ -56,6 +57,9 @@ namespace Triton.Interop
 
         public void PushClrType(IntPtr state, Type type) =>
             _environment.PushClrEntity(state, new ClrTypeProxy(type));
+
+        public object ToClrEntity(IntPtr state, int index) =>
+            _environment.ToClrEntity(state, index);
 
         public Type? ToClrType(IntPtr state, int index) =>
             _environment.ToClrEntity(state, index) switch
