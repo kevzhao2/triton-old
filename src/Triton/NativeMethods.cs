@@ -203,6 +203,12 @@ namespace Triton
         public static extern void lua_pushvalue(IntPtr L, int index);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern bool lua_getmetatable(IntPtr L, int index);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern LuaType lua_rawget(IntPtr L, int index);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern LuaType lua_rawgeti(IntPtr L, int index, long n);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]

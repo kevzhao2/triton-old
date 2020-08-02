@@ -32,69 +32,111 @@ namespace Triton.Interop
     internal sealed class ClrMetavalueGenerator
     {
         private readonly LuaEnvironment _environment;
+
+        private readonly int _wrapObjectIndexReference;
+
         private readonly List<LuaCFunction> _generatedMetamethods;
 
-        internal ClrMetavalueGenerator(LuaEnvironment environment)
+        internal ClrMetavalueGenerator(IntPtr state, LuaEnvironment environment)
         {
             _environment = environment;
+
+            // Set up a function to wrap the `__index` metavalue for CLR objects. This allows us to forward the CLR
+            // object to the `__index` metamethod for the metavalue; otherwise, the `__index` metamethod would receive
+            // the metavalue as the first argument, instead.
+            //
+            // Note that this is not required for CLR types since the type object is not required.
+            //
+            luaL_loadstring(state, @"
+                local t = ...
+                local __index = getmetatable(t).__index
+                return function(obj, key)
+                    local v = rawget(t, key)
+                    if v ~= nil then
+                        return v
+                    else
+                        return __index(obj, key)
+                    end
+                end");
+            _wrapObjectIndexReference = luaL_ref(state, LUA_REGISTRYINDEX);
+
+            // Set up a container of generated metamethods to ensure that the metamethods do not get garbage collected
+            // by the CLR.
+            //
             _generatedMetamethods = new List<LuaCFunction>();
         }
 
         internal void PushTypeMetatable(IntPtr state, Type type)
         {
-            lua_newtable(state);
+            lua_createtable(state, 0, 3);  // Include space for the `__gc` and `__tostring` metamethods
+
             PushTypeIndexMetavalue(state, type, null);
             lua_setfield(state, -2, "__index");
+
+            // TODO: __newindex
+            // TODO: __call
         }
 
         internal void PushGenericTypesMetatable(IntPtr state, Type[] types)
         {
-            var nonGenericType = types.FirstOrDefault(t => !t.IsGenericTypeDefinition);
+            var maybeNonGenericType = types.FirstOrDefault(t => !t.IsGenericTypeDefinition);
 
-            lua_newtable(state);
-            PushTypeIndexMetavalue(state, nonGenericType, types);
+            lua_createtable(state, 0, 3);  // Include space for the `__gc` and `__tostring` metamethods
+
+            PushTypeIndexMetavalue(state, maybeNonGenericType, types);
             lua_setfield(state, -2, "__index");
+
+            // TODO: __newindex
+            // TODO: __call
         }
 
         internal void PushObjectMetatable(IntPtr state, Type objType)
         {
-            lua_newtable(state);
+            lua_createtable(state, 0, 3);  // Include space for the `__gc` and `__tostring` metamethods
+
+            lua_rawgeti(state, LUA_REGISTRYINDEX, _wrapObjectIndexReference);
             PushObjectIndexMetavalue(state, objType);
+            lua_pcall(state, 1, 1, 0);
             lua_setfield(state, -2, "__index");
+
+            // TODO: __newindex
+            // TODO: metamethod operators
         }
 
-        private void PushTypeIndexMetavalue(IntPtr state, Type? nonGenericType, Type[]? maybeGenericTypes)
+        private void PushTypeIndexMetavalue(IntPtr state, Type? maybeNonGenericType, Type[]? maybeGenericTypes)
         {
             // If there is a non-generic type, then the metavalue should be a table with the cacheable members
             // pre-populated.
             //
-            if (nonGenericType is { })
+            if (maybeNonGenericType is { })
             {
                 lua_newtable(state);
 
-                foreach (var field in nonGenericType.GetPublicStaticFields().Where(f => f.IsLiteral || f.IsInitOnly))
+                // Const and readonly fields
+                foreach (var field in maybeNonGenericType.GetPublicStaticFields().Where(f => f.IsLiteral || f.IsInitOnly))
                 {
                     _environment.PushObject(state, field.GetValue(null));
                     lua_setfield(state, -2, field.Name);
                 }
 
-                // TODO: events
-                // TODO: methods
+                // TODO: populate events
+                // TODO: populate methods
 
-                foreach (var nestedType in nonGenericType.GetPublicNestedTypes())
+                // Nested types
+                foreach (var nestedType in maybeNonGenericType.GetPublicNestedTypes())
                 {
                     _environment.PushClrEntity(state, new ClrTypeProxy(nestedType));
                     lua_setfield(state, -2, nestedType.Name);
                 }
 
-                lua_newtable(state);
+                lua_createtable(state, 0, 1);
             }
 
-            var indexMetamethod = ProtectedCall(GenerateIndexMetamethod(nonGenericType, maybeGenericTypes));
+            var indexMetamethod = ProtectedCall(GenerateIndexMetamethod(maybeNonGenericType, maybeGenericTypes));
             _generatedMetamethods.Add(indexMetamethod);
             lua_pushcfunction(state, indexMetamethod);
 
-            if (nonGenericType is { })
+            if (maybeNonGenericType is { })
             {
                 lua_setfield(state, -2, "__index");
 
@@ -377,7 +419,7 @@ namespace Triton.Interop
                                 if (propertyType.IsByRef)
                                 {
                                     propertyType = propertyType.GetElementType();
-                                    ilg.EmitLoadIndirect(propertyType);
+                                    ilg.EmitLdind(propertyType);
                                 }
 
                                 ilg.EmitLuaPush(propertyType);
@@ -404,9 +446,10 @@ namespace Triton.Interop
         {
             lua_newtable(state);
 
+            // TODO: events
             // TODO: methods
 
-            lua_newtable(state);
+            lua_createtable(state, 0, 1);
 
             var indexMetamethod = ProtectedCall(GenerateIndexMetamethod(objType));
             _generatedMetamethods.Add(indexMetamethod);
@@ -421,14 +464,17 @@ namespace Triton.Interop
                     "__index", typeof(int), new[] { typeof(MetamethodContext), typeof(IntPtr) }, typeof(MetamethodContext));
                 var ilg = metamethod.GetILGenerator();
 
-                var instance = ilg.DeclareLocal(objType);
+                // Use a by-ref local for structs to eliminate copying.
+                //
+                var isStruct = objType.IsValueType;
+                var instance = ilg.DeclareLocal(isStruct ? objType.MakeByRefType() : objType);
                 var keyType = ilg.DeclareLocal(typeof(LuaType));
 
                 ilg.Emit(Ldarg_0);
                 ilg.Emit(Ldarg_1);
                 ilg.Emit(Ldc_I4_1);
                 ilg.Emit(Call, MetamethodContext._toClrEntity);
-                ilg.Emit(Castclass, objType);
+                ilg.Emit(isStruct ? Unbox : Castclass, objType);
                 ilg.Emit(Stloc, instance);
 
                 ilg.Emit(Ldarg_1);
@@ -445,7 +491,7 @@ namespace Triton.Interop
                     ilg.Emit(Ldc_I4_4);
                     ilg.Emit(Bne_Un, isNotString);  // Not short form since it branches over variable-length code
                     {
-                        var fields = objType.GetPublicInstanceFields().Where(f => !f.IsLiteral && !f.IsInitOnly);
+                        var fields = objType.GetPublicInstanceFields();
                         var properties = objType.GetPublicInstanceProperties();
                         var members = fields.Cast<MemberInfo>().Concat(properties).ToList();
                         memberNames = members.Select(m => m.Name).ToList();
@@ -505,7 +551,7 @@ namespace Triton.Interop
                                 if (propertyType.IsByRef)
                                 {
                                     propertyType = propertyType.GetElementType();
-                                    ilg.EmitLoadIndirect(propertyType);
+                                    ilg.EmitLdind(propertyType);
                                 }
 
                                 ilg.EmitLuaPush(propertyType);
@@ -515,8 +561,8 @@ namespace Triton.Interop
                         }
                     }
 
-                    // TODO: support indexers (with overloading included)
-                    // TODO: support array indexers
+                    // TODO: support indexers (which requires overloading)
+                    // TODO: support array indexing
 
                     ilg.MarkLabel(isNotString);
                 }
@@ -526,7 +572,7 @@ namespace Triton.Interop
                 ilg.Emit(Call, _luaL_error);
                 ilg.Emit(Ret);
 
-                var context = new MetamethodContext(_environment, Array.Empty<string>());
+                var context = new MetamethodContext(_environment, memberNames);
                 return (LuaCFunction)metamethod.CreateDelegate(typeof(LuaCFunction), context);
             }
         }
@@ -534,17 +580,12 @@ namespace Triton.Interop
         private LuaCFunction ProtectedCall(LuaCFunction callback) =>
             state =>
             {
-                var oldTop = lua_gettop(state);
-
                 try
                 {
                     return callback(state);
                 }
                 catch (Exception ex)
                 {
-                    // If an exception occurs, then we need to reset the Lua stack top -- we don't know what state the
-                    // Lua stack is in!
-                    lua_settop(state, oldTop);
                     return luaL_error(state, $"unhandled CLR exception:\n{ex}");
                 }
             };

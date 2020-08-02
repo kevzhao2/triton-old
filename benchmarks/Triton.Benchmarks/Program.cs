@@ -28,7 +28,7 @@ namespace Triton.Benchmarks
     {
         static void Main()
         {
-            BenchmarkRunner.Run<StaticProperty>();
+            BenchmarkRunner.Run<Structs>();
             Console.ReadKey(true);
         }
     }

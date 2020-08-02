@@ -61,7 +61,37 @@ namespace Triton.Interop
             }
         }
 
-        public static void EmitLoadIndirect(this ILGenerator ilg, Type type)
+        public static void EmitLdelem(this ILGenerator ilg, Type type)
+        {
+            type = type.Simplify();
+
+            if (!type.IsPrimitive && type.IsValueType)
+            {
+                ilg.Emit(Ldelem, type);
+                return;
+            }
+            
+            ilg.Emit(true switch
+            {
+                _ when type == typeof(bool)    => Ldelem_U1,
+                _ when type == typeof(byte)    => Ldelem_U1,
+                _ when type == typeof(sbyte)   => Ldelem_I1,
+                _ when type == typeof(short)   => Ldelem_I2,
+                _ when type == typeof(ushort)  => Ldelem_U2,
+                _ when type == typeof(int)     => Ldelem_I4,
+                _ when type == typeof(uint)    => Ldelem_U4,
+                _ when type == typeof(long)    => Ldelem_I8,
+                _ when type == typeof(ulong)   => Ldelem_I8,
+                _ when type == typeof(IntPtr)  => Ldelem_I,
+                _ when type == typeof(UIntPtr) => Ldelem_I,
+                _ when type == typeof(char)    => Ldelem_U2,
+                _ when type == typeof(float)   => Ldelem_R4,
+                _ when type == typeof(double)  => Ldelem_R8,
+                _                              => Ldelem_Ref
+            });
+        }
+
+        public static void EmitLdind(this ILGenerator ilg, Type type)
         {
             type = type.Simplify();
 

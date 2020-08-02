@@ -25,22 +25,84 @@ namespace Triton.Interop
 {
     public class ObjectTests
     {
-        public class MyObject
+        public class MyClass
         {
+            public byte ByteField;
+            public sbyte SByteField;
+            public short ShortField;
+            public ushort UShortField;
             public int IntField;
+            public uint UIntField;
+            public long LongField;
+            public ulong ULongField;
+        }
+
+        public struct MyStruct
+        {
+            public byte ByteField;
+            public sbyte SByteField;
+            public short ShortField;
+            public ushort UShortField;
+            public int IntField;
+            public uint UIntField;
+            public long LongField;
+            public ulong ULongField;
         }
 
         [Fact]
-        public void InstanceField_Get()
+        public void InstanceField_Get_Class()
         {
-            var obj = new MyObject { IntField = 1234 };
+            var obj = new MyClass
+            {
+                ByteField = 12,
+                SByteField = -12,
+                ShortField = -1234,
+                UShortField = 1234,
+                IntField = -12345678,
+                UIntField = 12345678,
+                LongField = -12345678910,
+                ULongField = 12345678910
+            };
 
             using var environment = new LuaEnvironment();
             environment["obj"] = LuaValue.FromClrObject(obj);
 
-            var (result, _) = environment.Eval("return obj.IntField");
+            environment.Eval("assert(obj.ByteField == 12)");
+            environment.Eval("assert(obj.SByteField == -12)");
+            environment.Eval("assert(obj.ShortField == -1234)");
+            environment.Eval("assert(obj.UShortField == 1234)");
+            environment.Eval("assert(obj.IntField == -12345678)");
+            environment.Eval("assert(obj.UIntField == 12345678)");
+            environment.Eval("assert(obj.LongField == -12345678910)");
+            environment.Eval("assert(obj.ULongField == 12345678910)");
+        }
 
-            Assert.Equal(1234, (long)result);
+        [Fact]
+        public void InstanceField_Get_Struct()
+        {
+            var obj = new MyStruct
+            {
+                ByteField = 12,
+                SByteField = -12,
+                ShortField = -1234,
+                UShortField = 1234,
+                IntField = -12345678,
+                UIntField = 12345678,
+                LongField = -12345678910,
+                ULongField = 12345678910
+            };
+
+            using var environment = new LuaEnvironment();
+            environment["obj"] = LuaValue.FromClrObject(obj);
+
+            environment.Eval("assert(obj.ByteField == 12)");
+            environment.Eval("assert(obj.SByteField == -12)");
+            environment.Eval("assert(obj.ShortField == -1234)");
+            environment.Eval("assert(obj.UShortField == 1234)");
+            environment.Eval("assert(obj.IntField == -12345678)");
+            environment.Eval("assert(obj.UIntField == 12345678)");
+            environment.Eval("assert(obj.LongField == -12345678910)");
+            environment.Eval("assert(obj.ULongField == 12345678910)");
         }
     }
 }

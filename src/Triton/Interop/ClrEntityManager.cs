@@ -44,7 +44,7 @@ namespace Triton.Interop
 
         internal ClrEntityManager(IntPtr state, LuaEnvironment environment)
         {
-            _metavalueGenerator = new ClrMetavalueGenerator(environment);
+            _metavalueGenerator = new ClrMetavalueGenerator(state, environment);
 
             // Set up the `__gc` and `__tostring` metamethods in the registry. This lowers the number of delegate
             // allocations since only one Lua object is created for each metamethod.
@@ -146,10 +146,8 @@ namespace Triton.Interop
 
         internal object ToClrEntity(IntPtr state, int index)
         {
-            throw new Exception(lua_type(state, index).ToString());
-
-            //var ptr = lua_touserdata(state, index);
-            //return _entityCache[ptr];
+            var ptr = lua_touserdata(state, index);
+            return _entityCache[ptr];
         }
 
         internal void ToValue(IntPtr state, int index, out LuaValue value)
