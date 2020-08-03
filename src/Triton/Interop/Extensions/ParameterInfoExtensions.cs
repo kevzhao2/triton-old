@@ -18,25 +18,14 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using Xunit;
+using System;
+using System.Reflection;
 
-namespace Triton.Interop
+namespace Triton.Interop.Extensions
 {
-    public class GenericTests
+    internal static class ParameterInfoExtensions
     {
-        public class StructList<T> where T : struct
-        {
-        }
-
-        [Fact]
-        public void ConstructGenericType_InvalidConstraints_RaisesLuaError()
-        {
-            using var environment = new LuaEnvironment();
-            environment["String"] = LuaValue.FromClrType(typeof(string));
-            environment["StructList"] = LuaValue.FromClrGenericTypes(typeof(StructList<>));
-
-            var exception = Assert.Throws<LuaEvalException>(() => environment.Eval("list = StructList[String]()"));
-            Assert.Contains("invalid constraints", exception.Message);
-        }
+        public static bool IsParams(this ParameterInfo parameter) =>
+            parameter.GetCustomAttribute<ParamArrayAttribute>() is { };
     }
 }

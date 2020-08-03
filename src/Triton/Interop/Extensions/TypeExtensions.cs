@@ -24,7 +24,7 @@ using System.Linq;
 using System.Reflection;
 using static System.Reflection.BindingFlags;
 
-namespace Triton.Interop
+namespace Triton.Interop.Extensions
 {
     internal static class TypeExtensions
     {
@@ -47,7 +47,7 @@ namespace Triton.Interop
         public static IEnumerable<Type> GetPublicNestedTypes(this Type type) =>
             type.BaseType is null
                 ? Enumerable.Empty<Type>()
-                : type.GetNestedTypes().Concat(GetPublicNestedTypes(type.BaseType)).Where(t => !t.IsSpecialName);
+                : type.GetNestedTypes().Concat(type.BaseType.GetPublicNestedTypes()).Where(t => !t.IsSpecialName);
 
         public static Type Simplify(this Type type) => true switch
         {

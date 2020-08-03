@@ -18,25 +18,37 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using Xunit;
+using System.Linq;
+using System.Reflection;
 
-namespace Triton.Interop
+namespace Triton.Interop.Extensions
 {
-    public class GenericTests
+    internal static class MethodBaseExtensions
     {
-        public class StructList<T> where T : struct
+        public static (int minArgs, int maxArgs) GetArgBounds(this MethodBase method)
         {
-        }
+            var minArgs = 0;
+            var maxArgs = 0;
+            
+            foreach (var parameter in method.GetParameters().Where(p => !p.IsOut))
+            {
+                // If the parameter is a params array, then the method can accept an unbounded number of parameters --
+                // we represent this using int.MaxValue.
+                //
+                if (parameter.IsParams())
+                {
+                    maxArgs = int.MaxValue;
+                    break;
+                }
 
-        [Fact]
-        public void ConstructGenericType_InvalidConstraints_RaisesLuaError()
-        {
-            using var environment = new LuaEnvironment();
-            environment["String"] = LuaValue.FromClrType(typeof(string));
-            environment["StructList"] = LuaValue.FromClrGenericTypes(typeof(StructList<>));
+                ++maxArgs;
+                if (!parameter.IsOptional)
+                {
+                    ++minArgs;
+                }
+            }
 
-            var exception = Assert.Throws<LuaEvalException>(() => environment.Eval("list = StructList[String]()"));
-            Assert.Contains("invalid constraints", exception.Message);
+            return (minArgs, maxArgs);
         }
     }
 }

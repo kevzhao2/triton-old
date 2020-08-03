@@ -75,7 +75,7 @@ namespace Triton
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate int LuaKFunction(IntPtr L, LuaStatus status, IntPtr ctx);
 
-        public static readonly MethodInfo _lua_pop = typeof(NativeMethods).GetMethod(nameof(lua_pop))!;
+        internal static readonly MethodInfo _lua_pop = typeof(NativeMethods).GetMethod(nameof(lua_pop))!;
         internal static readonly MethodInfo _lua_pushboolean = typeof(NativeMethods).GetMethod(nameof(lua_pushboolean))!;
         internal static readonly MethodInfo _lua_pushlightuserdata = typeof(NativeMethods).GetMethod(nameof(lua_pushlightuserdata))!;
         internal static readonly MethodInfo _lua_pushinteger = typeof(NativeMethods).GetMethod(nameof(lua_pushinteger))!;
@@ -83,7 +83,9 @@ namespace Triton
         internal static readonly MethodInfo _lua_pushstring = typeof(NativeMethods).GetMethod(nameof(lua_pushstring))!;
         internal static readonly MethodInfo _lua_rawgeti = typeof(NativeMethods).GetMethod(nameof(lua_rawgeti))!;
         internal static readonly MethodInfo _lua_rawlen = typeof(NativeMethods).GetMethod(nameof(lua_rawlen))!;
+        internal static readonly MethodInfo _lua_toboolean = typeof(NativeMethods).GetMethod(nameof(lua_toboolean))!;
         internal static readonly MethodInfo _lua_tostring = typeof(NativeMethods).GetMethod(nameof(lua_tostring))!;
+        internal static readonly MethodInfo _lua_touserdata = typeof(NativeMethods).GetMethod(nameof(lua_touserdata))!;
         internal static readonly MethodInfo _lua_type = typeof(NativeMethods).GetMethod(nameof(lua_type))!;
         internal static readonly MethodInfo _luaL_error = typeof(NativeMethods).GetMethod(nameof(luaL_error))!;
 
@@ -186,8 +188,14 @@ namespace Triton
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_pushnumber(IntPtr L, double n);
 
-        public static unsafe IntPtr lua_pushstring(IntPtr L, string s)
+        public static unsafe void lua_pushstring(IntPtr L, string? s)
         {
+            if (s is null)
+            {
+                lua_pushnil(L);
+                return;
+            }
+
             var maxLength = Encoding.UTF8.GetMaxByteCount(s.Length);
 
             var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
@@ -195,7 +203,7 @@ namespace Triton
 
             fixed (byte* buffer = span)
             {
-                return lua_pushlstring(L, (IntPtr)buffer, (UIntPtr)length);
+                lua_pushlstring(L, (IntPtr)buffer, (UIntPtr)length);
             }
         }
 
