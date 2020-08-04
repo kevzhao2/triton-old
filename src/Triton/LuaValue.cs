@@ -21,6 +21,7 @@
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Triton.Interop;
@@ -33,6 +34,14 @@ namespace Triton
     [StructLayout(LayoutKind.Explicit)]
     public readonly struct LuaValue : IEquatable<LuaValue>
     {
+        // Lua values are represented as a structure in the form of a _tagged union_. This allows for faster
+        // type-checking and for fewer allocations compared to the alternative of representing Lua values with an
+        // `object`.
+        //
+        // On x64, this structure is 16 bytes, and so RVO (return value optimization) is manually performed wherever
+        // possible using out variables.
+        //
+
         /// <summary>
         /// Tags a Lua value as a primitive.
         /// </summary>
@@ -61,12 +70,12 @@ namespace Triton
         }
 
         /// <summary>
-        /// Specifies a Lua object: a string, Lua object (table, function, or thread), or CLR entity.
+        /// Specifies a Lua object: a string, Lua reference, or CLR entity.
         /// </summary>
         internal enum ObjectType
         {
             String,
-            LuaObject,
+            LuaReference,
             ClrEntity
         }
 
@@ -86,6 +95,11 @@ namespace Triton
         /// Gets a value indicating whether the Lua value is nil.
         /// </summary>
         public bool IsNil => _objectOrTag is null;
+
+        /// <summary>
+        /// Gets a value indicating whether the Lua value is a primitive.
+        /// </summary>
+        public bool IsPrimitive => _objectOrTag is PrimitiveTag;
 
         /// <summary>
         /// Gets a value indicating whether the Lua value is a boolean.
@@ -108,9 +122,34 @@ namespace Triton
         public bool IsNumber => _objectOrTag == _numberTag;
 
         /// <summary>
+        /// Gets a value indicating whether the Lua value is an object.
+        /// </summary>
+        public bool IsObject => !IsNil && !IsPrimitive;
+
+        /// <summary>
         /// Gets a value indicating whether the Lua value is a string.
         /// </summary>
         public bool IsString => _objectType == ObjectType.String && _objectOrTag is string;
+
+        /// <summary>
+        /// Gets a value indicating whether the Lua value is a Lua reference.
+        /// </summary>
+        public bool IsLuaReference => _objectType == ObjectType.LuaReference && _objectOrTag is LuaReference;
+
+        /// <summary>
+        /// Gets a value indicating whether the Lua value is a CLR type.
+        /// </summary>
+        public bool IsClrType => _objectOrTag is ProxyClrType;
+
+        /// <summary>
+        /// Gets a value indicating whether the Lua value is CLR generic types.
+        /// </summary>
+        public bool IsClrGenericTypes => _objectOrTag is ProxyClrGenericTypes;
+
+        /// <summary>
+        /// Gets a value indicating whether the Lua value is a CLR object.
+        /// </summary>
+        public bool IsClrObject => _objectType == ObjectType.ClrEntity && !IsPrimitive && !IsClrType && !IsClrGenericTypes;
 
         /// <summary>
         /// Creates a Lua value from the given boolean.
@@ -168,6 +207,70 @@ namespace Triton
         }
 
         /// <summary>
+        /// Creates a Lua value from the given Lua reference.
+        /// </summary>
+        /// <param name="reference">The Lua reference.</param>
+        /// <returns>The resulting Lua value.</returns>
+        public static LuaValue FromLuaReference(LuaReference? reference)
+        {
+            FromLuaReference(reference, out var value);
+            return value;
+        }
+
+        /// <summary>
+        /// Creates a Lua value from the given CLR type.
+        /// </summary>
+        /// <param name="type">The CLR type.</param>
+        /// <returns>The resulting Lua value.</returns>
+        /// <exception cref="ArgumentException"><paramref name="type"/> is generic.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="type"/> is <see langword="null"/>.</exception>
+        public static LuaValue FromClrType(Type type)
+        {
+            if (type is null)
+            {
+                throw new ArgumentNullException(nameof(type));
+            }
+
+            if (type.IsGenericTypeDefinition)
+            {
+                throw new ArgumentException("Type is generic", nameof(type));
+            }
+
+            FromClrEntity(new ProxyClrType(type), out var value);
+            return value;
+        }
+
+        /// <summary>
+        /// Creates a Lua value from the given CLR generic types.
+        /// </summary>
+        /// <param name="types">The CLR generic types.</param>
+        /// <returns>The resulting Lua value.</returns>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="types"/> contains <see langword="null"/> or more than one non-generic type.
+        /// </exception>
+        /// <exception cref="ArgumentNullException"><paramref name="types"/> is <see langword="null"/>.</exception>
+        public static LuaValue FromClrGenericTypes(params Type[] types)
+        {
+            if (types is null)
+            {
+                throw new ArgumentNullException(nameof(types));
+            }
+
+            if (types.Any(t => t is null))
+            {
+                throw new ArgumentException("Types contains null", nameof(types));
+            }
+
+            if (types.Count(t => !t.IsGenericTypeDefinition) > 1)
+            {
+                throw new ArgumentException("Types contains more than one non-generic type", nameof(types));
+            }
+
+            FromClrEntity(new ProxyClrGenericTypes(types), out var value);
+            return value;
+        }
+
+        /// <summary>
         /// Creates a Lua value from the given CLR object.
         /// </summary>
         /// <param name="obj">The CLR object.</param>
@@ -175,7 +278,12 @@ namespace Triton
         /// <exception cref="ArgumentNullException"><paramref name="obj"/> is <see langword="null"/>.</exception>
         public static LuaValue FromClrObject(object obj)
         {
-            FromClrObject(obj ?? throw new ArgumentNullException(nameof(obj)), out var value);
+            if (obj is null)
+            {
+                throw new ArgumentNullException(nameof(obj));
+            }
+
+            FromClrEntity(obj, out var value);
             return value;
         }
 
@@ -250,17 +358,29 @@ namespace Triton
         }
 
         /// <summary>
-        /// Creates a Lua value from the given CLR object.
+        /// Creates a Lua value from the given Lua reference.
         /// </summary>
-        /// <param name="obj">The CLR object.</param>
+        /// <param name="reference">The Lua reference.</param>
         /// <param name="value">The resulting Lua value.</param>
-        internal static void FromClrObject(object obj, out LuaValue value)
+        internal static void FromLuaReference(LuaReference? reference, out LuaValue value)
         {
-            Debug.Assert(obj is { });
+            Unsafe.SkipInit(out value);
+            Unsafe.AsRef(in value._objectType) = ObjectType.LuaReference;
+            Unsafe.AsRef(in value._objectOrTag) = reference;
+        }
+
+        /// <summary>
+        /// Creates a Lua value from the given CLR entity.
+        /// </summary>
+        /// <param name="entity">The CLR entity.</param>
+        /// <param name="value">The resulting Lua value.</param>
+        internal static void FromClrEntity(object entity, out LuaValue value)
+        {
+            Debug.Assert(entity is { });
 
             Unsafe.SkipInit(out value);
             Unsafe.AsRef(in value._objectType) = ObjectType.ClrEntity;
-            Unsafe.AsRef(in value._objectOrTag) = obj;
+            Unsafe.AsRef(in value._objectOrTag) = entity;
         }
 
         /// <inheritdoc/>
@@ -270,6 +390,7 @@ namespace Triton
         public bool Equals(in LuaValue other) =>
             Equals(_objectOrTag, other._objectOrTag) && _objectOrTag switch
             {
+                null => true,
                 PrimitiveTag { PrimitiveType: var primitiveType } => primitiveType switch
                 {
                     PrimitiveType.Boolean       => _boolean == other._boolean,
@@ -277,7 +398,7 @@ namespace Triton
                     PrimitiveType.Integer       => _integer == other._integer,
                     _                           => _number == other._number
                 },
-                _ => true
+                _ => _objectType == other._objectType
             };
 
         /// <inheritdoc/>
@@ -291,7 +412,7 @@ namespace Triton
                 PrimitiveType.Integer       => _integer.GetHashCode(),
                 _                           => _number.GetHashCode()
             },
-            _ => _objectOrTag.GetHashCode()
+            _ => HashCode.Combine(_objectType, _objectOrTag)
         };
 
         /// <inheritdoc/>
@@ -308,9 +429,9 @@ namespace Triton
             },
             _ => _objectType switch
             {
-                ObjectType.String    => $"<string: {_objectOrTag}",
-                ObjectType.LuaObject => $"<Lua object: {_objectOrTag}>",
-                _                    => _objectOrTag switch
+                ObjectType.String       => $"<string: {_objectOrTag}",
+                ObjectType.LuaReference => $"<Lua reference: {_objectOrTag}>",
+                _                       => _objectOrTag switch
                 {
                     ProxyClrGenericTypes _ => $"<CLR generic types: {_objectOrTag}>",
                     ProxyClrType _         => $"<CLR type: {_objectOrTag}>",
@@ -349,6 +470,36 @@ namespace Triton
         /// <returns>The resulting string.</returns>
         public string? AsString() => _objectOrTag as string;
 
+        /// <summary>
+        /// Converts the Lua value into a Lua reference. <i>This is unchecked!</i>
+        /// </summary>
+        /// <returns>The resulting Lua reference.</returns>
+        public LuaReference? AsLuaReference() => _objectOrTag as LuaReference;
+
+        /// <summary>
+        /// Converts the Lua value into a CLR type. <i>This is unchecked!</i>
+        /// </summary>
+        /// <returns>The resulting CLR type.</returns>
+        public Type? AsClrType() => _objectOrTag is ProxyClrType { Type: var type } ? type : null;
+
+        /// <summary>
+        /// Converts the Lua value into CLR generic types. <i>This is unchecked!</i>
+        /// </summary>
+        /// <returns>The resulting CLR generic types.</returns>
+        public Type[]? AsClrGenericTypes() => _objectOrTag is ProxyClrGenericTypes { Types: var types } ? types : null;
+
+        /// <summary>
+        /// Gets the Lua value's object type. <i>This is unchecked!</i>
+        /// </summary>
+        /// <returns>The Lua value's object type.</returns>
+        internal ObjectType GetObjectType() => _objectType;
+
+        /// <summary>
+        /// Gets the Lua value's object or tag.
+        /// </summary>
+        /// <returns>The Lua value's object or tag.</returns>
+        internal object? GetObjectOrTag() => _objectOrTag;
+
         [ExcludeFromCodeCoverage]
         bool IEquatable<LuaValue>.Equals(LuaValue other) => Equals(other);
 
@@ -383,6 +534,12 @@ namespace Triton
         public static implicit operator LuaValue(string? str) => FromString(str);
 
         /// <summary>
+        /// Converts the given Lua reference into a Lua value.
+        /// </summary>
+        /// <param name="reference">The Lua reference.</param>
+        public static implicit operator LuaValue(LuaReference? reference) => FromLuaReference(reference);
+
+        /// <summary>
         /// Cnoverts the given Lua value into a boolean.
         /// </summary>
         /// <param name="value">The Lua value.</param>
@@ -411,5 +568,11 @@ namespace Triton
         /// </summary>
         /// <param name="value">The Lua value.</param>
         public static explicit operator string?(in LuaValue value) => value.AsString();
+
+        /// <summary>
+        /// Cnoverts the given Lua value into a Lua reference.
+        /// </summary>
+        /// <param name="value">The Lua value.</param>
+        public static explicit operator LuaReference?(in LuaValue value) => value.AsLuaReference();
     }
 }

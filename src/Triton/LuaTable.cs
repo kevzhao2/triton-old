@@ -19,33 +19,16 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Diagnostics.CodeAnalysis;
 
-namespace Triton.Interop
+namespace Triton
 {
     /// <summary>
-    /// Acts as a proxy for a CLR type.
+    /// Represents a Lua table.
     /// </summary>
-    internal sealed class ProxyClrType
+    public class LuaTable : LuaReference
     {
-        internal ProxyClrType(Type type)
+        internal LuaTable(IntPtr state, LuaEnvironment environment, int @ref) : base(state, environment, @ref)
         {
-            Type = type;
         }
-
-        /// <summary>
-        /// Gets the type.
-        /// </summary>
-        public Type Type { get; }
-
-        /// <inheritdoc/>
-        public override bool Equals(object? obj) => obj is ProxyClrType { Type: var type } && Type.Equals(type);
-
-        /// <inheritdoc/>
-        public override int GetHashCode() => Type.GetHashCode();
-
-        /// <inheritdoc/>
-        [ExcludeFromCodeCoverage]
-        public override string ToString() => Type.ToString();
     }
 }

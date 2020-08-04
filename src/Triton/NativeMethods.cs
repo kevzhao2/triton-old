@@ -21,6 +21,7 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace Triton
 {
@@ -84,6 +85,7 @@ namespace Triton
         //
         // See http://www.lua.org/manual/5.4/manual.html#4 for a detailed description of these functions.
         //
+
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_close(IntPtr L);
 
@@ -142,7 +144,16 @@ namespace Triton
         public static extern void lua_pushvalue(IntPtr L, int index);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern LuaType lua_rawgeti(IntPtr L, int index, long n);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_rotate(IntPtr L, int index, int n);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void lua_setfield(IntPtr L, int index, IntPtr k);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern bool lua_setmetatable(IntPtr L, int index);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_settop(IntPtr L, int index);
@@ -164,6 +175,17 @@ namespace Triton
         public static extern double lua_tonumberx(IntPtr L, int index, IntPtr isnum);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern IntPtr lua_topointer(IntPtr L, int index);
+
+        public static unsafe string lua_tostring(IntPtr L, int index)
+        {
+            UIntPtr length;
+            var ptr = lua_tolstring(L, index, (IntPtr)(&length));
+
+            return Encoding.UTF8.GetString((byte*)ptr, (int)length);
+        }
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr lua_touserdata(IntPtr L, int index);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
@@ -174,6 +196,7 @@ namespace Triton
         //
         // See http://www.lua.org/manual/5.4/manual.html#5 for a detailed description of these functions.
         //
+
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr luaL_newstate();
 

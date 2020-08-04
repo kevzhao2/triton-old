@@ -19,38 +19,42 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.Linq;
+using System.Diagnostics;
+using static Triton.NativeMethods;
 
-namespace Triton.Interop
+namespace Triton
 {
     /// <summary>
-    /// Acts as a proxy for CLR generic types with the same names.
+    /// Represents a Lua reference: a table, function, or thread.
     /// </summary>
-    internal sealed class ProxyClrGenericTypes
+    public abstract class LuaReference
     {
-        internal ProxyClrGenericTypes(Type[] types)
+        private protected readonly IntPtr _state;
+        private protected readonly LuaEnvironment _environment;
+        private protected readonly int _ref;
+
+        private protected LuaReference(IntPtr state, LuaEnvironment environment, int @ref)
         {
-            Types = types;
+            Debug.Assert(environment is { });
+
+            _state = state;
+            _environment = environment;
+            _ref = @ref;
         }
 
         /// <summary>
-        /// Gets the CLR generic types.
+        /// Pushes the Lua reference onto the stack.
         /// </summary>
-        public Type[] Types { get; }
+        /// <param name="state">The Lua state.</param>
+        /// <param name="environment">The Lua environment.</param>
+        internal void Push(IntPtr state, LuaEnvironment environment)
+        {
+            if (environment != _environment)
+            {
+                throw new InvalidOperationException("Lua object does not belong to the environment");
+            }
 
-        /// <inheritdoc/>
-        public override bool Equals(object? obj) =>
-            obj is ProxyClrGenericTypes { Types: var types } && Types.SequenceEqual(types);
-
-        /// <inheritdoc/>
-        public override int GetHashCode() =>
-            ((IStructuralEquatable)Types).GetHashCode(EqualityComparer<Type>.Default);
-
-        /// <inheritdoc/>
-        [ExcludeFromCodeCoverage]
-        public override string ToString() => string.Join(", ", (IEnumerable<Type>)Types);
+            lua_rawgeti(state, LUA_REGISTRYINDEX, _ref);
+        }
     }
 }

@@ -18,34 +18,17 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using BenchmarkDotNet.Attributes;
+using System;
 
-namespace Triton.Benchmarks.Micro
+namespace Triton
 {
-    [MemoryDiagnoser]
-    public class Eval
+    /// <summary>
+    /// Represents a Lua function.
+    /// </summary>
+    public class LuaFunction : LuaReference
     {
-        private NLua.Lua _nlua;
-        private LuaEnvironment _triton;
-
-        [GlobalSetup]
-        public void Setup()
+        internal LuaFunction(IntPtr state, LuaEnvironment environment, int @ref) : base(state, environment, @ref)
         {
-            _nlua = new NLua.Lua();
-            _triton = new LuaEnvironment();
         }
-
-        [GlobalCleanup]
-        public void Cleanup()
-        {
-            _nlua.Dispose();
-            _triton.Dispose();
-        }
-
-        [Benchmark]
-        public void NLua() => _nlua.DoString("return 0");
-
-        [Benchmark]
-        public void Triton() => _triton.Eval("return 0");
     }
 }
