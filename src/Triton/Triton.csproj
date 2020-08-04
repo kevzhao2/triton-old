@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.1</TargetFramework>
+    <TargetFrameworks>netstandard2.1;netcoreapp3.1</TargetFrameworks>
     <LangVersion>8</LangVersion>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -24,18 +24,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="4.7.1" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Update="runtimes\**" Pack="true" PackagePath="" />
-  </ItemGroup>
-
-  <ItemGroup Condition=" '$(OS)' == 'Windows_NT' ">
-    <None Include="runtimes\win-x64\native\lua54.dll" Visible="false">
-      <Link>lua54.dll</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="5.0.0-preview.7.20364.11" />
   </ItemGroup>
 
   <ItemGroup Condition=" '$(OS)' == 'Unix' and Exists('/usr/lib/libc.dylib')">

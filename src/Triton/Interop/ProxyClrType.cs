@@ -18,30 +18,34 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using System.Diagnostics;
-using System.Dynamic;
-using static Triton.Native.NativeMethods;
+using System;
+using System.Diagnostics.CodeAnalysis;
 
-namespace Triton
+namespace Triton.Interop
 {
     /// <summary>
-    /// Provides the base class for a Lua object.
+    /// Acts as a proxy for a CLR type.
     /// </summary>
-    public abstract unsafe class LuaObject : DynamicObject
+    internal sealed class ProxyClrType
     {
-        internal readonly LuaEnvironment _environment;
-        internal readonly int _reference;
-
-        private protected readonly lua_State* _state;
-
-        private protected LuaObject(LuaEnvironment environment, int reference, lua_State* state)
+        internal ProxyClrType(Type type)
         {
-            Debug.Assert(environment != null);
-            Debug.Assert(state != null);
-
-            _environment = environment;
-            _reference = reference;
-            _state = state;
+            Type = type;
         }
+
+        /// <summary>
+        /// Gets the type.
+        /// </summary>
+        public Type Type { get; }
+
+        /// <inheritdoc/>
+        public override bool Equals(object? obj) => obj is ProxyClrType { Type: var type } && Type.Equals(type);
+
+        /// <inheritdoc/>
+        public override int GetHashCode() => Type.GetHashCode();
+
+        /// <inheritdoc/>
+        [ExcludeFromCodeCoverage]
+        public override string ToString() => Type.ToString();
     }
 }

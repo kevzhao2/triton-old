@@ -18,18 +18,39 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-namespace Triton.Native
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+
+namespace Triton.Interop
 {
     /// <summary>
-    /// Specifies the status of a Lua thread or some operation.
+    /// Acts as a proxy for CLR generic types with the same names.
     /// </summary>
-    internal enum LuaStatus
+    internal sealed class ProxyClrGenericTypes
     {
-        Ok = 0,
-        Yield = 1,
-        ErrRun = 2,
-        ErrSyntax = 3,
-        ErrMem = 4,
-        ErrErr = 5
+        internal ProxyClrGenericTypes(Type[] types)
+        {
+            Types = types;
+        }
+
+        /// <summary>
+        /// Gets the CLR generic types.
+        /// </summary>
+        public Type[] Types { get; }
+
+        /// <inheritdoc/>
+        public override bool Equals(object? obj) =>
+            obj is ProxyClrGenericTypes { Types: var types } && Types.SequenceEqual(types);
+
+        /// <inheritdoc/>
+        public override int GetHashCode() =>
+            ((IStructuralEquatable)Types).GetHashCode(EqualityComparer<Type>.Default);
+
+        /// <inheritdoc/>
+        [ExcludeFromCodeCoverage]
+        public override string ToString() => string.Join(", ", (IEnumerable<Type>)Types);
     }
 }
