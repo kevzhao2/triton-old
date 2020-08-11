@@ -19,16 +19,21 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Triton
 {
     /// <summary>
     /// Represents a Lua function.
     /// </summary>
-    public class LuaFunction : LuaReference
+    public class LuaFunction : LuaObject
     {
         internal LuaFunction(IntPtr state, LuaEnvironment environment, int @ref) : base(state, environment, @ref)
         {
         }
+
+        /// <inheritdoc/>
+        [ExcludeFromCodeCoverage]
+        public override string ToString() => $"function {_ref}";
     }
 }

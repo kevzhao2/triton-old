@@ -19,21 +19,42 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 
-namespace Triton
+namespace Triton.Interop
 {
     /// <summary>
-    /// Represents a Lua thread.
+    /// Acts as a proxy for generic CLR types with the same names.
     /// </summary>
-    public class LuaThread : LuaObject
+    internal sealed class ProxyGenericClrTypes
     {
-        internal LuaThread(IntPtr state, LuaEnvironment environment, int @ref) : base(state, environment, @ref)
+        internal ProxyGenericClrTypes(Type[] types)
         {
+            Debug.Assert(types.All(t => t is { }));
+            Debug.Assert(types.Count(t => !t.IsGenericTypeDefinition) <= 1);
+
+            Types = types;
         }
+
+        /// <summary>
+        /// Gets the generic CLR types.
+        /// </summary>
+        public Type[] Types { get; }
+
+        /// <inheritdoc/>
+        public override bool Equals(object? obj) =>
+            obj is ProxyGenericClrTypes { Types: var types } && Types.SequenceEqual(types);
+
+        /// <inheritdoc/>
+        public override int GetHashCode() =>
+            ((IStructuralEquatable)Types).GetHashCode(EqualityComparer<Type>.Default);
 
         /// <inheritdoc/>
         [ExcludeFromCodeCoverage]
-        public override string ToString() => $"thread {_ref}";
+        public override string ToString() => string.Join(", ", (IEnumerable<Type>)Types);
     }
 }

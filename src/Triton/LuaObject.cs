@@ -19,21 +19,26 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Triton
 {
     /// <summary>
-    /// Represents a Lua thread.
+    /// Represents a Lua object.
     /// </summary>
-    public class LuaThread : LuaObject
+    public abstract class LuaObject
     {
-        internal LuaThread(IntPtr state, LuaEnvironment environment, int @ref) : base(state, environment, @ref)
-        {
-        }
+        // These fields are internal to centralize logic inside of `LuaObjectManager`.
+        //
 
-        /// <inheritdoc/>
-        [ExcludeFromCodeCoverage]
-        public override string ToString() => $"thread {_ref}";
+        internal readonly IntPtr _state;
+        internal readonly LuaEnvironment _environment;
+        internal readonly int _ref;
+
+        private protected LuaObject(IntPtr state, LuaEnvironment environment, int @ref)
+        {
+            _state = state;
+            _environment = environment;
+            _ref = @ref;
+        }
     }
 }

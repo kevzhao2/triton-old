@@ -1,4 +1,5 @@
-﻿// Copyright (c) 2020 Kevin Zhao
+﻿
+// Copyright (c) 2020 Kevin Zhao
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
@@ -19,21 +20,36 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 
-namespace Triton
+namespace Triton.Interop
 {
     /// <summary>
-    /// Represents a Lua thread.
+    /// Acts as a proxy for a CLR type.
     /// </summary>
-    public class LuaThread : LuaObject
+    internal sealed class ProxyClrType
     {
-        internal LuaThread(IntPtr state, LuaEnvironment environment, int @ref) : base(state, environment, @ref)
+        internal ProxyClrType(Type type)
         {
+            Debug.Assert(!type.IsGenericTypeDefinition);
+
+            Type = type;
         }
+
+        /// <summary>
+        /// Gets the CLR type.
+        /// </summary>
+        public Type Type { get; }
+
+        /// <inheritdoc/>
+        public override bool Equals(object? obj) => obj is ProxyClrType { Type: var type } && Type.Equals(type);
+
+        /// <inheritdoc/>
+        public override int GetHashCode() => Type.GetHashCode();
 
         /// <inheritdoc/>
         [ExcludeFromCodeCoverage]
-        public override string ToString() => $"thread {_ref}";
+        public override string ToString() => Type.ToString();
     }
 }

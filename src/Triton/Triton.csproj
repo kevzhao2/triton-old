@@ -27,6 +27,13 @@
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="5.0.0-preview.7.20364.11" />
   </ItemGroup>
 
+  <ItemGroup Condition=" '$(OS)' == 'Windows_NT'">
+    <None Include="runtimes\win-x64\native\lua54.dll" Visible="false">
+      <Link>lua54.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <ItemGroup Condition=" '$(OS)' == 'Unix' and Exists('/usr/lib/libc.dylib')">
     <None Include="runtimes\osx\native\liblua54.dylib" Visible="false">
       <Link>liblua54.dylib</Link>

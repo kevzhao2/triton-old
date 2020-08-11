@@ -19,42 +19,41 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Diagnostics;
-using static Triton.NativeMethods;
+using System.Collections.Generic;
+using System.Text;
+using Xunit;
 
-namespace Triton
+namespace Triton.Interop
 {
-    /// <summary>
-    /// Represents a Lua reference: a table, function, or thread.
-    /// </summary>
-    public abstract class LuaReference
+    public class InstancePropertyTests
     {
-        private protected readonly IntPtr _state;
-        private protected readonly LuaEnvironment _environment;
-        private protected readonly int _ref;
-
-        private protected LuaReference(IntPtr state, LuaEnvironment environment, int @ref)
+        public class BoolProperty
         {
-            Debug.Assert(environment is { });
-
-            _state = state;
-            _environment = environment;
-            _ref = @ref;
+            public bool Value { get; set; }
         }
 
-        /// <summary>
-        /// Pushes the Lua reference onto the stack.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="environment">The Lua environment.</param>
-        internal void Push(IntPtr state, LuaEnvironment environment)
+        [Fact]
+        public void Bool_Get()
         {
-            if (environment != _environment)
-            {
-                throw new InvalidOperationException("Lua object does not belong to the environment");
-            }
+            var obj = new BoolProperty { Value = true };
 
-            lua_rawgeti(state, LUA_REGISTRYINDEX, _ref);
+            using var environment = new LuaEnvironment();
+            environment["bool_property"] = LuaValue.FromClrObject(obj);
+
+            environment.Eval("assert(bool_property.Value)");
+        }
+
+        [Fact]
+        public void Bool_Set()
+        {
+            var obj = new BoolProperty();
+
+            using var environment = new LuaEnvironment();
+            environment["bool_property"] = LuaValue.FromClrObject(obj);
+
+            environment.Eval("bool_property.Value = true");
+
+            Assert.True(obj.Value);
         }
     }
 }

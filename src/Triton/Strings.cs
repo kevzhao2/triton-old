@@ -22,21 +22,52 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
 
 namespace Triton
 {
     /// <summary>
-    /// Stores strings for efficient reuse.
+    /// Stores strings.
     /// </summary>
     [SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "Consistency")]
     internal static class Strings
     {
-        // These UTF8 strings are stored directly in the data section of the DLL, and allow quick access to
-        // commonly-used strings.
+        // These strings are stored directly as data in the assembly, allowing for efficient use in Lua functions.
         //
 
-        internal static readonly IntPtr __gc = AddrOf(new byte[] { 0x5f, 0x5f, 0x67, 0x63 });
+        internal static readonly IntPtr __call = AddrOf(new byte[]
+        {
+            0x5f, 0x5f, 0x63, 0x61, 0x6c, 0x6c, 0x00
+        });
+
+        internal static readonly IntPtr __gc = AddrOf(new byte[]
+        {
+            0x5f, 0x5f, 0x67, 0x63, 0x00
+        });
+
+        internal static readonly IntPtr __index = AddrOf(new byte[]
+        {
+            0x5f, 0x5f, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x00
+        });
+
+        internal static readonly IntPtr __mode = AddrOf(new byte[]
+        {
+            0x5f, 0x5f, 0x6d, 0x6f, 0x64, 0x65, 0x00
+        });
+
+        internal static readonly IntPtr __newindex = AddrOf(new byte[]
+        {
+            0x5f, 0x5f, 0x6e, 0x65, 0x77, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x00
+        });
+
+        internal static readonly IntPtr __tostring = AddrOf(new byte[]
+        {
+            0x5f, 0x5f, 0x7f, 0x6f, 0x73, 0x74, 0x72, 0x69, 0x6e, 0x67, 0x00
+        });
+
+        internal static readonly IntPtr v = AddrOf(new byte[]
+        {
+            0x76, 0x00
+        });
 
         private static unsafe IntPtr AddrOf(ReadOnlySpan<byte> bytes) =>
             (IntPtr)Unsafe.AsPointer(ref MemoryMarshal.GetReference(bytes));

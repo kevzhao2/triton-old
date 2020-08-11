@@ -20,72 +20,79 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using static Triton.NativeMethods;
 
-namespace Triton
+namespace Triton.Interop.Lua
 {
     /// <summary>
-    /// Manages Lua references.
+    /// Manages Lua objects. Controls the lifetime of <see cref="LuaObject"/>s and provides methods to manipulate and
+    /// retrieve them.
     /// </summary>
-    internal sealed class LuaReferenceManager
+    internal sealed class LuaObjectManager
     {
-        // In order to properly manipulate a Lua reference from the CLR, we need to somehow store it within Lua. We also
-        // need the references to be kept alive as long as the CLR has access to the reference. The natural solution is
-        // to store the Lua reference in the Lua registry -- it can then be retrieved from the registry when needed, and
-        // the reference will also be kept alive.
-        //
-        // If possible, Lua references should be cached. Additionally, they need to be cleaned up to prevent memory
-        // leaks. This can be accomplished by running code whenever the Lua garbage collector runs using a metatable.
-        //
-
         private readonly LuaEnvironment _environment;
 
-        private readonly Dictionary<IntPtr, (int @ref, WeakReference<LuaReference> weakReference)> _cache;
+        private readonly Dictionary<IntPtr, (int @ref, WeakReference<LuaObject> weakReference)> _objects =
+            new Dictionary<IntPtr, (int @ref, WeakReference<LuaObject> weakReference)>();
 
         private readonly LuaCFunction _gcMetamethod;
         private readonly int _gcMetatableRef;
 
-        internal LuaReferenceManager(IntPtr state, LuaEnvironment environment)
+        internal LuaObjectManager(IntPtr state, LuaEnvironment environment)
         {
             _environment = environment;
 
-            // Set up the cache of Lua references.
-            //
-            _cache = new Dictionary<IntPtr, (int @ref, WeakReference<LuaReference> weakReference)>();
-
-            // Set up a metatable which will trigger `GcMetamethod` upon garbage collection, and create an empty table
-            // for this purpose.
-            //
-            _gcMetamethod = GcMetamethod;
-
-            lua_newtable(state);
+            _gcMetamethod = GcMetamethod;  // Prevent garbage collection of the delegate
             lua_newtable(state);
             lua_pushcfunction(state, _gcMetamethod);
             lua_setfield(state, -2, Strings.__gc);
-            lua_pushvalue(state, -1);
             _gcMetatableRef = luaL_ref(state, LUA_REGISTRYINDEX);
-            lua_setmetatable(state, -2);
-            lua_pop(state, 1);
+
+            PushGarbage(state);
         }
 
         /// <summary>
-        /// Converts the value on the stack into a Lua reference.
+        /// Interns the given Lua object in the cache.
         /// </summary>
-        /// <param name="state">The Lua state. </param>
+        /// <param name="ptr">The object pointer.</param>
+        /// <param name="obj">The Lua object.</param>
+        public void Intern(IntPtr ptr, LuaObject obj)
+        {
+            _objects.Add(ptr, (obj._ref, new WeakReference<LuaObject>(obj)));
+        }
+
+        /// <summary>
+        /// Pushes the given Lua object onto the stack.
+        /// </summary>
+        /// <param name="state">The Lua state.</param>
+        /// <param name="obj">The Lua object.</param>
+        public void Push(IntPtr state, LuaObject obj)
+        {
+            if (obj._environment != _environment)
+            {
+                throw new InvalidOperationException("Lua object does not belong to this environment");
+            }
+
+            lua_rawgeti(state, LUA_REGISTRYINDEX, obj._ref);
+        }
+
+        /// <summary>
+        /// Loads a Lua object from a value on the stack.
+        /// </summary>
+        /// <param name="state">The Lua state.</param>
         /// <param name="index">The index.</param>
         /// <param name="type">The type of the value.</param>
-        /// <returns>The resulting Lua reference.</returns>
-        public LuaReference ToLuaReference(IntPtr state, int index, LuaType type)
+        /// <returns>The resulting Lua object.</returns>
+        public LuaObject Load(IntPtr state, int index, LuaType type)
         {
-            LuaReference? reference;
+            LuaObject? obj;
 
             var ptr = lua_topointer(state, index);
-            if (_cache.TryGetValue(ptr, out var tuple))
+            if (_objects.TryGetValue(ptr, out var tuple))
             {
-                if (tuple.weakReference.TryGetTarget(out reference))
+                if (tuple.weakReference.TryGetTarget(out obj))
                 {
-                    return reference;
+                    return obj;
                 }
             }
             else
@@ -94,43 +101,48 @@ namespace Triton
                 tuple.@ref = luaL_ref(state, LUA_REGISTRYINDEX);
             }
 
-            reference = type switch
+            obj = type switch
             {
                 LuaType.Table    => new LuaTable(state, _environment, tuple.@ref),
                 LuaType.Function => new LuaFunction(state, _environment, tuple.@ref),
                 _                => new LuaThread(ptr, _environment, tuple.@ref)
             };
 
-            tuple.weakReference = new WeakReference<LuaReference>(reference);
-            _cache[ptr] = tuple;
-            return reference;
+            Intern(ptr, obj);
+            return obj;
         }
 
         private int GcMetamethod(IntPtr state)
         {
-            var deadPtrs = new List<IntPtr>();
+            CleanRefs(state);
+            PushGarbage(state);
+            return 0;
 
-            foreach (var (ptr, (@ref, weakReference)) in _cache)
+            void CleanRefs(IntPtr state)
             {
-                if (!weakReference.TryGetTarget(out _))
+                var deadPtrs = new List<IntPtr>();
+                foreach (var (ptr, (@ref, weakReference)) in _objects)
                 {
-                    luaL_unref(state, LUA_REGISTRYINDEX, @ref);
-                    deadPtrs.Add(ptr);
+                    if (!weakReference.TryGetTarget(out _))
+                    {
+                        luaL_unref(state, LUA_REGISTRYINDEX, @ref);
+                        deadPtrs.Add(ptr);
+                    }
+                }
+
+                foreach (var deadPtr in deadPtrs)
+                {
+                    _objects.Remove(deadPtr);
                 }
             }
+        }
 
-            foreach (var ptr in deadPtrs)
-            {
-                _cache.Remove(ptr);
-            }
-
-            // Create another empty table to trigger `GcMetamethod` upon garbage collection.
-            //
+        private void PushGarbage(IntPtr state)
+        {
             lua_newtable(state);
             lua_rawgeti(state, LUA_REGISTRYINDEX, _gcMetatableRef);
             lua_setmetatable(state, -1);
             lua_pop(state, 1);
-            return 0;
         }
     }
 }

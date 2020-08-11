@@ -20,6 +20,7 @@
 
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -80,6 +81,51 @@ namespace Triton
 
         public const int LUA_REFNIL = -1;
 
+        // These MethodInfos are provided for IL emit purposes.
+        //
+
+        internal static readonly MethodInfo _lua_isinteger =
+            typeof(NativeMethods).GetMethod(nameof(lua_isinteger))!;
+
+        internal static readonly MethodInfo _lua_toboolean =
+            typeof(NativeMethods).GetMethod(nameof(lua_toboolean))!;
+
+        internal static readonly MethodInfo _lua_touserdata =
+            typeof(NativeMethods).GetMethod(nameof(lua_touserdata))!;
+
+        internal static readonly MethodInfo _lua_tointeger =
+            typeof(NativeMethods).GetMethod(nameof(lua_tointeger))!;
+
+        internal static readonly MethodInfo _lua_tolstring =
+            typeof(NativeMethods).GetMethod(nameof(lua_tolstring))!;
+
+        internal static readonly MethodInfo _lua_tonumber =
+            typeof(NativeMethods).GetMethod(nameof(lua_tonumber))!;
+
+        internal static readonly MethodInfo _lua_tostring =
+            typeof(NativeMethods).GetMethod(nameof(lua_tostring))!;
+
+        internal static readonly MethodInfo _lua_type =
+            typeof(NativeMethods).GetMethod(nameof(lua_type))!;
+
+        internal static readonly MethodInfo _lua_pushboolean =
+            typeof(NativeMethods).GetMethod(nameof(lua_pushboolean))!;
+
+        internal static readonly MethodInfo _lua_pushlightuserdata =
+            typeof(NativeMethods).GetMethod(nameof(lua_pushlightuserdata))!;
+
+        internal static readonly MethodInfo _lua_pushinteger =
+            typeof(NativeMethods).GetMethod(nameof(lua_pushinteger))!;
+
+        internal static readonly MethodInfo _lua_pushnumber =
+            typeof(NativeMethods).GetMethod(nameof(lua_pushnumber))!;
+
+        internal static readonly MethodInfo _lua_pushstring =
+            typeof(NativeMethods).GetMethod(nameof(lua_pushstring), new[] { typeof(IntPtr), typeof(string) })!;
+
+        internal static readonly MethodInfo _luaL_error =
+            typeof(NativeMethods).GetMethod(nameof(luaL_error), new[] { typeof(IntPtr), typeof(string) })!;
+
         // =============================================================================================================
         // lua.h imports
         //
@@ -91,6 +137,40 @@ namespace Triton
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_createtable(IntPtr L, int narr, int nrec);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern LuaType lua_getfield(IntPtr L, int index, IntPtr k);
+
+        public static unsafe LuaType lua_getfield(IntPtr L, int index, string k)
+        {
+            var maxLength = Encoding.UTF8.GetMaxByteCount(k.Length) + 1;
+
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(k, span);
+            span[length] = 0;  // Null terminator
+
+            fixed (byte* buffer = span)
+            {
+                return lua_getfield(L, index, (IntPtr)buffer);
+            }
+        }
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern LuaType lua_getglobal(IntPtr L, IntPtr name);
+
+        public static unsafe LuaType lua_getglobal(IntPtr L, string name)
+        {
+            var maxLength = Encoding.UTF8.GetMaxByteCount(name.Length) + 1;
+
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(name, span);
+            span[length] = 0;  // Null terminator
+
+            fixed (byte* buffer = span)
+            {
+                return lua_getglobal(L, (IntPtr)buffer);
+            }
+        }
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern LuaType lua_geti(IntPtr L, int index, long n);
@@ -138,6 +218,27 @@ namespace Triton
         public static extern void lua_pushnumber(IntPtr L, double n);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern IntPtr lua_pushstring(IntPtr L, IntPtr s);
+
+        public static unsafe IntPtr lua_pushstring(IntPtr L, string? s)
+        {
+            if (s is null)
+            {
+                lua_pushnil(L);
+                return IntPtr.Zero;
+            }
+
+            var maxLength = Encoding.UTF8.GetMaxByteCount(s.Length);
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(s, span);
+
+            fixed (byte* buffer = span)
+            {
+                return lua_pushlstring(L, (IntPtr)buffer, (UIntPtr)length);
+            }
+        }
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr lua_pushlstring(IntPtr L, IntPtr s, UIntPtr len);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
@@ -147,10 +248,68 @@ namespace Triton
         public static extern LuaType lua_rawgeti(IntPtr L, int index, long n);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern LuaType lua_rawgetp(IntPtr L, int index, IntPtr p);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern UIntPtr lua_rawlen(IntPtr L, int index);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void lua_rawseti(IntPtr L, int index, long n);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void lua_rawsetp(IntPtr L, int index, IntPtr p);
+
+        public static void lua_remove(IntPtr L, int index)
+        {
+            lua_rotate(L, index, -1);
+            lua_pop(L, 1);
+        }
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern LuaStatus lua_resume(IntPtr l, IntPtr from, int nargs, IntPtr nresults);
+
+        public static unsafe LuaStatus lua_resume(IntPtr L, IntPtr from, int nargs)
+        {
+            int nresults;
+            return lua_resume(L, from, nargs, (IntPtr)(&nresults));
+        }
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_rotate(IntPtr L, int index, int n);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_setfield(IntPtr L, int index, IntPtr k);
+
+        public static unsafe void lua_setfield(IntPtr L, int index, string k)
+        {
+            var maxLength = Encoding.UTF8.GetMaxByteCount(k.Length) + 1;
+
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(k, span);
+            span[length] = 0;  // Null terminator
+
+            fixed (byte* buffer = span)
+            {
+                lua_setfield(L, index, (IntPtr)buffer);
+            }
+        }
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void lua_setglobal(IntPtr L, IntPtr name);
+
+        public static unsafe void lua_setglobal(IntPtr L, string name)
+        {
+            var maxLength = Encoding.UTF8.GetMaxByteCount(name.Length) + 1;
+
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(name, span);
+            span[length] = 0;  // Null terminator
+
+            fixed (byte* buffer = span)
+            {
+                lua_setglobal(L, (IntPtr)buffer);
+            }
+        }
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern bool lua_setmetatable(IntPtr L, int index);
@@ -212,6 +371,35 @@ namespace Triton
         [DoesNotReturn]
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern int luaL_error(IntPtr L, IntPtr fmt);
+
+        [DoesNotReturn]
+        public static unsafe int luaL_error(IntPtr L, string fmt)
+        {
+            var maxLength = Encoding.UTF8.GetMaxByteCount(fmt.Length) + 1;
+
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(fmt, span);
+            span[length] = 0;  // Null terminator
+
+            fixed (byte* buffer = span)
+            {
+                return luaL_error(L, (IntPtr)buffer);
+            }
+        }
+
+        public static unsafe LuaStatus luaL_loadstring(IntPtr L, string s)
+        {
+            var maxLength = Encoding.UTF8.GetMaxByteCount(s.Length) + 1;
+
+            var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
+            var length = Encoding.UTF8.GetBytes(s, span);
+            span[length] = 0;  // Null terminator
+
+            fixed (byte* buffer = span)
+            {
+                return luaL_loadstring(L, (IntPtr)buffer);
+            }
+        }
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern LuaStatus luaL_loadstring(IntPtr L, IntPtr s);
