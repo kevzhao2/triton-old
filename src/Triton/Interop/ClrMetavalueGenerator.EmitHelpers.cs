@@ -1,25 +1,10 @@
-﻿// Copyright (c) 2020 Kevin Zhao
+﻿// Copyright (c) 2020 Kevin Zhao. All rights reserved.
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to
-// deal in the Software without restriction, including without limitation the
-// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-// sell copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-// IN THE SOFTWARE.
+// Licensed under the MIT license. See the LICENSE file in the project root for more information.
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using Triton.Interop.Extensions;
@@ -31,10 +16,14 @@ namespace Triton.Interop
 {
     internal partial class ClrMetavalueGenerator
     {
-        private static readonly PropertyInfo _stringLength = typeof(string).GetProperty(nameof(string.Length))!;
-        private static readonly PropertyInfo _stringIndexer = typeof(string).GetProperty("Chars")!;
+        private static readonly PropertyInfo _stringLength =
+            typeof(string).GetProperty(nameof(string.Length))!;
 
-        private static readonly MethodInfo _charToString = typeof(char).GetMethod(nameof(char.ToString), Public | Static)!;
+        private static readonly PropertyInfo _stringIndexer =
+            typeof(string).GetProperty("Chars")!;
+
+        private static readonly MethodInfo _charToString =
+            typeof(char).GetMethod(nameof(char.ToString), Public | Static)!;
 
         private static readonly Type[] _metamethodParameterTypes = new[] { typeof(MetamethodContext), typeof(IntPtr) };
 
@@ -70,15 +59,15 @@ namespace Triton.Interop
         {
             clrType = clrType.Simplify();
 
-            // Verify that the Lua type is correct. This is not required for LuaValue since it is a tagged union that
-            // supports all Lua types.
-            //
+            // Verify that the Lua type is correct. This is not required for the `LuaValue` type, since it is a tagged
+            // union that supports all Lua types.
+
             if (clrType != typeof(LuaValue))
             {
                 if (clrType == typeof(LuaObject))
                 {
-                    // LuaObject can actually handle three different Lua types.
-                    //
+                    // `LuaObject` can correspond to three different Lua types
+
                     var isCorrectType = ilg.DefineLabel();
 
                     getLuaType(ilg);
@@ -138,8 +127,8 @@ namespace Triton.Interop
 
             ilg.Emit(Call, true switch
             {
-                _ when clrType == typeof(LuaValue) => MetamethodContext._loadLuaValue,
-                _ when clrType == typeof(bool)     => _lua_toboolean,
+                _ when clrType == typeof(LuaValue) => MetamethodContext._loadValue,
+                _ when clrType.IsBoolean()         => _lua_toboolean,
                 _ when clrType.IsLightUserdata()   => _lua_touserdata,
                 _ when clrType.IsInteger()         => _lua_tointeger,
                 _ when clrType.IsNumber()          => _lua_tonumber,
@@ -152,7 +141,7 @@ namespace Triton.Interop
             if (clrType.IsInteger() && clrType != typeof(long) && clrType != typeof(ulong))
             {
                 // Verify that the integer can be converted without overflow or underflow.
-                //
+
                 using var temp = ilg.DeclareReusableLocal(typeof(long));
                 using var result = ilg.DeclareReusableLocal(clrType);
 
@@ -189,7 +178,7 @@ namespace Triton.Interop
             else if (clrType == typeof(char))
             {
                 // Verify that the string has exactly one character.
-                //
+
                 using var temp = ilg.DeclareReusableLocal(typeof(string));
 
                 ilg.Emit(Stloc, temp);
@@ -210,7 +199,7 @@ namespace Triton.Interop
             else if (clrType.IsClrObject())
             {
                 // Verify that the type is correct.
-                //
+
                 var isStruct = clrType.IsClrStruct();
                 using var temp = ilg.DeclareReusableLocal(isStruct ? clrType.MakeByRefType() : clrType);
 
@@ -262,7 +251,7 @@ namespace Triton.Interop
             ilg.Emit(Call, true switch
             {
                 _ when clrType == typeof(LuaValue) => MetamethodContext._pushValue,
-                _ when clrType == typeof(bool)     => _lua_pushboolean,
+                _ when clrType.IsBoolean()         => _lua_pushboolean,
                 _ when clrType.IsLightUserdata()   => _lua_pushlightuserdata,
                 _ when clrType.IsInteger()         => _lua_pushinteger,
                 _ when clrType.IsNumber()          => _lua_pushnumber,
@@ -274,23 +263,8 @@ namespace Triton.Interop
 
             if (clrType.IsString())
             {
-                ilg.Emit(Pop);
+                ilg.Emit(Pop);  // Pop the return value
             }
-        }
-
-        private static LocalBuilder EmitDeclareTarget(ILGenerator ilg, Type objType)
-        {
-            var isStruct = objType.IsClrStruct();
-            var target = ilg.DeclareLocal(isStruct ? objType.MakeByRefType() : objType);
-
-            ilg.Emit(Ldarg_0);
-            ilg.Emit(Ldarg_1);
-            ilg.Emit(Ldc_I4_1);
-            ilg.Emit(Call, MetamethodContext._loadClrEntity);
-            ilg.Emit(isStruct ? Unbox : Unbox_Any, objType);
-            ilg.Emit(Stloc, target);
-
-            return target;
         }
 
         private static LocalBuilder EmitDeclareKeyType(ILGenerator ilg)
@@ -317,10 +291,22 @@ namespace Triton.Interop
             return valueType;
         }
 
+        private static LocalBuilder EmitDeclareArgCount(ILGenerator ilg)
+        {
+            var argCount = ilg.DeclareLocal(typeof(int));
+
+            ilg.Emit(Ldarg_1);
+            ilg.Emit(Call, _lua_gettop);
+            ilg.Emit(Stloc, argCount);
+
+            return argCount;
+        }
+
         private static void EmitSwitchMembers(
             ILGenerator ilg, IReadOnlyList<MemberInfo> members,
             Action<ILGenerator> getKeyLuaType,
-            Action<ILGenerator, MemberInfo> memberAction)
+            Action<ILGenerator, MemberInfo> memberAction,
+            Label isInvalidMember)
         {
             var isNotString = ilg.DefineLabel();
 
@@ -332,15 +318,10 @@ namespace Triton.Interop
 
                 ilg.Emit(Ldarg_0);
                 ilg.Emit(Ldarg_1);
-                ilg.Emit(Ldc_I4_2);
-                ilg.Emit(Ldc_I4_0);
-                ilg.Emit(Conv_I);
-                ilg.Emit(Call, _lua_tolstring);
                 ilg.Emit(Call, MetamethodContext._matchMemberName);
                 ilg.Emit(Switch, cases);
 
-                ilg.Emit(Ldc_I4_0);
-                ilg.Emit(Ret);
+                ilg.Emit(Br, isInvalidMember);  // Not short form
 
                 for (var i = 0; i < members.Count; ++i)
                 {
@@ -359,8 +340,21 @@ namespace Triton.Interop
             Action<ILGenerator, FieldInfo> getFieldValue,
             Action<ILGenerator, PropertyInfo> getPropertyValue)
         {
-            var isWriteOnlyProperty = LazyEmitErrorMemberName(ilg, "attempt to get write-only property '{0}'");
+            var isNonReadableProperty = LazyEmitErrorMemberName(ilg, "attempt to get non-readable property '{0}'");
             var isByRefLikeProperty = LazyEmitErrorMemberName(ilg, "attempt to get byref-like property '{0}'");
+
+            var skip = ilg.DefineLabel();
+            var isInvalidMember = ilg.DefineLabel();
+
+            ilg.Emit(Br_S, skip);
+            {
+                ilg.MarkLabel(isInvalidMember);
+
+                ilg.Emit(Ldc_I4_0);
+                ilg.Emit(Ret);
+            }
+
+            ilg.MarkLabel(skip);
 
             EmitSwitchMembers(ilg, members,
                 getKeyLuaType,
@@ -385,7 +379,7 @@ namespace Triton.Interop
 
                             if (property.GetMethod?.IsPublic != true)
                             {
-                                ilg.Emit(Br, isWriteOnlyProperty.Value);  // Not short form
+                                ilg.Emit(Br, isNonReadableProperty.Value);  // Not short form
                                 return;
                             }
 
@@ -405,7 +399,8 @@ namespace Triton.Interop
 
                     ilg.Emit(Ldc_I4_1);
                     ilg.Emit(Ret);
-                });
+                },
+                isInvalidMember);
         }
 
         private void EmitIndexTypeArgs(
@@ -424,7 +419,7 @@ namespace Triton.Interop
             ilg.Emit(Ldc_I4_5);
             ilg.Emit(Bne_Un, isNotTable);  // Not short form
             {
-                using var typeArgs = ilg.DeclareReusableLocal(typeof(Type[]));
+                var typeArgs = ilg.DeclareLocal(typeof(Type[]));
 
                 ilg.MarkLabel(isUserdata);
 
@@ -449,18 +444,20 @@ namespace Triton.Interop
             Action<ILGenerator, PropertyInfo, LocalBuilder> setPropertyValue)
         {
             var isConstField = LazyEmitErrorMemberName(ilg, "attempt to set const field '{0}'");
-            var isReadOnlyField = LazyEmitErrorMemberName(ilg, "attempt to set read-only field '{0}'");
+            var isNonWritableField = LazyEmitErrorMemberName(ilg, "attempt to set non-writable field '{0}'");
             var invalidFieldValue = LazyEmitErrorMemberName(ilg, "attempt to set field '{0}' with invalid value");
 
             var isEvent = LazyEmitErrorMemberName(ilg, "attempt to set event '{0}'");
 
-            var isReadOnlyProperty = LazyEmitErrorMemberName(ilg, "attempt to set read-only property '{0}'");
+            var isNonWritableProperty = LazyEmitErrorMemberName(ilg, "attempt to set non-writable property '{0}'");
             var isByRefLikeProperty = LazyEmitErrorMemberName(ilg, "attempt to set byref-like property '{0}'");
             var invalidPropertyValue = LazyEmitErrorMemberName(ilg, "attempt to set property '{0}' with invalid value");
 
             var isMethod = LazyEmitErrorMemberName(ilg, "attempt to set method '{0}'");
 
             var isNestedType = LazyEmitErrorMemberName(ilg, "attempt to set nested type '{0}'");
+
+            var isInvalidMember = LazyEmitErrorMemberName(ilg, "attempt to set invalid member '{0}'");
 
             EmitSwitchMembers(ilg, members,
                 getKeyLuaType,
@@ -479,7 +476,7 @@ namespace Triton.Interop
 
                             if (field.IsInitOnly)
                             {
-                                ilg.Emit(Br, isReadOnlyField.Value);  // Not short form
+                                ilg.Emit(Br, isNonWritableField.Value);  // Not short form
                                 return;
                             }
 
@@ -512,7 +509,7 @@ namespace Triton.Interop
 
                             if ((isByRef ? property.GetMethod : property.SetMethod)?.IsPublic != true)
                             {
-                                ilg.Emit(Br, isReadOnlyProperty.Value);  // Not short form
+                                ilg.Emit(Br, isNonWritableProperty.Value);  // Not short form
                                 return;
                             }
 
@@ -551,7 +548,82 @@ namespace Triton.Interop
 
                     ilg.Emit(Ldc_I4_0);
                     ilg.Emit(Ret);
-                });
+                },
+                isInvalidMember.Value);
+        }
+
+        private static void EmitCallMethod(
+            ILGenerator ilg, MethodBase clrMethod,
+            Action<ILGenerator> getLuaArgCount,
+            Action<ILGenerator, LocalBuilder> getLuaArgType,
+            Action<ILGenerator, LocalBuilder> getLuaArgIndex,
+            Action<ILGenerator, MethodBase, LocalBuilder[]> callClrMethod,
+            Label isInvalidCall)
+        {
+            var (minArgs, maxArgs) = clrMethod.GetArgCountBounds();
+
+            getLuaArgCount(ilg);
+            ilg.Emit(Ldc_I4, minArgs);
+            ilg.Emit(Blt, isInvalidCall);  // Not short form
+
+            getLuaArgCount(ilg);
+            ilg.Emit(Ldc_I4, maxArgs);
+            ilg.Emit(Bgt, isInvalidCall);  // Not short form
+
+            var parameters = clrMethod.GetParameters();
+            var reusableLocals = parameters.Select(p => ilg.DeclareReusableLocal(p.ParameterType)).ToArray();
+            var locals = reusableLocals.Select(l => (LocalBuilder)l).ToArray();
+
+            for (var i = 0; i < parameters.Length; ++i)
+            {
+                var parameterType = parameters[i].ParameterType;
+
+                using var temp = ilg.DeclareReusableLocal(typeof(int));
+
+                ilg.Emit(Ldc_I4, i + 1);
+                ilg.Emit(Stloc, temp);
+
+                EmitLuaLoad(ilg, parameterType,
+                    ilg => getLuaArgType(ilg, temp),
+                    ilg => getLuaArgIndex(ilg, temp),
+                    isInvalidCall);
+                ilg.Emit(Stloc, reusableLocals[i]);
+            }
+
+            callClrMethod(ilg, clrMethod, locals);
+
+            // TODO: return values?
+
+            var results = 0;
+            ilg.Emit(Ldc_I4, results);
+            ilg.Emit(Ret);
+
+            foreach (var reusableLocal in reusableLocals)
+            {
+                reusableLocal.Dispose();
+            }
+        }
+
+        private static void EmitCallMethods(
+            ILGenerator ilg, IReadOnlyList<MethodBase> methods,
+            Action<ILGenerator> getLuaArgCount,
+            Action<ILGenerator, LocalBuilder> getLuaArgType,
+            Action<ILGenerator, LocalBuilder> getLuaArgIndex,
+            Action<ILGenerator, MethodBase, LocalBuilder[]> callMethod)
+        {
+            var nextMethods = ilg.DefineLabels(methods.Count);
+
+            for (var i = 0; i < methods.Count; ++i)
+            {
+                EmitCallMethod(ilg, methods[i],
+                    getLuaArgCount,
+                    getLuaArgType,
+                    getLuaArgIndex,
+                    callMethod,
+                    nextMethods[i]);
+
+                ilg.MarkLabel(nextMethods[i]);
+            }
         }
 
         private LuaCFunction GenerateMetamethod(string name, Action<ILGenerator, MetamethodContext> emitAction)

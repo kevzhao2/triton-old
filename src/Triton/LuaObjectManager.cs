@@ -1,28 +1,12 @@
-﻿// Copyright (c) 2020 Kevin Zhao
+﻿// Copyright (c) 2020 Kevin Zhao. All rights reserved.
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to
-// deal in the Software without restriction, including without limitation the
-// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-// sell copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-// IN THE SOFTWARE.
+// Licensed under the MIT license. See the LICENSE file in the project root for more information.
 
 using System;
 using System.Collections.Generic;
 using static Triton.NativeMethods;
 
-namespace Triton.Interop.Lua
+namespace Triton
 {
     /// <summary>
     /// Manages Lua objects. Controls the lifetime of <see cref="LuaObject"/>s and provides methods to manipulate and
@@ -32,8 +16,15 @@ namespace Triton.Interop.Lua
     {
         private readonly LuaEnvironment _environment;
 
+        // We would like to use the same `LuaObject` instances for the same Lua objects. This is accomplished by storing
+        // them inside of the Lua registry and using the following object cache.
+
         private readonly Dictionary<IntPtr, (int @ref, WeakReference<LuaObject> weakReference)> _objects =
             new Dictionary<IntPtr, (int @ref, WeakReference<LuaObject> weakReference)>();
+
+        // In order to clean up Lua objects which have been garbage collected by the CLR, we will execute cleanups
+        // whenever a garbage collection is performed by Lua. This will enable the Lua objects to be removed from the
+        // registry, making them eligible for garbage collection by Lua.
 
         private readonly LuaCFunction _gcMetamethod;
         private readonly int _gcMetatableRef;
@@ -45,7 +36,7 @@ namespace Triton.Interop.Lua
             _gcMetamethod = GcMetamethod;  // Prevent garbage collection of the delegate
             lua_newtable(state);
             lua_pushcfunction(state, _gcMetamethod);
-            lua_setfield(state, -2, Strings.__gc);
+            lua_setfield(state, -2, "__gc");
             _gcMetatableRef = luaL_ref(state, LUA_REGISTRYINDEX);
 
             PushGarbage(state);
@@ -54,7 +45,7 @@ namespace Triton.Interop.Lua
         /// <summary>
         /// Interns the given Lua object in the cache.
         /// </summary>
-        /// <param name="ptr">The object pointer.</param>
+        /// <param name="ptr">The Lua object pointer.</param>
         /// <param name="obj">The Lua object.</param>
         public void Intern(IntPtr ptr, LuaObject obj)
         {

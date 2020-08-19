@@ -1,22 +1,6 @@
-﻿// Copyright (c) 2020 Kevin Zhao
+﻿// Copyright (c) 2020 Kevin Zhao. All rights reserved.
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to
-// deal in the Software without restriction, including without limitation the
-// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-// sell copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-// IN THE SOFTWARE.
+// Licensed under the MIT license. See the LICENSE file in the project root for more information.
 
 using System;
 using System.Diagnostics.CodeAnalysis;
@@ -27,7 +11,7 @@ using System.Text;
 namespace Triton
 {
     /// <summary>
-    /// Provides access to native Lua functions.
+    /// Provides access to native Lua methods.
     /// </summary>
     [ExcludeFromCodeCoverage]
     [SuppressMessage("Style", "IDE1005:Naming Styles", Justification = "Matching declarations")]
@@ -81,8 +65,8 @@ namespace Triton
 
         public const int LUA_REFNIL = -1;
 
-        // These MethodInfos are provided for IL emit purposes.
-        //
+        internal static readonly MethodInfo _lua_gettop =
+            typeof(NativeMethods).GetMethod(nameof(lua_gettop))!;
 
         internal static readonly MethodInfo _lua_isinteger =
             typeof(NativeMethods).GetMethod(nameof(lua_isinteger))!;
@@ -90,23 +74,17 @@ namespace Triton
         internal static readonly MethodInfo _lua_toboolean =
             typeof(NativeMethods).GetMethod(nameof(lua_toboolean))!;
 
-        internal static readonly MethodInfo _lua_touserdata =
-            typeof(NativeMethods).GetMethod(nameof(lua_touserdata))!;
-
         internal static readonly MethodInfo _lua_tointeger =
             typeof(NativeMethods).GetMethod(nameof(lua_tointeger))!;
-
-        internal static readonly MethodInfo _lua_tolstring =
-            typeof(NativeMethods).GetMethod(nameof(lua_tolstring))!;
 
         internal static readonly MethodInfo _lua_tonumber =
             typeof(NativeMethods).GetMethod(nameof(lua_tonumber))!;
 
+        internal static readonly MethodInfo _lua_touserdata =
+            typeof(NativeMethods).GetMethod(nameof(lua_touserdata))!;
+
         internal static readonly MethodInfo _lua_tostring =
             typeof(NativeMethods).GetMethod(nameof(lua_tostring))!;
-
-        internal static readonly MethodInfo _lua_type =
-            typeof(NativeMethods).GetMethod(nameof(lua_type))!;
 
         internal static readonly MethodInfo _lua_pushboolean =
             typeof(NativeMethods).GetMethod(nameof(lua_pushboolean))!;
@@ -123,6 +101,9 @@ namespace Triton
         internal static readonly MethodInfo _lua_pushstring =
             typeof(NativeMethods).GetMethod(nameof(lua_pushstring), new[] { typeof(IntPtr), typeof(string) })!;
 
+        internal static readonly MethodInfo _lua_type =
+            typeof(NativeMethods).GetMethod(nameof(lua_type))!;
+
         internal static readonly MethodInfo _luaL_error =
             typeof(NativeMethods).GetMethod(nameof(luaL_error), new[] { typeof(IntPtr), typeof(string) })!;
 
@@ -130,7 +111,6 @@ namespace Triton
         // lua.h imports
         //
         // See http://www.lua.org/manual/5.4/manual.html#4 for a detailed description of these functions.
-        //
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_close(IntPtr L);
@@ -387,6 +367,9 @@ namespace Triton
             }
         }
 
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern LuaStatus luaL_loadstring(IntPtr L, IntPtr s);
+
         public static unsafe LuaStatus luaL_loadstring(IntPtr L, string s)
         {
             var maxLength = Encoding.UTF8.GetMaxByteCount(s.Length) + 1;
@@ -400,8 +383,5 @@ namespace Triton
                 return luaL_loadstring(L, (IntPtr)buffer);
             }
         }
-
-        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
-        public static extern LuaStatus luaL_loadstring(IntPtr L, IntPtr s);
     }
 }

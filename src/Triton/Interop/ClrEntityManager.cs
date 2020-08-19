@@ -1,25 +1,10 @@
-﻿// Copyright (c) 2020 Kevin Zhao
+﻿// Copyright (c) 2020 Kevin Zhao. All rights reserved.
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to
-// deal in the Software without restriction, including without limitation the
-// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-// sell copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-// IN THE SOFTWARE.
+// Licensed under the MIT license. See the LICENSE file in the project root for more information.
 
 using System;
 using System.Collections.Generic;
+using static Triton.LuaValue;
 using static Triton.NativeMethods;
 
 namespace Triton.Interop
@@ -32,17 +17,23 @@ namespace Triton.Interop
     {
         private readonly ClrMetavalueGenerator _metavalueGenerator;
 
+        // We would like to use the same userdata instances for the same CLR entities. This is accomplished by storing
+        // them inside of a table within the Lua registry and using the following entity caches.
+
         private readonly Dictionary<object, IntPtr> _ptrs = new Dictionary<object, IntPtr>();
         private readonly Dictionary<IntPtr, object> _entities = new Dictionary<IntPtr, object>();
+        private readonly int _entityCacheRef;
+
+        // Cache the metatables for CLR objects, since generating a metatable is a _very_ expensive operation.
+
         private readonly Dictionary<Type, int> _objectMetatableRefs = new Dictionary<Type, int>();
+
+        // Cache the `__gc` and `__tostring` metamethods to reduce the number of delegate allocations.
 
         private readonly LuaCFunction _gcMetamethod;
         private readonly int _gcMetamethodRef;
-
         private readonly LuaCFunction _tostringMetamethod;
         private readonly int _tostringMetamethodRef;
-
-        private readonly int _entityCacheRef;
 
         internal ClrEntityManager(IntPtr state, LuaEnvironment environment)
         {
@@ -57,9 +48,9 @@ namespace Triton.Interop
             _tostringMetamethodRef = luaL_ref(state, LUA_REGISTRYINDEX);
 
             lua_newtable(state);
-            lua_newtable(state);
-            lua_pushstring(state, Strings.v);
-            lua_setfield(state, -2, Strings.__mode);
+            lua_createtable(state, 0, 1);
+            lua_pushstring(state, "v");
+            lua_setfield(state, -2, "__mode");
             lua_setmetatable(state, -2);
             _entityCacheRef = luaL_ref(state, LUA_REGISTRYINDEX);
         }
@@ -130,10 +121,10 @@ namespace Triton.Interop
                 }
 
                 lua_rawgeti(state, LUA_REGISTRYINDEX, _gcMetamethodRef);
-                lua_setfield(state, -2, Strings.__gc);
+                lua_setfield(state, -2, "__gc");
 
                 lua_rawgeti(state, LUA_REGISTRYINDEX, _tostringMetamethodRef);
-                lua_setfield(state, -2, Strings.__tostring);
+                lua_setfield(state, -2, "__tostring");
             }
         }
 

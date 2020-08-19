@@ -1,22 +1,6 @@
-﻿// Copyright (c) 2020 Kevin Zhao
+﻿// Copyright (c) 2020 Kevin Zhao. All rights reserved.
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to
-// deal in the Software without restriction, including without limitation the
-// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-// sell copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-// IN THE SOFTWARE.
+// Licensed under the MIT license. See the LICENSE file in the project root for more information.
 
 using System;
 using System.Collections.Generic;
@@ -24,25 +8,45 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
+using static Triton.LuaValue;
 using static Triton.NativeMethods;
 
 namespace Triton.Interop
 {
     /// <summary>
-    /// Provides context for a generated metamethod.
+    /// Provides context for a metamethod along with helper functions.
     /// </summary>
     internal sealed class MetamethodContext
     {
-        internal static readonly MethodInfo _matchMemberName = typeof(MetamethodContext).GetMethod(nameof(MatchMemberName))!;
-        internal static readonly MethodInfo _errorMemberName = typeof(MetamethodContext).GetMethod(nameof(ErrorMemberName))!;
-        internal static readonly MethodInfo _loadLuaValue = typeof(MetamethodContext).GetMethod(nameof(LoadValue))!;
-        internal static readonly MethodInfo _loadLuaObject = typeof(MetamethodContext).GetMethod(nameof(LoadLuaObject))!;
-        internal static readonly MethodInfo _loadClrEntity = typeof(MetamethodContext).GetMethod(nameof(LoadClrEntity))!;
-        internal static readonly MethodInfo _loadClrTypes = typeof(MetamethodContext).GetMethod(nameof(LoadClrTypes))!;
-        internal static readonly MethodInfo _pushValue = typeof(MetamethodContext).GetMethod(nameof(PushValue))!;
-        internal static readonly MethodInfo _pushLuaObject = typeof(MetamethodContext).GetMethod(nameof(PushLuaObject))!;
-        internal static readonly MethodInfo _pushClrEntity = typeof(MetamethodContext).GetMethod(nameof(PushClrEntity))!;
-        internal static readonly MethodInfo _pushClrType = typeof(MetamethodContext).GetMethod(nameof(PushClrType))!;
+        internal static readonly MethodInfo _errorMemberName =
+            typeof(MetamethodContext).GetMethod(nameof(ErrorMemberName))!;
+
+        internal static readonly MethodInfo _matchMemberName =
+            typeof(MetamethodContext).GetMethod(nameof(MatchMemberName))!;
+
+        internal static readonly MethodInfo _loadValue =
+            typeof(MetamethodContext).GetMethod(nameof(LoadValue))!;
+
+        internal static readonly MethodInfo _loadLuaObject =
+            typeof(MetamethodContext).GetMethod(nameof(LoadLuaObject))!;
+
+        internal static readonly MethodInfo _loadClrEntity =
+            typeof(MetamethodContext).GetMethod(nameof(LoadClrEntity))!;
+
+        internal static readonly MethodInfo _loadClrTypes =
+            typeof(MetamethodContext).GetMethod(nameof(LoadClrTypes))!;
+
+        internal static readonly MethodInfo _pushValue =
+            typeof(MetamethodContext).GetMethod(nameof(PushValue))!;
+
+        internal static readonly MethodInfo _pushLuaObject =
+            typeof(MetamethodContext).GetMethod(nameof(PushLuaObject))!;
+
+        internal static readonly MethodInfo _pushClrEntity =
+            typeof(MetamethodContext).GetMethod(nameof(PushClrEntity))!;
+
+        internal static readonly MethodInfo _pushClrType =
+            typeof(MetamethodContext).GetMethod(nameof(PushClrType))!;
 
         private readonly LuaEnvironment _environment;
         private readonly Dictionary<IntPtr, int> _memberNameToIndex = new Dictionary<IntPtr, int>();
@@ -61,10 +65,10 @@ namespace Triton.Interop
         {
             Debug.Assert(members.All(n => n is { }));
 
-            // The idea is to store the member names inside of a Lua table in the registry, as strings. Since all
-            // strings in Lua are reused if possible, we can perform string comparisons by just checking the string
-            // pointers! This saves us from doing extra work.
-            //
+            // We store the member names inside of a Lua atble in the registry as strings. Since all strings in Lua are
+            // reused if possible, we can then perform string comparisons by checking the string pointers, which is
+            // extremely efficient.
+
             lua_createtable(state, members.Count, 0);
             for (var i = 0; i < members.Count; ++i)
             {
@@ -76,15 +80,6 @@ namespace Triton.Interop
         }
 
         /// <summary>
-        /// Matches the given string pointer to a member's name, returning the member's index (or <c>-1</c> if it does
-        /// not exist).
-        /// </summary>
-        /// <param name="ptr">The string pointer.</param>
-        /// <returns>The member's index (or <c>-1</c> if it does not exist).</returns>
-        public int MatchMemberName(IntPtr ptr) =>
-            _memberNameToIndex.TryGetValue(ptr, out var index) ? index : -1;
-
-        /// <summary>
         /// Raises an error using the member name.
         /// </summary>
         /// <param name="state">The Lua state.</param>
@@ -93,6 +88,14 @@ namespace Triton.Interop
         [DoesNotReturn]
         public int ErrorMemberName(IntPtr state, string format) =>
             luaL_error(state, string.Format(format, lua_tostring(state, 2)));
+
+        /// <summary>
+        /// Matches the member name, returning the member's index (or <c>-1</c> if it does not exist).
+        /// </summary>
+        /// <param name="state">The Lua state.</param>
+        /// <returns>The member's index (or <c>-1</c> if it does not exist).</returns>
+        public int MatchMemberName(IntPtr state) =>
+            _memberNameToIndex.TryGetValue(lua_tolstring(state, 2, IntPtr.Zero), out var index) ? index : -1;
 
         /// <summary>
         /// Loads a Lua value from a value on the stack.

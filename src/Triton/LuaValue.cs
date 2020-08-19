@@ -1,29 +1,15 @@
-﻿// Copyright (c) 2020 Kevin Zhao
+﻿// Copyright (c) 2020 Kevin Zhao. All rights reserved.
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to
-// deal in the Software without restriction, including without limitation the
-// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-// sell copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-// IN THE SOFTWARE.
+// Licensed under the MIT license. See the LICENSE file in the project root for more information.
 
 using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Triton.Interop;
 
 namespace Triton
 {
@@ -47,6 +33,65 @@ namespace Triton
             /// Gets the primitive type.
             /// </summary>
             public PrimitiveType PrimitiveType { get; }
+        }
+
+        /// <summary>
+        /// Acts as a proxy for a CLR type.
+        /// </summary>
+        internal sealed class ProxyClrType
+        {
+            internal ProxyClrType(Type type)
+            {
+                Debug.Assert(!type.IsGenericTypeDefinition);
+
+                Type = type;
+            }
+
+            /// <summary>
+            /// Gets the CLR type.
+            /// </summary>
+            public Type Type { get; }
+
+            /// <inheritdoc/>
+            public override bool Equals(object? obj) => obj is ProxyClrType { Type: var type } && Type.Equals(type);
+
+            /// <inheritdoc/>
+            public override int GetHashCode() => Type.GetHashCode();
+
+            /// <inheritdoc/>
+            [ExcludeFromCodeCoverage]
+            public override string ToString() => Type.ToString();
+        }
+
+        /// <summary>
+        /// Acts as a proxy for generic CLR types with the same names.
+        /// </summary>
+        internal sealed class ProxyGenericClrTypes
+        {
+            internal ProxyGenericClrTypes(Type[] types)
+            {
+                Debug.Assert(types.All(t => t is { }));
+                Debug.Assert(types.Count(t => !t.IsGenericTypeDefinition) <= 1);
+
+                Types = types;
+            }
+
+            /// <summary>
+            /// Gets the generic CLR types.
+            /// </summary>
+            public Type[] Types { get; }
+
+            /// <inheritdoc/>
+            public override bool Equals(object? obj) =>
+                obj is ProxyGenericClrTypes { Types: var types } && Types.SequenceEqual(types);
+
+            /// <inheritdoc/>
+            public override int GetHashCode() =>
+                ((IStructuralEquatable)Types).GetHashCode(EqualityComparer<Type>.Default);
+
+            /// <inheritdoc/>
+            [ExcludeFromCodeCoverage]
+            public override string ToString() => string.Join(", ", (IEnumerable<Type>)Types);
         }
 
         /// <summary>
@@ -75,8 +120,7 @@ namespace Triton
         private static readonly PrimitiveTag _integerTag = new PrimitiveTag(PrimitiveType.Integer);
         private static readonly PrimitiveTag _numberTag = new PrimitiveTag(PrimitiveType.Number);
 
-        // These fields are internal to centralize logic inside of `LuaEnvironment`.
-        //
+        // These fields are internal to centralize logic inside of the `LuaEnvironment` class.
 
         [FieldOffset(0)] internal readonly bool _boolean;
         [FieldOffset(0)] internal readonly IntPtr _lightUserdata;
@@ -136,6 +180,11 @@ namespace Triton
         public bool IsLuaObject => _objectType == ObjectType.LuaObject && _objectOrTag is LuaObject;
 
         /// <summary>
+        /// Gets a value indicating whether the Lua value is a CLR entity.
+        /// </summary>
+        public bool IsClrEntity => _objectType == ObjectType.ClrEntity && !IsPrimitive;
+
+        /// <summary>
         /// Gets a value indicating whether the Lua value is a CLR type.
         /// </summary>
         public bool IsClrType => _objectOrTag is ProxyClrType;
@@ -148,7 +197,7 @@ namespace Triton
         /// <summary>
         /// Gets a value indicating whether the Lua value is a CLR object.
         /// </summary>
-        public bool IsClrObject => _objectType == ObjectType.ClrEntity && !IsPrimitive && !IsClrType && !IsGenericClrTypes;
+        public bool IsClrObject => IsClrEntity && !IsClrType && !IsGenericClrTypes;
 
         /// <summary>
         /// Creates a Lua value from the given boolean.
@@ -288,7 +337,6 @@ namespace Triton
 
         // The following methods employ manual RVO (return value optimization) using out variables and bypass
         // initialization using `Unsafe.SkipInit` for maximum performance.
-        //
 
         /// <summary>
         /// Creates a Lua value representing nil.
@@ -408,10 +456,10 @@ namespace Triton
             null => 0,
             PrimitiveTag { PrimitiveType: var primitiveType } => primitiveType switch
             {
-                PrimitiveType.Boolean       => _boolean.GetHashCode(),
-                PrimitiveType.LightUserdata => _lightUserdata.GetHashCode(),
-                PrimitiveType.Integer       => _integer.GetHashCode(),
-                _                           => _number.GetHashCode()
+                PrimitiveType.Boolean       => HashCode.Combine(_boolean),
+                PrimitiveType.LightUserdata => HashCode.Combine(_lightUserdata),
+                PrimitiveType.Integer       => HashCode.Combine(_integer),
+                _                           => HashCode.Combine(_number)
             },
             _ => HashCode.Combine(_objectType, _objectOrTag)
         };
@@ -431,7 +479,7 @@ namespace Triton
             _ => _objectType switch
             {
                 ObjectType.String       => $"<string: {_objectOrTag}",
-                ObjectType.LuaObject => $"<Lua object: {_objectOrTag}>",
+                ObjectType.LuaObject    => $"<Lua object: {_objectOrTag}>",
                 _                       => _objectOrTag switch
                 {
                     ProxyClrType _         => $"<CLR type: {_objectOrTag}>",
