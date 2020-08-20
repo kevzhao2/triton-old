@@ -28,7 +28,7 @@ namespace Triton.Benchmarks
     {
         static void Main()
         {
-            BenchmarkRunner.Run<InstanceProperty>();
+            BenchmarkRunner.Run<InstanceMethod>();
             Console.ReadKey(true);
         }
     }

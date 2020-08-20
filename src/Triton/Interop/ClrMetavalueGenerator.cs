@@ -25,9 +25,24 @@ namespace Triton.Interop
 
         private readonly LuaEnvironment _environment;
 
+        private readonly int _wrapObjectIndexRef;
+
         internal ClrMetavalueGenerator(IntPtr state, LuaEnvironment environment)
         {
             _environment = environment;
+
+            luaL_loadstring(state, @"
+                local t = ...
+                local __index = getmetatable(t).__index
+                return function(obj, key)
+                    local v = rawget(t, key)
+                    if v ~= nil then
+                        return v
+                    else
+                        return __index(obj, key)
+                    end
+                end");
+            _wrapObjectIndexRef = luaL_ref(state, LUA_REGISTRYINDEX);
         }
 
         /// <summary>
@@ -45,7 +60,8 @@ namespace Triton.Interop
             PushTypeNewIndexMetavalue(state, type);
             lua_setfield(state, -2, "__newindex");
 
-            // TODO: __call
+            PushTypeCallMetavalue(state, type);
+            lua_setfield(state, -2, "__call");
         }
 
         /// <summary>
@@ -57,7 +73,7 @@ namespace Triton.Interop
         {
             var maybeNonGenericType = types.SingleOrDefault(t => !t.IsGenericTypeDefinition);
 
-            lua_createtable(state, 0, maybeNonGenericType is null ? 3 : 4);
+            lua_createtable(state, 0, maybeNonGenericType is null ? 3 : 5);
 
             PushTypeIndexMetavalue(state, maybeNonGenericType, types);
             lua_setfield(state, -2, "__index");
@@ -67,7 +83,8 @@ namespace Triton.Interop
                 PushTypeNewIndexMetavalue(state, nonGenericType);
                 lua_setfield(state, -2, "__newindex");
 
-                // TODO: __call
+                PushTypeCallMetavalue(state, nonGenericType);
+                lua_setfield(state, -2, "__call");
             }
         }
 
@@ -78,7 +95,15 @@ namespace Triton.Interop
         /// <param name="objType">The CLR object type.</param>
         public void PushObjectMetatable(IntPtr state, Type objType)
         {
-            throw new NotImplementedException();
+            lua_createtable(state, 0, 5);
+
+            lua_rawgeti(state, LUA_REGISTRYINDEX, _wrapObjectIndexRef);
+            PushObjectIndexMetavalue(state, objType);
+            lua_pcall(state, 1, 1, 0);
+            lua_setfield(state, -2, "__index");
+
+            PushObjectNewIndexMetavalue(state, objType);
+            lua_setfield(state, -2, "__newindex");
         }
 
         private void PushTypeIndexMetavalue(IntPtr state, Type? maybeNonGenericType, Type[]? maybeGenericTypes)
@@ -100,7 +125,7 @@ namespace Triton.Interop
 
                 foreach (var group in nonGenericType.GetPublicStaticMethods().GroupBy(m => m.Name))
                 {
-                    PushStaticMethodMetavalue(state, group.ToList());
+                    PushTypeMethodMetavalue(state, group.ToList());
                     lua_setfield(state, -2, group.Key);
                 }
 
@@ -263,7 +288,54 @@ namespace Triton.Interop
             lua_pushcfunction(state, metamethod);
         }
 
-        private void PushStaticMethodMetavalue(IntPtr state, IReadOnlyList<MethodInfo> methods)
+        private void PushTypeCallMetavalue(IntPtr state, Type type)
+        {
+            var metamethod = GenerateMetamethod("__call", (ilg, _) =>
+            {
+                var constructors = type.GetConstructors();
+
+                var argCount = EmitDeclareArgCount(ilg);
+
+                EmitCallMethods(ilg, constructors,
+                    ilg =>
+                    {
+                        ilg.Emit(Ldloc, argCount);
+                        ilg.Emit(Ldc_I4_1);
+                        ilg.Emit(Sub);
+                    },
+                    (ilg, temp) =>
+                    {
+                        ilg.Emit(Ldarg_1);
+                        ilg.Emit(Ldloc, temp);
+                        ilg.Emit(Ldc_I4_1);
+                        ilg.Emit(Add);
+                        ilg.Emit(Call, _lua_type);
+                    },
+                    (ilg, temp) =>
+                    {
+                        ilg.Emit(Ldloc, temp);
+                        ilg.Emit(Ldc_I4_1);
+                        ilg.Emit(Add);
+                    },
+                    (ilg, method, temps) =>
+                    {
+                        foreach (var temp in temps)
+                        {
+                            ilg.Emit(Ldloc, temp);
+                        }
+
+                        ilg.Emit(Newobj, (ConstructorInfo)method);
+                    });
+
+                ilg.Emit(Ldarg_1);
+                ilg.Emit(Ldstr, "attempt to construct type with invalid arguments");
+                ilg.Emit(Call, _luaL_error);
+                ilg.Emit(Ret);
+            });
+            lua_pushcfunction(state, metamethod);
+        }
+
+        private void PushTypeMethodMetavalue(IntPtr state, IReadOnlyList<MethodInfo> methods)
         {
             var metamethod = GenerateMetamethod("__call", (ilg, _) =>
             {
@@ -286,6 +358,159 @@ namespace Triton.Interop
                         }
 
                         ilg.Emit(Call, (MethodInfo)method);
+                    });
+
+                ilg.Emit(Ldarg_1);
+                ilg.Emit(Ldstr, "attempt to call method with invalid arguments");
+                ilg.Emit(Call, _luaL_error);
+                ilg.Emit(Ret);
+            });
+            lua_pushcfunction(state, metamethod);
+        }
+    
+        private void PushObjectIndexMetavalue(IntPtr state, Type objType)
+        {
+            lua_newtable(state);
+
+            // TODO: pre-populate events
+
+            foreach (var group in objType.GetPublicInstanceMethods().GroupBy(m => m.Name))
+            {
+                PushObjectMethodMetavalue(state, objType, group.ToList());
+                lua_setfield(state, -2, group.Key);
+            }
+
+            lua_createtable(state, 0, 1);
+
+            var metamethod = GenerateMetamethod("__index", (ilg, context) =>
+            {
+                var target = EmitDeclareTarget(ilg, objType);
+                var keyType = EmitDeclareKeyType(ilg);
+
+                {
+                    var fields = objType.GetPublicInstanceFields();
+                    var properties = objType.GetPublicInstanceProperties();
+                    var members = fields.Cast<MemberInfo>().Concat(properties).ToList();
+                    context.SetMembers(state, members);
+
+                    EmitIndexMembers(ilg, members,
+                        ilg => ilg.Emit(Ldloc, keyType),
+                        (ilg, field) =>
+                        {
+                            ilg.Emit(Ldloc, target);
+                            ilg.Emit(Ldfld, field);
+                        },
+                        (ilg, property) =>
+                        {
+                            var propertyType = property.PropertyType;
+
+                            ilg.Emit(Ldloc, target);
+                            ilg.EmitCall(property.GetMethod!);
+                            if (propertyType.IsByRef)
+                            {
+                                ilg.EmitLdind(propertyType.GetElementType()!);
+                            }
+                        });
+                }
+
+                // TODO: support array indexers
+                // TODO: support indexers
+
+                ilg.Emit(Ldc_I4_0);
+                ilg.Emit(Ret);
+            });
+            lua_pushcfunction(state, metamethod);
+            lua_setfield(state, -2, "__index");
+
+            lua_setmetatable(state, -2);
+        }
+
+        private void PushObjectNewIndexMetavalue(IntPtr state, Type objType)
+        {
+            var metamethod = GenerateMetamethod("__newindex", (ilg, context) =>
+            {
+                var target = EmitDeclareTarget(ilg, objType);
+                var keyType = EmitDeclareKeyType(ilg);
+                var valueType = EmitDeclareValueType(ilg);
+
+                {
+                    var fields = objType.GetPublicInstanceFields();
+                    var properties = objType.GetPublicInstanceProperties();
+                    var members = fields.Cast<MemberInfo>().Concat(properties).ToList();
+                    context.SetMembers(state, members);
+
+                    EmitNewIndexMembers(ilg, members,
+                        ilg => ilg.Emit(Ldloc, keyType),
+                        ilg => ilg.Emit(Ldloc, valueType),
+                        (ilg, field, temp) =>
+                        {
+                            ilg.Emit(Ldloc, target);
+                            ilg.Emit(Ldloc, temp);
+                            ilg.Emit(Stfld, field);
+                        },
+                        (ilg, property, temp) =>
+                        {
+                            var propertyType = property.PropertyType;
+
+                            if (propertyType.IsByRef)
+                            {
+                                ilg.Emit(Ldloc, target);
+                                ilg.EmitCall(property.GetMethod!);
+                                ilg.Emit(Ldloc, temp);
+                                ilg.EmitStind(propertyType.GetElementType()!);
+                            }
+                            else
+                            {
+                                ilg.Emit(Ldloc, target);
+                                ilg.Emit(Ldloc, temp);
+                                ilg.EmitCall(property.SetMethod!);
+                            }
+                        });
+                }
+
+                ilg.Emit(Ldc_I4_0);
+                ilg.Emit(Ret);
+            });
+            lua_pushcfunction(state, metamethod);
+        }
+
+        private void PushObjectMethodMetavalue(IntPtr state, Type objType, IReadOnlyList<MethodInfo> methods)
+        {
+            var metamethod = GenerateMetamethod("__call", (ilg, _) =>
+            {
+                var target = EmitDeclareTarget(ilg, objType);
+                var argCount = EmitDeclareArgCount(ilg);
+
+                EmitCallMethods(ilg, methods,
+                    ilg =>
+                    {
+                        ilg.Emit(Ldloc, argCount);
+                        ilg.Emit(Ldc_I4_1);
+                        ilg.Emit(Sub);
+                    },
+                    (ilg, temp) =>
+                    {
+                        ilg.Emit(Ldarg_1);
+                        ilg.Emit(Ldloc, temp);
+                        ilg.Emit(Ldc_I4_1);
+                        ilg.Emit(Add);
+                        ilg.Emit(Call, _lua_type);
+                    },
+                    (ilg, temp) =>
+                    {
+                        ilg.Emit(Ldloc, temp);
+                        ilg.Emit(Ldc_I4_1);
+                        ilg.Emit(Add);
+                    },
+                    (ilg, method, temps) =>
+                    {
+                        ilg.Emit(Ldloc, target);
+                        foreach (var temp in temps)
+                        {
+                            ilg.Emit(Ldloc, temp);
+                        }
+
+                        ilg.EmitCall((MethodInfo)method);
                     });
 
                 ilg.Emit(Ldarg_1);

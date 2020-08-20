@@ -23,12 +23,17 @@ using BenchmarkDotNet.Attributes;
 namespace Triton.Benchmarks.Interop
 {
     [MemoryDiagnoser]
-    public class InstanceProperty
+    public class InstanceMethod
     {
         public class TestClass
         {
-            public int Int { get; set; }
-            public string String { get; set; }
+            public void VoidMethod()
+            {
+            }
+
+            public void VoidMethod(int x)
+            {
+            }
         }
 
         private NLua.Lua _nluaEnvironment;
@@ -40,8 +45,8 @@ namespace Triton.Benchmarks.Interop
             _nluaEnvironment = new NLua.Lua();
             _tritonEnvironment = new LuaEnvironment();
 
-            _nluaEnvironment["cls"] = new TestClass();
-            _tritonEnvironment["cls"] = LuaValue.FromClrObject(new TestClass());
+            _nluaEnvironment["obj"] = new TestClass();
+            _tritonEnvironment["obj"] = LuaValue.FromClrObject(new TestClass());
         }
 
         [GlobalCleanup]
@@ -52,51 +57,27 @@ namespace Triton.Benchmarks.Interop
         }
 
         [Benchmark]
-        public void NLua_GetInt() => _nluaEnvironment.DoString(@"
+        public void NLua_VoidMethod_NoArgs() => _nluaEnvironment.DoString(@"
             for i = 1, 10000 do
-                _ = cls.Int
+                obj:VoidMethod()
             end");
 
         [Benchmark]
-        public void Triton_GetInt() => _tritonEnvironment.Eval(@"
+        public void Triton_VoidMethod_NoArgs() => _tritonEnvironment.Eval(@"
             for i = 1, 10000 do
-                _ = cls.Int
+                obj:VoidMethod()
             end");
 
         [Benchmark]
-        public void NLua_GetString() => _nluaEnvironment.DoString(@"
+        public void NLua_VoidMethod_OneArg() => _nluaEnvironment.DoString(@"
             for i = 1, 10000 do
-                _ = cls.String
+                obj:VoidMethod(1234)
             end");
 
         [Benchmark]
-        public void Triton_GetString() => _tritonEnvironment.Eval(@"
+        public void Triton_VoidMethod_OneArg() => _tritonEnvironment.Eval(@"
             for i = 1, 10000 do
-                _ = cls.String
-            end");
-
-        [Benchmark]
-        public void NLua_SetInt() => _nluaEnvironment.DoString(@"
-            for i = 1, 10000 do
-                cls.Int = 1234
-            end");
-
-        [Benchmark]
-        public void Triton_SetInt() => _tritonEnvironment.Eval(@"
-            for i = 1, 10000 do
-                cls.Int = 1234
-            end");
-
-        [Benchmark]
-        public void NLua_SetString() => _nluaEnvironment.DoString(@"
-            for i = 1, 10000 do
-                cls.String = 'test'
-            end");
-
-        [Benchmark]
-        public void Triton_SetString() => _tritonEnvironment.Eval(@"
-            for i = 1, 10000 do
-                cls.String = 'test'
+                obj:VoidMethod(1234)
             end");
     }
 }

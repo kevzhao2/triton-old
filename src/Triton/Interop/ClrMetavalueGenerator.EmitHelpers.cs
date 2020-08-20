@@ -267,6 +267,21 @@ namespace Triton.Interop
             }
         }
 
+        private static LocalBuilder EmitDeclareTarget(ILGenerator ilg, Type objType)
+        {
+            var isStruct = objType.IsClrStruct();
+            var target = ilg.DeclareLocal(isStruct ? objType.MakeByRefType() : objType);
+
+            ilg.Emit(Ldarg_0);
+            ilg.Emit(Ldarg_1);
+            ilg.Emit(Ldc_I4_1);
+            ilg.Emit(Call, MetamethodContext._loadClrEntity);
+            ilg.Emit(isStruct ? Unbox : Unbox_Any, objType);
+            ilg.Emit(Stloc, target);
+
+            return target;
+        }
+
         private static LocalBuilder EmitDeclareKeyType(ILGenerator ilg)
         {
             var keyType = ilg.DeclareLocal(typeof(LuaType));
@@ -553,24 +568,29 @@ namespace Triton.Interop
         }
 
         private static void EmitCallMethod(
-            ILGenerator ilg, MethodBase clrMethod,
+            ILGenerator ilg, MethodBase clrMethodOrConstructor,
             Action<ILGenerator> getLuaArgCount,
             Action<ILGenerator, LocalBuilder> getLuaArgType,
             Action<ILGenerator, LocalBuilder> getLuaArgIndex,
             Action<ILGenerator, MethodBase, LocalBuilder[]> callClrMethod,
             Label isInvalidCall)
         {
-            var (minArgs, maxArgs) = clrMethod.GetArgCountBounds();
+            // Use the argument count bounds to filter out calls with too few arguments or too many arguments. This is
+            // done using an unsigned comparison.
+
+            var (minArgs, maxArgs) = clrMethodOrConstructor.GetArgCountBounds();
 
             getLuaArgCount(ilg);
             ilg.Emit(Ldc_I4, minArgs);
-            ilg.Emit(Blt, isInvalidCall);  // Not short form
+            ilg.Emit(Sub);
+            ilg.Emit(Ldc_I4, maxArgs - minArgs);
+            ilg.Emit(Bgt_Un, isInvalidCall);  // Not short form
 
-            getLuaArgCount(ilg);
-            ilg.Emit(Ldc_I4, maxArgs);
-            ilg.Emit(Bgt, isInvalidCall);  // Not short form
+            // Declare local variables for the arguments.
 
-            var parameters = clrMethod.GetParameters();
+            var parameters = clrMethodOrConstructor.GetParameters();
+            var args = parameters.Select(p => ilg.DeclareReusableLocal(p.ParameterType)).ToArray();
+
             var reusableLocals = parameters.Select(p => ilg.DeclareReusableLocal(p.ParameterType)).ToArray();
             var locals = reusableLocals.Select(l => (LocalBuilder)l).ToArray();
 
@@ -579,7 +599,7 @@ namespace Triton.Interop
                 var parameterType = parameters[i].ParameterType;
 
                 using var temp = ilg.DeclareReusableLocal(typeof(int));
-
+                
                 ilg.Emit(Ldc_I4, i + 1);
                 ilg.Emit(Stloc, temp);
 
@@ -590,7 +610,19 @@ namespace Triton.Interop
                 ilg.Emit(Stloc, reusableLocals[i]);
             }
 
-            callClrMethod(ilg, clrMethod, locals);
+            switch (clrMethodOrConstructor)
+            {
+                case ConstructorInfo constructor:
+                    EmitLuaPush(ilg, constructor.DeclaringType!,
+                        ilg => callClrMethod(ilg, clrMethodOrConstructor, locals));
+                    ilg.Emit(Ldc_I4_1);
+                    ilg.Emit(Ret);
+                    break;
+
+                case MethodInfo method:
+                    callClrMethod(ilg, clrMethodOrConstructor, locals);
+                    break;
+            }
 
             // TODO: return values?
 

@@ -34,7 +34,7 @@ namespace Triton
             _environment = environment;
 
             _gcMetamethod = GcMetamethod;  // Prevent garbage collection of the delegate
-            lua_newtable(state);
+            lua_createtable(state, 0, 1);
             lua_pushcfunction(state, _gcMetamethod);
             lua_setfield(state, -2, "__gc");
             _gcMetatableRef = luaL_ref(state, LUA_REGISTRYINDEX);
@@ -132,7 +132,7 @@ namespace Triton
         {
             lua_newtable(state);
             lua_rawgeti(state, LUA_REGISTRYINDEX, _gcMetatableRef);
-            lua_setmetatable(state, -1);
+            lua_setmetatable(state, -2);
             lua_pop(state, 1);
         }
     }

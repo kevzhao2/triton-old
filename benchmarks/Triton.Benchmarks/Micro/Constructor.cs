@@ -23,12 +23,13 @@ using BenchmarkDotNet.Attributes;
 namespace Triton.Benchmarks.Interop
 {
     [MemoryDiagnoser]
-    public class StaticProperty
+    public class Constructor
     {
         public class TestClass
         {
-            public static int Int { get; set; }
-            public static string String { get; set; }
+            public TestClass()
+            {
+            }
         }
 
         private NLua.Lua _nluaEnvironment;
@@ -43,7 +44,7 @@ namespace Triton.Benchmarks.Interop
             _nluaEnvironment.LoadCLRPackage();
             _nluaEnvironment.DoString("luanet.load_assembly('Triton.Benchmarks')");
             _nluaEnvironment.DoString(
-                "TestClass = luanet.import_type('Triton.Benchmarks.Interop.StaticProperty+TestClass')");
+                "TestClass = luanet.import_type('Triton.Benchmarks.Interop.Constructor+TestClass')");
             _tritonEnvironment["TestClass"] = LuaValue.FromClrType(typeof(TestClass));
         }
 
@@ -55,51 +56,9 @@ namespace Triton.Benchmarks.Interop
         }
 
         [Benchmark]
-        public void NLua_GetInt() => _nluaEnvironment.DoString(@"
-            for i = 1, 10000 do
-                _ = TestClass.Int
-            end");
-
-        [Benchmark]
-        public void Triton_GetInt() => _tritonEnvironment.Eval(@"
-            for i = 1, 10000 do
-                _ = TestClass.Int
-            end");
-
-        [Benchmark]
-        public void NLua_GetString() => _nluaEnvironment.DoString(@"
-            for i = 1, 10000 do
-                _ = TestClass.String
-            end");
-
-        [Benchmark]
-        public void Triton_GetString() => _tritonEnvironment.Eval(@"
-            for i = 1, 10000 do
-                _ = TestClass.String
-            end");
-
-        [Benchmark]
-        public void NLua_SetInt() => _nluaEnvironment.DoString(@"
-            for i = 1, 10000 do
-                TestClass.Int = 1234
-            end");
-
-        [Benchmark]
-        public void Triton_SetInt() => _tritonEnvironment.Eval(@"
-            for i = 1, 10000 do
-                TestClass.Int = 1234
-            end");
-
-        [Benchmark]
-        public void NLua_SetString() => _nluaEnvironment.DoString(@"
-            for i = 1, 10000 do
-                TestClass.String = 'test'
-            end");
-
-        [Benchmark]
-        public void Triton_SetString() => _tritonEnvironment.Eval(@"
-            for i = 1, 10000 do
-                TestClass.String = 'test'
+        public void Triton_NoArgs() => _tritonEnvironment.Eval(@"
+            for i = 1, 100000 do
+                _ = TestClass()
             end");
     }
 }
