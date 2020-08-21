@@ -572,67 +572,122 @@ namespace Triton.Interop
             Action<ILGenerator> getLuaArgCount,
             Action<ILGenerator, LocalBuilder> getLuaArgType,
             Action<ILGenerator, LocalBuilder> getLuaArgIndex,
-            Action<ILGenerator, MethodBase, LocalBuilder[]> callClrMethod,
+            Action<ILGenerator, MethodBase, ILGeneratorExtensions.ReusableLocalBuilder[]> callClrMethod,
             Label isInvalidCall)
         {
-            // Use the argument count bounds to filter out calls with too few arguments or too many arguments. This is
-            // done using an unsigned comparison.
-
-            var (minArgs, maxArgs) = clrMethodOrConstructor.GetArgCountBounds();
-
-            getLuaArgCount(ilg);
-            ilg.Emit(Ldc_I4, minArgs);
-            ilg.Emit(Sub);
-            ilg.Emit(Ldc_I4, maxArgs - minArgs);
-            ilg.Emit(Bgt_Un, isInvalidCall);  // Not short form
-
-            // Declare local variables for the arguments.
+            // Declare local variables for each of the arguments.
 
             var parameters = clrMethodOrConstructor.GetParameters();
             var args = parameters.Select(p => ilg.DeclareReusableLocal(p.ParameterType)).ToArray();
 
-            var reusableLocals = parameters.Select(p => ilg.DeclareReusableLocal(p.ParameterType)).ToArray();
-            var locals = reusableLocals.Select(l => (LocalBuilder)l).ToArray();
-
-            for (var i = 0; i < parameters.Length; ++i)
             {
-                var parameterType = parameters[i].ParameterType;
+                // Use the argument count bounds to filter out calls with too few arguments or too many arguments. This
+                // is done using an unsigned comparison for optimal codegen.
 
-                using var temp = ilg.DeclareReusableLocal(typeof(int));
-                
-                ilg.Emit(Ldc_I4, i + 1);
-                ilg.Emit(Stloc, temp);
+                var (minArgs, maxArgs) = clrMethodOrConstructor.GetArgCountBounds();
 
-                EmitLuaLoad(ilg, parameterType,
-                    ilg => getLuaArgType(ilg, temp),
-                    ilg => getLuaArgIndex(ilg, temp),
-                    isInvalidCall);
-                ilg.Emit(Stloc, reusableLocals[i]);
+                getLuaArgCount(ilg);
+                ilg.Emit(Ldc_I4, minArgs);
+                ilg.Emit(Sub);
+                ilg.Emit(Ldc_I4, maxArgs - minArgs);
+                ilg.Emit(Bgt_Un, isInvalidCall);  // Not short form
+            }
+
+            {
+                using var argIndex = ilg.DeclareReusableLocal(typeof(int));
+                ilg.Emit(Ldc_I4_1);  // Starts at 1 to match Lua convention
+                ilg.Emit(Stloc, argIndex);
+
+                for (var i = 0; i < parameters.Length; ++i)
+                {
+                    var parameter = parameters[i];
+                    var parameterType = parameters[i].ParameterType;
+                    var arg = args[i];
+
+                    // If the parameter is a `params` array, then we construct an array with the rest of the Lua
+                    // arguments.
+
+                    if (parameter.IsParams())
+                    {
+                        var elementType = parameterType.GetElementType()!;
+
+                        // Create the array based on the number of remaining Lua arguments.
+
+                        getLuaArgCount(ilg);
+                        ilg.Emit(Ldloc, argIndex);
+                        ilg.Emit(Sub);
+                        ilg.Emit(Ldc_I4_1);
+                        ilg.Emit(Add);
+                        ilg.Emit(Newarr, elementType);
+                        ilg.Emit(Stloc, arg);
+
+                        using var arrIndex = ilg.DeclareReusableLocal(typeof(int));
+                        ilg.Emit(Ldc_I4_0);
+                        ilg.Emit(Stloc, arrIndex);
+
+                        var loopStart = ilg.DefineLabel();
+
+                        ilg.Emit(Br, loopStart);  // Not short form
+                        {
+                            var loopBody = ilg.DefineAndMarkLabel();
+
+                            EmitLuaLoad(ilg, elementType,
+                                ilg => getLuaArgType(ilg, argIndex),
+                                ilg => getLuaArgIndex(ilg, argIndex),
+                                isInvalidCall);
+
+                            using var temp = ilg.DeclareReusableLocal(elementType);
+                            ilg.Emit(Stloc, temp);
+
+                            ilg.Emit(Ldloc, argIndex);
+                            ilg.Emit(Ldc_I4_1);
+                            ilg.Emit(Add);
+                            ilg.Emit(Stloc, argIndex);
+
+                            ilg.Emit(Ldloc, arg);
+                            ilg.Emit(Ldloc, arrIndex);
+                            ilg.Emit(Ldloc, temp);
+                            ilg.EmitStelem(elementType);
+
+                            ilg.Emit(Ldloc, arrIndex);
+                            ilg.Emit(Ldc_I4_1);
+                            ilg.Emit(Add);
+                            ilg.Emit(Stloc, arrIndex);
+
+                            ilg.MarkLabel(loopStart);
+
+                            ilg.Emit(Ldloc, arrIndex);
+                            ilg.Emit(Ldloc, arg);
+                            ilg.Emit(Ldlen);
+                            ilg.Emit(Conv_I4);
+                            ilg.Emit(Blt, loopBody);  // Not short form
+                        }
+
+                        break;
+                    }
+                }
             }
 
             switch (clrMethodOrConstructor)
             {
-                case ConstructorInfo constructor:
-                    EmitLuaPush(ilg, constructor.DeclaringType!,
-                        ilg => callClrMethod(ilg, clrMethodOrConstructor, locals));
-                    ilg.Emit(Ldc_I4_1);
-                    ilg.Emit(Ret);
+                case ConstructorInfo clrConstructor:
+                    // TODO: handle constructors
                     break;
 
-                case MethodInfo method:
-                    callClrMethod(ilg, clrMethodOrConstructor, locals);
+                case MethodInfo clrMethod:
+                    callClrMethod(ilg, clrMethodOrConstructor, args);
                     break;
             }
 
-            // TODO: return values?
+            // TODO: return values
 
             var results = 0;
             ilg.Emit(Ldc_I4, results);
             ilg.Emit(Ret);
-
-            foreach (var reusableLocal in reusableLocals)
+            
+            foreach (var arg in args)
             {
-                reusableLocal.Dispose();
+                arg.Dispose();
             }
         }
 
@@ -641,7 +696,7 @@ namespace Triton.Interop
             Action<ILGenerator> getLuaArgCount,
             Action<ILGenerator, LocalBuilder> getLuaArgType,
             Action<ILGenerator, LocalBuilder> getLuaArgIndex,
-            Action<ILGenerator, MethodBase, LocalBuilder[]> callMethod)
+            Action<ILGenerator, MethodBase, ILGeneratorExtensions.ReusableLocalBuilder[]> callMethod)
         {
             var nextMethods = ilg.DefineLabels(methods.Count);
 

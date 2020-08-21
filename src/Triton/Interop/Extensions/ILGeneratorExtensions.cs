@@ -76,6 +76,18 @@ namespace Triton.Interop.Extensions
         }
 
         /// <summary>
+        /// Defines and marks a label.
+        /// </summary>
+        /// <param name="ilg">The IL generator.</param>
+        /// <returns>The label.</returns>
+        public static Label DefineAndMarkLabel(this ILGenerator ilg)
+        {
+            var label = ilg.DefineLabel();
+            ilg.MarkLabel(label);
+            return label;
+        }
+
+        /// <summary>
         /// Defines the given number of labels.
         /// </summary>
         /// <param name="ilg">The IL generator.</param>
