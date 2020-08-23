@@ -58,29 +58,34 @@ namespace Triton.Interop
             Action<ILGenerator> getLuaIndex,
             Label isInvalidLuaValue)
         {
-            Debug.Assert(clrType == temp.LocalType);
-            Debug.Assert(!clrType.IsByRef);
-            Debug.Assert(!clrType.IsByRefLike);
+            //Debug.Assert(!clrType.IsByRef);
+            //Debug.Assert(!clrType.IsByRefLike);
+            Debug.Assert(temp.LocalType == clrType, "Temporary should match type");
 
-            // First, unpack the type into the non-nullable type. This allows us to handle `int?` properly.
+            // Unpack the type into the non-nullable type and then the underlying enumeration type.
 
-            var isNullableType = Nullable.GetUnderlyingType(clrType) is { };
             var nonNullableType = Nullable.GetUnderlyingType(clrType) ?? clrType;
+            var isNullableType = nonNullableType != clrType;
+
+            if (nonNullableType.IsEnum)
+            {
+                nonNullableType = Enum.GetUnderlyingType(nonNullableType);
+            }
 
             var skip = ilg.DefineLabel();
 
             {
-                // Handle `null` if it is a valid value. This may occur if the type is not a value type or if it is a
-                // nullable type.
+                // Handle `null` if it is a valid value: i.e., when the type is not a value type or is a nullable type.
 
-                if (!clrType.IsValueType || isNullableType)
+                var isNotValueType = !clrType.IsValueType;
+                if (isNotValueType || isNullableType)
                 {
                     var isNotNull = ilg.DefineLabel();
 
                     getLuaType(ilg);
                     ilg.Emit(Brtrue_S, isNotNull);
                     {
-                        if (!clrType.IsValueType)
+                        if (isNotValueType)
                         {
                             ilg.Emit(Ldnull);
                             ilg.Emit(Stloc, temp);
@@ -98,15 +103,13 @@ namespace Triton.Interop
                 }
             }
 
-            if (nonNullableType != typeof(LuaValue))
             {
-                // Verify that the Lua type is correct. This is not required for the `LuaValue` type, since it is a
-                // tagged union that supports all Lua types.
+                // Verify that the Lua type is correct.
+                // - For the `LuaObject` type, three Lua types are valid (due to polymorphism).
+                // - For the `LuaValue` type, all Lua types are valid.
 
                 if (nonNullableType == typeof(LuaObject))
                 {
-                    // `LuaObject` can correspond to three different Lua types.
-
                     var isCorrectType = ilg.DefineLabel();
 
                     getLuaType(ilg);
@@ -123,7 +126,7 @@ namespace Triton.Interop
 
                     ilg.MarkLabel(isCorrectType);
                 }
-                else
+                else if (nonNullableType != typeof(LuaValue))
                 {
                     getLuaType(ilg);
                     ilg.Emit(true switch
@@ -152,8 +155,8 @@ namespace Triton.Interop
             }
 
             {
-                // Load the value from the Lua stack. If it is a nullable type, then we need to load it into a temporary
-                // to construct the nullable.
+                // Load the value from the Lua stack. For nullable types, we need to load the value into a temporary in
+                // order to construct the nullable.
 
                 var nonNullableTemp = isNullableType ? ilg.DeclareReusableLocal(nonNullableType) : null;
 
@@ -197,12 +200,12 @@ namespace Triton.Interop
                         ilg.Emit(Ldloc, tempLong);
                         ilg.Emit(true switch
                         {
-                            _ when nonNullableType == typeof(byte) => Conv_Ovf_U1,
+                            _ when nonNullableType == typeof(byte)   => Conv_Ovf_U1,
                             _ when nonNullableType == typeof(ushort) => Conv_Ovf_U2,
-                            _ when nonNullableType == typeof(uint) => Conv_Ovf_U4,
-                            _ when nonNullableType == typeof(sbyte) => Conv_Ovf_I1,
-                            _ when nonNullableType == typeof(short) => Conv_Ovf_I2,
-                            _ => Conv_Ovf_I4
+                            _ when nonNullableType == typeof(uint)   => Conv_Ovf_U4,
+                            _ when nonNullableType == typeof(sbyte)  => Conv_Ovf_I1,
+                            _ when nonNullableType == typeof(short)  => Conv_Ovf_I2,
+                            _                                        => Conv_Ovf_I4
                         });
                         ilg.Emit(Stloc, nonNullableTemp ?? temp);
                     }
@@ -279,46 +282,47 @@ namespace Triton.Interop
         private static void EmitLuaPush(
             ILGenerator ilg, Type clrType, LocalBuilder temp)
         {
-            Debug.Assert(clrType == temp.LocalType);
-            Debug.Assert(!clrType.IsByRefLike);
+            Debug.Assert(temp.LocalType == clrType, "Temporary should match type");
+            //Debug.Assert(!clrType.IsByRefLike);
 
-            // First, unpack the type into the non-byref type, and then into the non-nullable type. This allows us to
-            // handle `ref int?` properly.
+            // Unpack the type into the non-byref type, then the non-nullable type, and finally the underlying
+            // enumeration type.
 
             var isByRefType = clrType.IsByRef;
             var nonByRefType = isByRefType ? clrType.GetElementType()! : clrType;
 
-            var isNullableType = Nullable.GetUnderlyingType(nonByRefType) is { };
             var nonNullableType = Nullable.GetUnderlyingType(nonByRefType) ?? nonByRefType;
+            var isNullableType = nonNullableType != nonByRefType;
+
+            if (nonNullableType.IsEnum)
+            {
+                nonNullableType = Enum.GetUnderlyingType(nonNullableType);
+            }
 
             var skip = ilg.DefineLabel();
 
             {
-                // Handle `null` if it is a valid value. This may occur if the type is not a value type or if it is a
-                // nullable type.
+                // Handle `null` if it is a valid value: i.e., when the type is not a value type or is a nullable type.
 
-                if (!clrType.IsValueType || isNullableType)
+                var isNotValueType = !clrType.IsValueType;
+                if (isNotValueType || isNullableType)
                 {
-                    var isNotNull = ilg.DefineLabel();
                     var isNull = ilg.DefineLabel();
+                    var isNotNull = ilg.DefineLabel();
 
-                    // First, check if the value is `null`. Then we check if the nullable value is `null`. This allows
-                    // us to handle `ref int?` properly.
-
-                    if (!clrType.IsValueType)
+                    if (isNotValueType)
                     {
                         ilg.Emit(Ldloc, temp);
-                        ilg.Emit(Brfalse_S, isNull);
+                        ilg.Emit(isNullableType ? Brfalse_S : Brtrue_S, isNullableType ? isNull : isNotNull);
                     }
 
                     if (isNullableType)
                     {
                         ilg.Emit(isByRefType ? Ldloc : Ldloca, temp);
                         ilg.Emit(Call, nonByRefType.GetProperty(nameof(Nullable<int>.HasValue))!.GetMethod!);
-                        ilg.Emit(Brfalse_S, isNull);
+                        ilg.Emit(Brtrue_S, isNotNull);
                     }
 
-                    ilg.Emit(Br_S, isNotNull);
                     {
                         ilg.MarkLabel(isNull);
 
@@ -357,11 +361,11 @@ namespace Triton.Interop
                     ilg.Emit(Call, nonByRefType.GetProperty(nameof(Nullable<int>.Value))!.GetMethod!);
                 }
 
-                if (nonNullableType.IsSignedInteger())
+                if (nonNullableType.IsSignedInteger() && nonNullableType != typeof(long))
                 {
                     ilg.Emit(Conv_I8);
                 }
-                else if (nonNullableType.IsUnsignedInteger())
+                else if (nonNullableType.IsUnsignedInteger() && nonNullableType != typeof(ulong))
                 {
                     ilg.Emit(Conv_U8);
                 }
@@ -402,14 +406,14 @@ namespace Triton.Interop
 
         private static LocalBuilder EmitDeclareTarget(ILGenerator ilg, Type objType)
         {
-            var isStruct = objType.IsClrStruct();
-            var target = ilg.DeclareLocal(isStruct ? objType.MakeByRefType() : objType);
+            var isByRefType = objType.IsClrStruct();
+            var target = ilg.DeclareLocal(isByRefType ? objType.MakeByRefType() : objType);
 
             ilg.Emit(Ldarg_0);
             ilg.Emit(Ldarg_1);
             ilg.Emit(Ldc_I4_1);
             ilg.Emit(Call, MetamethodContext._loadClrEntity);
-            ilg.Emit(isStruct ? Unbox : Unbox_Any, objType);
+            ilg.Emit(isByRefType ? Unbox : Unbox_Any, objType);
             ilg.Emit(Stloc, target);
 
             return target;
@@ -704,7 +708,7 @@ namespace Triton.Interop
             Action<ILGenerator> getLuaArgCount,
             Action<ILGenerator, LocalBuilder> getLuaArgType,
             Action<ILGenerator, LocalBuilder> getLuaArgIndex,
-            Action<ILGenerator, MethodBase, ILGeneratorExtensions.ReusableLocalBuilder[]> callClrMethod,
+            Action<ILGenerator, MethodBase, ILGeneratorExtensions.ReusableLocalBuilder[], LocalBuilder?> callClrMethod,
             Label isInvalidCall)
         {
             var parameters = clrMethod.GetParameters();
@@ -809,7 +813,7 @@ namespace Triton.Interop
             var returnType = clrMethod.GetReturnType();
             if (returnType == typeof(void))
             {
-                callClrMethod(ilg, clrMethod, args);
+                callClrMethod(ilg, clrMethod, args, null);
 
                 ilg.Emit(Ldc_I4_0);
                 ilg.Emit(Ret);
@@ -818,11 +822,9 @@ namespace Triton.Interop
             {
                 using var temp = ilg.DeclareReusableLocal(returnType);
 
-                callClrMethod(ilg, clrMethod, args);
-                ilg.Emit(Stloc, temp);
+                callClrMethod(ilg, clrMethod, args, temp);
 
                 EmitLuaPush(ilg, returnType, temp);
-
                 ilg.Emit(Ldc_I4_1);
                 ilg.Emit(Ret);
             }
@@ -838,7 +840,7 @@ namespace Triton.Interop
             Action<ILGenerator> getLuaArgCount,
             Action<ILGenerator, LocalBuilder> getLuaArgType,
             Action<ILGenerator, LocalBuilder> getLuaArgIndex,
-            Action<ILGenerator, MethodBase, ILGeneratorExtensions.ReusableLocalBuilder[]> callClrMethod)
+            Action<ILGenerator, MethodBase, ILGeneratorExtensions.ReusableLocalBuilder[], LocalBuilder?> callClrMethod)
         {
             var nextMethods = ilg.DefineLabels(methods.Count);
 

@@ -3,6 +3,7 @@
 // Licensed under the MIT license. See the LICENSE file in the project root for more information.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Xunit;
@@ -89,6 +90,16 @@ namespace Triton.Interop
             public static LuaThread? ThreadValue { get; set; }
         }
 
+        public class ClrClassProperty
+        {
+            public static List<int>? ListValue { get; set; }
+        }
+
+        public class ClrStructProperty
+        {
+            public static DateTime DateTimeValue { get; set; }
+        }
+
         public class ByRefProperty
         {
             [SuppressMessage("Style", "IDE0044:Add readonly modifier", Justification = "Testing")]
@@ -109,6 +120,20 @@ namespace Triton.Interop
             private static int? _value;
 
             public static ref int? Value => ref _value;
+        }
+
+        public class NonReadableProperty
+        {
+            [SuppressMessage("CodeQuality", "IDE0052:Remove unread private members", Justification = "Testing")]
+            private static int _value;
+
+            public static int PrivateGetterValue { private get; set; }
+            public static int NoGetterValue { set => _value = value; }
+        }
+
+        public class ByRefLikeProperty
+        {
+            public static Span<int> Value { get => default; set { } }
         }
 
         [Fact]
@@ -178,6 +203,16 @@ namespace Triton.Interop
         }
 
         [Fact]
+        public void Byte_SetOverflow_RaisesLuaError()
+        {
+            using var environment = new LuaEnvironment();
+            environment["ByteProperty"] = LuaValue.FromClrType(typeof(ByteProperty));
+
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("ByteProperty.Value = 12345"));
+            Assert.Contains("attempt to set property 'Value' with invalid value", ex.Message);
+        }
+
+        [Fact]
         public void Short_Get()
         {
             using var environment = new LuaEnvironment();
@@ -200,6 +235,16 @@ namespace Triton.Interop
         }
 
         [Fact]
+        public void Short_SetOverflow_RaisesLuaError()
+        {
+            using var environment = new LuaEnvironment();
+            environment["ShortProperty"] = LuaValue.FromClrType(typeof(ShortProperty));
+
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("ShortProperty.Value = 123456789"));
+            Assert.Contains("attempt to set property 'Value' with invalid value", ex.Message);
+        }
+
+        [Fact]
         public void Int_Get()
         {
             using var environment = new LuaEnvironment();
@@ -219,6 +264,16 @@ namespace Triton.Interop
             environment.Eval("IntProperty.Value = 123456789");
 
             Assert.Equal(123456789, IntProperty.Value);
+        }
+
+        [Fact]
+        public void Int_SetOverflow_RaisesLuaError()
+        {
+            using var environment = new LuaEnvironment();
+            environment["IntProperty"] = LuaValue.FromClrType(typeof(IntProperty));
+
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("IntProperty.Value = 1234567891011"));
+            Assert.Contains("attempt to set property 'Value' with invalid value", ex.Message);
         }
 
         [Fact]
@@ -266,6 +321,16 @@ namespace Triton.Interop
         }
 
         [Fact]
+        public void SByte_SetOverflow_RaisesLuaError()
+        {
+            using var environment = new LuaEnvironment();
+            environment["SByteProperty"] = LuaValue.FromClrType(typeof(SByteProperty));
+
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("SByteProperty.Value = 128"));
+            Assert.Contains("attempt to set property 'Value' with invalid value", ex.Message);
+        }
+
+        [Fact]
         public void UShort_Get()
         {
             using var environment = new LuaEnvironment();
@@ -288,6 +353,16 @@ namespace Triton.Interop
         }
 
         [Fact]
+        public void UShort_SetUnderflow_RaisesLuaError()
+        {
+            using var environment = new LuaEnvironment();
+            environment["UShortProperty"] = LuaValue.FromClrType(typeof(UShortProperty));
+
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("UShortProperty.Value = -1"));
+            Assert.Contains("attempt to set property 'Value' with invalid value", ex.Message);
+        }
+
+        [Fact]
         public void UInt_Get()
         {
             using var environment = new LuaEnvironment();
@@ -307,6 +382,16 @@ namespace Triton.Interop
             environment.Eval("UIntProperty.Value = 123456789");
 
             Assert.Equal(123456789U, UIntProperty.Value);
+        }
+
+        [Fact]
+        public void UInt_SetUnderflow_RaisesLuaError()
+        {
+            using var environment = new LuaEnvironment();
+            environment["UIntProperty"] = LuaValue.FromClrType(typeof(UIntProperty));
+
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("UIntProperty.Value = -1"));
+            Assert.Contains("attempt to set property 'Value' with invalid value", ex.Message);
         }
 
         [Fact]
@@ -690,6 +775,75 @@ namespace Triton.Interop
         }
 
         [Fact]
+        public void ClrClass_Get()
+        {
+            using var environment = new LuaEnvironment();
+            environment["ClrClassProperty"] = LuaValue.FromClrType(typeof(ClrClassProperty));
+
+            ClrClassProperty.ListValue = new List<int>();
+
+            environment.Eval("assert(ClrClassProperty.ListValue ~= nil)");
+        }
+
+        [Fact]
+        public void ClrClass_GetNull()
+        {
+            using var environment = new LuaEnvironment();
+            environment["ClrClassProperty"] = LuaValue.FromClrType(typeof(ClrClassProperty));
+
+            ClrClassProperty.ListValue = null;
+
+            environment.Eval("assert(ClrClassProperty.ListValue == nil)");
+        }
+
+        [Fact]
+        public void ClrClass_Set()
+        {
+            using var environment = new LuaEnvironment();
+            environment["Int32"] = LuaValue.FromClrType(typeof(int));
+            environment["List"] = LuaValue.FromGenericClrTypes(typeof(List<>));
+            environment["ClrClassProperty"] = LuaValue.FromClrType(typeof(ClrClassProperty));
+
+            environment.Eval("ClrClassProperty.ListValue = List[Int32]()");
+
+            Assert.NotNull(ClrClassProperty.ListValue);
+        }
+
+        [Fact]
+        public void ClrClass_SetNull()
+        {
+            using var environment = new LuaEnvironment();
+            environment["ClrClassProperty"] = LuaValue.FromClrType(typeof(ClrClassProperty));
+
+            environment.Eval("ClrClassProperty.ListValue = nil");
+
+            Assert.Null(ClrClassProperty.ListValue);
+        }
+
+        [Fact]
+        public void ClrStruct_Get()
+        {
+            using var environment = new LuaEnvironment();
+            environment["ClrStructProperty"] = LuaValue.FromClrType(typeof(ClrStructProperty));
+
+            ClrStructProperty.DateTimeValue = new DateTime(123456789);
+
+            environment.Eval("assert(ClrStructProperty.DateTimeValue ~= nil)");
+        }
+
+        [Fact]
+        public void ClrStruct_Set()
+        {
+            using var environment = new LuaEnvironment();
+            environment["DateTime"] = LuaValue.FromClrType(typeof(DateTime));
+            environment["ClrStructProperty"] = LuaValue.FromClrType(typeof(ClrStructProperty));
+
+            environment.Eval("ClrStructProperty.DateTimeValue = DateTime(123456789)");
+
+            Assert.Equal(new DateTime(123456789), ClrStructProperty.DateTimeValue);
+        }
+
+        [Fact]
         public void ByRef_Get()
         {
             using var environment = new LuaEnvironment();
@@ -784,6 +938,48 @@ namespace Triton.Interop
             environment.Eval("NullableIntProperty.Value = 1234");
 
             Assert.Equal(1234, NullableIntProperty.Value);
+        }
+
+        [Fact]
+        public void NonReadable_GetPrivateGetter_RaisesLuaError()
+        {
+            using var environment = new LuaEnvironment();
+            environment["NonReadableProperty"] = LuaValue.FromClrType(typeof(NonReadableProperty));
+
+            var ex = Assert.Throws<LuaRuntimeException>(
+                () => environment.Eval("_ = NonReadableProperty.PrivateGetterValue"));
+            Assert.Contains("attempt to get non-readable property 'PrivateGetterValue'", ex.Message);
+        }
+
+        [Fact]
+        public void NonReadable_GetNoGetter_RaisesLuaError()
+        {
+            using var environment = new LuaEnvironment();
+            environment["NonReadableProperty"] = LuaValue.FromClrType(typeof(NonReadableProperty));
+
+            var ex = Assert.Throws<LuaRuntimeException>(
+                () => environment.Eval("_ = NonReadableProperty.NoGetterValue"));
+            Assert.Contains("attempt to get non-readable property 'NoGetterValue'", ex.Message);
+        }
+
+        [Fact]
+        public void ByRefLike_Get_RaisesLuaError()
+        {
+            using var environment = new LuaEnvironment();
+            environment["ByRefLikeProperty"] = LuaValue.FromClrType(typeof(ByRefLikeProperty));
+
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("_ = ByRefLikeProperty.Value"));
+            Assert.Contains("attempt to get byref-like property 'Value'", ex.Message);
+        }
+
+        [Fact]
+        public void ByRefLike_Set_RaisesLuaError()
+        {
+            using var environment = new LuaEnvironment();
+            environment["ByRefLikeProperty"] = LuaValue.FromClrType(typeof(ByRefLikeProperty));
+
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("ByRefLikeProperty.Value = nil"));
+            Assert.Contains("attempt to set byref-like property 'Value'", ex.Message);
         }
     }
 }

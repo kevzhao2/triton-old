@@ -311,14 +311,28 @@ namespace Triton.Interop
                         ilg.Emit(Ldc_I4_1);
                         ilg.Emit(Add);
                     },
-                    (ilg, clrMethodOrConstructor, temps) =>
+                    (ilg, clrMethodOrConstructor, args, temp) =>
                     {
-                        foreach (var temp in temps)
+                        if (type.IsValueType)
                         {
-                            ilg.Emit(Ldloc, temp);
-                        }
+                            ilg.Emit(Ldloca, temp!);
+                            foreach (var arg in args)
+                            {
+                                ilg.Emit(Ldloc, arg);
+                            }
 
-                        ilg.Emit(Newobj, (ConstructorInfo)clrMethodOrConstructor);
+                            ilg.Emit(Call, (ConstructorInfo)clrMethodOrConstructor);
+                        }
+                        else
+                        {
+                            foreach (var arg in args)
+                            {
+                                ilg.Emit(Ldloc, arg);
+                            }
+
+                            ilg.Emit(Newobj, (ConstructorInfo)clrMethodOrConstructor);
+                            ilg.Emit(Stloc, temp!);
+                        }
                     });
 
                 ilg.Emit(Ldarg_1);
@@ -344,14 +358,18 @@ namespace Triton.Interop
                         ilg.Emit(Call, _lua_type);
                     },
                     (ilg, temp) => ilg.Emit(Ldloc, temp),
-                    (ilg, method, temps) =>
+                    (ilg, method, args, temp) =>
                     {
-                        foreach (var temp in temps)
+                        foreach (var arg in args)
                         {
-                            ilg.Emit(Ldloc, temp);
+                            ilg.Emit(Ldloc, arg);
                         }
 
                         ilg.Emit(Call, (MethodInfo)method);
+                        if (temp is { })
+                        {
+                            ilg.Emit(Stloc, temp);
+                        }
                     });
 
                 ilg.Emit(Ldarg_1);
@@ -490,15 +508,19 @@ namespace Triton.Interop
                         ilg.Emit(Ldc_I4_1);
                         ilg.Emit(Add);
                     },
-                    (ilg, method, temps) =>
+                    (ilg, method, args, temp) =>
                     {
                         ilg.Emit(Ldloc, target);
-                        foreach (var temp in temps)
+                        foreach (var arg in args)
                         {
-                            ilg.Emit(Ldloc, temp);
+                            ilg.Emit(Ldloc, arg);
                         }
 
                         ilg.EmitCall((MethodInfo)method);
+                        if (temp is { })
+                        {
+                            ilg.Emit(Stloc, temp);
+                        }
                     });
 
                 ilg.Emit(Ldarg_1);

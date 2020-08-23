@@ -142,21 +142,21 @@ namespace Triton.Interop.Extensions
 
             ilg.Emit(true switch
             {
-                _ when type == typeof(bool) => Ldelem_U1,
-                _ when type == typeof(byte) => Ldelem_U1,
-                _ when type == typeof(sbyte) => Ldelem_I1,
-                _ when type == typeof(short) => Ldelem_I2,
-                _ when type == typeof(ushort) => Ldelem_U2,
-                _ when type == typeof(int) => Ldelem_I4,
-                _ when type == typeof(uint) => Ldelem_U4,
-                _ when type == typeof(long) => Ldelem_I8,
-                _ when type == typeof(ulong) => Ldelem_I8,
-                _ when type == typeof(IntPtr) => Ldelem_I,
+                _ when type == typeof(bool)    => Ldelem_U1,
+                _ when type == typeof(byte)    => Ldelem_U1,
+                _ when type == typeof(sbyte)   => Ldelem_I1,
+                _ when type == typeof(short)   => Ldelem_I2,
+                _ when type == typeof(ushort)  => Ldelem_U2,
+                _ when type == typeof(int)     => Ldelem_I4,
+                _ when type == typeof(uint)    => Ldelem_U4,
+                _ when type == typeof(long)    => Ldelem_I8,
+                _ when type == typeof(ulong)   => Ldelem_I8,
+                _ when type == typeof(IntPtr)  => Ldelem_I,
                 _ when type == typeof(UIntPtr) => Ldelem_I,
-                _ when type == typeof(char) => Ldelem_U2,
-                _ when type == typeof(float) => Ldelem_R4,
-                _ when type == typeof(double) => Ldelem_R8,
-                _ => Ldelem_Ref
+                _ when type == typeof(char)    => Ldelem_U2,
+                _ when type == typeof(float)   => Ldelem_R4,
+                _ when type == typeof(double)  => Ldelem_R8,
+                _                              => Ldelem_Ref
             });
         }
 
@@ -177,21 +177,21 @@ namespace Triton.Interop.Extensions
 
             ilg.Emit(true switch
             {
-                _ when type == typeof(bool) => Ldind_U1,
-                _ when type == typeof(byte) => Ldind_U1,
-                _ when type == typeof(sbyte) => Ldind_I1,
-                _ when type == typeof(short) => Ldind_I2,
-                _ when type == typeof(ushort) => Ldind_U2,
-                _ when type == typeof(int) => Ldind_I4,
-                _ when type == typeof(uint) => Ldind_U4,
-                _ when type == typeof(long) => Ldind_I8,
-                _ when type == typeof(ulong) => Ldind_I8,
-                _ when type == typeof(IntPtr) => Ldind_I,
+                _ when type == typeof(bool)    => Ldind_U1,
+                _ when type == typeof(byte)    => Ldind_U1,
+                _ when type == typeof(sbyte)   => Ldind_I1,
+                _ when type == typeof(short)   => Ldind_I2,
+                _ when type == typeof(ushort)  => Ldind_U2,
+                _ when type == typeof(int)     => Ldind_I4,
+                _ when type == typeof(uint)    => Ldind_U4,
+                _ when type == typeof(long)    => Ldind_I8,
+                _ when type == typeof(ulong)   => Ldind_I8,
+                _ when type == typeof(IntPtr)  => Ldind_I,
                 _ when type == typeof(UIntPtr) => Ldind_I,
-                _ when type == typeof(char) => Ldind_U2,
-                _ when type == typeof(float) => Ldind_R4,
-                _ when type == typeof(double) => Ldind_R8,
-                _ => Ldind_Ref
+                _ when type == typeof(char)    => Ldind_U2,
+                _ when type == typeof(float)   => Ldind_R4,
+                _ when type == typeof(double)  => Ldind_R8,
+                _                              => Ldind_Ref
             });
         }
 
@@ -212,21 +212,21 @@ namespace Triton.Interop.Extensions
 
             ilg.Emit(true switch
             {
-                _ when type == typeof(bool) => Stelem_I1,
-                _ when type == typeof(byte) => Stelem_I1,
-                _ when type == typeof(sbyte) => Stelem_I1,
-                _ when type == typeof(short) => Stelem_I2,
-                _ when type == typeof(ushort) => Stelem_I2,
-                _ when type == typeof(int) => Stelem_I4,
-                _ when type == typeof(uint) => Stelem_I4,
-                _ when type == typeof(long) => Stelem_I8,
-                _ when type == typeof(ulong) => Stelem_I8,
-                _ when type == typeof(IntPtr) => Stelem_I,
+                _ when type == typeof(bool)    => Stelem_I1,
+                _ when type == typeof(byte)    => Stelem_I1,
+                _ when type == typeof(sbyte)   => Stelem_I1,
+                _ when type == typeof(short)   => Stelem_I2,
+                _ when type == typeof(ushort)  => Stelem_I2,
+                _ when type == typeof(int)     => Stelem_I4,
+                _ when type == typeof(uint)    => Stelem_I4,
+                _ when type == typeof(long)    => Stelem_I8,
+                _ when type == typeof(ulong)   => Stelem_I8,
+                _ when type == typeof(IntPtr)  => Stelem_I,
                 _ when type == typeof(UIntPtr) => Stelem_I,
-                _ when type == typeof(char) => Stelem_I2,
-                _ when type == typeof(float) => Stelem_R4,
-                _ when type == typeof(double) => Stelem_R8,
-                _ => Stelem_Ref
+                _ when type == typeof(char)    => Stelem_I2,
+                _ when type == typeof(float)   => Stelem_R4,
+                _ when type == typeof(double)  => Stelem_R8,
+                _                              => Stelem_Ref
             });
         }
 
@@ -247,21 +247,21 @@ namespace Triton.Interop.Extensions
 
             ilg.Emit(true switch
             {
-                _ when type == typeof(bool) => Stind_I1,
-                _ when type == typeof(byte) => Stind_I1,
-                _ when type == typeof(sbyte) => Stind_I1,
-                _ when type == typeof(short) => Stind_I2,
-                _ when type == typeof(ushort) => Stind_I2,
-                _ when type == typeof(int) => Stind_I4,
-                _ when type == typeof(uint) => Stind_I4,
-                _ when type == typeof(long) => Stind_I8,
-                _ when type == typeof(ulong) => Stind_I8,
-                _ when type == typeof(IntPtr) => Stind_I,
+                _ when type == typeof(bool)    => Stind_I1,
+                _ when type == typeof(byte)    => Stind_I1,
+                _ when type == typeof(sbyte)   => Stind_I1,
+                _ when type == typeof(short)   => Stind_I2,
+                _ when type == typeof(ushort)  => Stind_I2,
+                _ when type == typeof(int)     => Stind_I4,
+                _ when type == typeof(uint)    => Stind_I4,
+                _ when type == typeof(long)    => Stind_I8,
+                _ when type == typeof(ulong)   => Stind_I8,
+                _ when type == typeof(IntPtr)  => Stind_I,
                 _ when type == typeof(UIntPtr) => Stind_I,
-                _ when type == typeof(char) => Stind_I2,
-                _ when type == typeof(float) => Stind_R4,
-                _ when type == typeof(double) => Stind_R8,
-                _ => Stind_Ref
+                _ when type == typeof(char)    => Stind_I2,
+                _ when type == typeof(float)   => Stind_R4,
+                _ when type == typeof(double)  => Stind_R8,
+                _                              => Stind_Ref
             });
         }
     }
