@@ -95,6 +95,9 @@ namespace Triton
         internal static readonly MethodInfo _lua_pushinteger =
             typeof(NativeMethods).GetMethod(nameof(lua_pushinteger))!;
 
+        internal static readonly MethodInfo _lua_pushnil =
+            typeof(NativeMethods).GetMethod(nameof(lua_pushnil))!;
+
         internal static readonly MethodInfo _lua_pushnumber =
             typeof(NativeMethods).GetMethod(nameof(lua_pushnumber))!;
 
@@ -200,14 +203,8 @@ namespace Triton
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr lua_pushstring(IntPtr L, IntPtr s);
 
-        public static unsafe IntPtr lua_pushstring(IntPtr L, string? s)
+        public static unsafe IntPtr lua_pushstring(IntPtr L, string s)
         {
-            if (s is null)
-            {
-                lua_pushnil(L);
-                return IntPtr.Zero;
-            }
-
             var maxLength = Encoding.UTF8.GetMaxByteCount(s.Length);
             var span = maxLength <= 1024 ? stackalloc byte[1024] : new byte[maxLength];
             var length = Encoding.UTF8.GetBytes(s, span);

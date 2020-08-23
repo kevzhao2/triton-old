@@ -95,7 +95,7 @@ namespace Triton.Interop.Extensions
         /// <see langword="true"/> if the type is a light userdata type; otherwise, <see langword="false"/>.
         /// </returns>
         public static bool IsLightUserdata(this Type type) =>
-            type == typeof(IntPtr) || type == typeof(UIntPtr);
+            type.IsPointer || type == typeof(IntPtr) || type == typeof(UIntPtr);
 
         /// <summary>
         /// Determines whether a type is an integral type.
@@ -105,8 +105,9 @@ namespace Triton.Interop.Extensions
         /// <see langword="true"/> if the type is an integral type; otherwise, <see langword="false"/>.
         /// </returns>
         public static bool IsInteger(this Type type) =>
-            type == typeof(byte) || type == typeof(short) || type == typeof(int) || type == typeof(long) ||
-            type == typeof(sbyte) || type == typeof(ushort) || type == typeof(uint) || type == typeof(ulong);
+            type.IsEnum ||
+                type == typeof(byte) || type == typeof(short) || type == typeof(int) || type == typeof(long) ||
+                type == typeof(sbyte) || type == typeof(ushort) || type == typeof(uint) || type == typeof(ulong);
 
         /// <summary>
         /// Determines whether a type is a signed integral type.
@@ -116,7 +117,9 @@ namespace Triton.Interop.Extensions
         /// <see langword="true"/> if the type is a signed integral type; otherwise, <see langword="false"/>.
         /// </returns>
         public static bool IsSignedInteger(this Type type) =>
-            type == typeof(sbyte) || type == typeof(short) || type == typeof(int) || type == typeof(long);
+            type.IsEnum
+                ? IsSignedInteger(type.GetEnumUnderlyingType())
+                : type == typeof(sbyte) || type == typeof(short) || type == typeof(int) || type == typeof(long);
 
         /// <summary>
         /// Determines whether a type is an unsigned integral type.
@@ -126,7 +129,9 @@ namespace Triton.Interop.Extensions
         /// <see langword="true"/> if the type is an unsigned integral type; otherwise, <see langword="false"/>.
         /// </returns>
         public static bool IsUnsignedInteger(this Type type) =>
-            type == typeof(byte) || type == typeof(ushort) || type == typeof(uint) || type == typeof(ulong);
+            type.IsEnum
+                ? IsSignedInteger(type.GetEnumUnderlyingType())
+                : type == typeof(byte) || type == typeof(ushort) || type == typeof(uint) || type == typeof(ulong);
 
         /// <summary>
         /// Determines whether a type is a numeric type.
@@ -182,7 +187,7 @@ namespace Triton.Interop.Extensions
         /// <see langword="true"/> if the type is a CLR struct type; otherwise, <see langword="false"/>.
         /// </returns>
         public static bool IsClrStruct(this Type type) =>
-            type.IsValueType && !type.IsPrimitive;
+            type.IsValueType && !type.IsPrimitive && type != typeof(LuaValue);
 
         /// <summary>
         /// Simplifies the type.

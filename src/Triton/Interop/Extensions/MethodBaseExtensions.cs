@@ -2,6 +2,7 @@
 //
 // Licensed under the MIT license. See the LICENSE file in the project root for more information.
 
+using System;
 using System.Reflection;
 
 namespace Triton.Interop.Extensions
@@ -41,5 +42,13 @@ namespace Triton.Interop.Extensions
 
             return (minArgs, maxArgs);
         }
+
+        /// <summary>
+        /// Gets the return type of the method.
+        /// </summary>
+        /// <param name="method">The method.</param>
+        /// <returns>The return type.</returns>
+        public static Type GetReturnType(this MethodBase method) =>
+            method is MethodInfo { ReturnType: var returnType } ? returnType : method.DeclaringType!;
     }
 }

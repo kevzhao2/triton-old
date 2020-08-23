@@ -155,13 +155,7 @@ namespace Triton.Interop
                         },
                         (ilg, property) =>
                         {
-                            var propertyType = property.PropertyType;
-
                             ilg.Emit(Call, property.GetMethod!);
-                            if (propertyType.IsByRef)
-                            {
-                                ilg.EmitLdind(propertyType.GetElementType()!);
-                            }
                         });
                 }
 
@@ -317,14 +311,14 @@ namespace Triton.Interop
                         ilg.Emit(Ldc_I4_1);
                         ilg.Emit(Add);
                     },
-                    (ilg, method, temps) =>
+                    (ilg, clrMethodOrConstructor, temps) =>
                     {
                         foreach (var temp in temps)
                         {
                             ilg.Emit(Ldloc, temp);
                         }
 
-                        ilg.Emit(Newobj, (ConstructorInfo)method);
+                        ilg.Emit(Newobj, (ConstructorInfo)clrMethodOrConstructor);
                     });
 
                 ilg.Emit(Ldarg_1);
@@ -402,14 +396,8 @@ namespace Triton.Interop
                         },
                         (ilg, property) =>
                         {
-                            var propertyType = property.PropertyType;
-
                             ilg.Emit(Ldloc, target);
                             ilg.EmitCall(property.GetMethod!);
-                            if (propertyType.IsByRef)
-                            {
-                                ilg.EmitLdind(propertyType.GetElementType()!);
-                            }
                         });
                 }
 

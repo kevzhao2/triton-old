@@ -9,11 +9,14 @@ namespace Triton.Interop
 {
     public class StaticMethodTests
     {
+        public class DefaultValueMethod
+        {
+
+        }
+
         public class ParamsMethod
         {
-            public static int Value;
-
-            public static void DoWork(params int[] values) => Value = values.Sum();
+            public static int Sum(params int[] values) => values.Sum();
         }
 
         [Fact]
@@ -22,9 +25,7 @@ namespace Triton.Interop
             using var environment = new LuaEnvironment();
             environment["ParamsMethod"] = LuaValue.FromClrType(typeof(ParamsMethod));
 
-            environment.Eval("ParamsMethod.DoWork()");
-
-            Assert.Equal(0, ParamsMethod.Value);
+            environment.Eval("assert(ParamsMethod.Sum() == 0)");
         }
 
         [Fact]
@@ -33,20 +34,17 @@ namespace Triton.Interop
             using var environment = new LuaEnvironment();
             environment["ParamsMethod"] = LuaValue.FromClrType(typeof(ParamsMethod));
 
-            environment.Eval("ParamsMethod.DoWork(1234)");
-
-            Assert.Equal(1234, ParamsMethod.Value);
+            environment.Eval("assert(ParamsMethod.Sum(1) == 1)");
         }
 
         [Fact]
-        public void ParamsMethod_TwoArgs()
+        public void ParamsMethod_MultipleArgs()
         {
             using var environment = new LuaEnvironment();
             environment["ParamsMethod"] = LuaValue.FromClrType(typeof(ParamsMethod));
 
-            environment.Eval("ParamsMethod.DoWork(1234, 5678)");
-
-            Assert.Equal(6912, ParamsMethod.Value);
+            environment.Eval("assert(ParamsMethod.Sum(1, 2) == 3)");
+            environment.Eval("assert(ParamsMethod.Sum(1, 2, 3) == 6)");
         }
     }
 }

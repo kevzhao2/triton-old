@@ -11,6 +11,7 @@ using Triton.Interop.Extensions;
 using static System.Reflection.BindingFlags;
 using static System.Reflection.Emit.OpCodes;
 using static Triton.NativeMethods;
+using Debug = System.Diagnostics.Debug;
 
 namespace Triton.Interop
 {
@@ -52,21 +53,59 @@ namespace Triton.Interop
             });
 
         private static void EmitLuaLoad(
-            ILGenerator ilg, Type clrType,
+            ILGenerator ilg, Type clrType, LocalBuilder temp,
             Action<ILGenerator> getLuaType,
             Action<ILGenerator> getLuaIndex,
             Label isInvalidLuaValue)
         {
-            clrType = clrType.Simplify();
+            Debug.Assert(clrType == temp.LocalType);
+            Debug.Assert(!clrType.IsByRef);
+            Debug.Assert(!clrType.IsByRefLike);
 
-            // Verify that the Lua type is correct. This is not required for the `LuaValue` type, since it is a tagged
-            // union that supports all Lua types.
+            // First, unpack the type into the non-nullable type. This allows us to handle `int?` properly.
 
-            if (clrType != typeof(LuaValue))
+            var isNullableType = Nullable.GetUnderlyingType(clrType) is { };
+            var nonNullableType = Nullable.GetUnderlyingType(clrType) ?? clrType;
+
+            var skip = ilg.DefineLabel();
+
             {
-                if (clrType == typeof(LuaObject))
+                // Handle `null` if it is a valid value. This may occur if the type is not a value type or if it is a
+                // nullable type.
+
+                if (!clrType.IsValueType || isNullableType)
                 {
-                    // `LuaObject` can correspond to three different Lua types
+                    var isNotNull = ilg.DefineLabel();
+
+                    getLuaType(ilg);
+                    ilg.Emit(Brtrue_S, isNotNull);
+                    {
+                        if (!clrType.IsValueType)
+                        {
+                            ilg.Emit(Ldnull);
+                            ilg.Emit(Stloc, temp);
+                        }
+                        else
+                        {
+                            ilg.Emit(Ldloca, temp);
+                            ilg.Emit(Initobj, clrType);
+                        }
+
+                        ilg.Emit(Br_S, skip);
+                    }
+
+                    ilg.MarkLabel(isNotNull);
+                }
+            }
+
+            if (nonNullableType != typeof(LuaValue))
+            {
+                // Verify that the Lua type is correct. This is not required for the `LuaValue` type, since it is a
+                // tagged union that supports all Lua types.
+
+                if (nonNullableType == typeof(LuaObject))
+                {
+                    // `LuaObject` can correspond to three different Lua types.
 
                     var isCorrectType = ilg.DefineLabel();
 
@@ -89,20 +128,20 @@ namespace Triton.Interop
                     getLuaType(ilg);
                     ilg.Emit(true switch
                     {
-                        _ when clrType == typeof(bool)        => Ldc_I4_1,
-                        _ when clrType.IsLightUserdata()      => Ldc_I4_2,
-                        _ when clrType.IsInteger()            => Ldc_I4_3,
-                        _ when clrType.IsNumber()             => Ldc_I4_3,
-                        _ when clrType.IsString()             => Ldc_I4_4,
-                        _ when clrType == typeof(LuaTable)    => Ldc_I4_5,
-                        _ when clrType == typeof(LuaFunction) => Ldc_I4_6,
-                        _ when clrType.IsClrObject()          => Ldc_I4_7,
-                        _ when clrType == typeof(LuaThread)   => Ldc_I4_8,
-                        _                                     => throw new InvalidOperationException()
+                        _ when nonNullableType.IsBoolean()            => Ldc_I4_1,
+                        _ when nonNullableType.IsLightUserdata()      => Ldc_I4_2,
+                        _ when nonNullableType.IsInteger()            => Ldc_I4_3,
+                        _ when nonNullableType.IsNumber()             => Ldc_I4_3,
+                        _ when nonNullableType.IsString()             => Ldc_I4_4,
+                        _ when nonNullableType == typeof(LuaTable)    => Ldc_I4_5,
+                        _ when nonNullableType == typeof(LuaFunction) => Ldc_I4_6,
+                        _ when nonNullableType.IsClrObject()          => Ldc_I4_7,
+                        _ when nonNullableType == typeof(LuaThread)   => Ldc_I4_8,
+                        _                                             => throw new InvalidOperationException()
                     });
                     ilg.Emit(Bne_Un, isInvalidLuaValue);  // Not short form
 
-                    if (clrType.IsInteger())
+                    if (nonNullableType.IsInteger())
                     {
                         ilg.Emit(Ldarg_1);
                         getLuaIndex(ilg);
@@ -112,159 +151,253 @@ namespace Triton.Interop
                 }
             }
 
-            if (clrType == typeof(LuaValue) || clrType.IsLuaObject() || clrType.IsClrObject())
             {
-                ilg.Emit(Ldarg_0);  // Required for `MetamethodContext` methods
-            }
+                // Load the value from the Lua stack. If it is a nullable type, then we need to load it into a temporary
+                // to construct the nullable.
 
-            ilg.Emit(Ldarg_1);
-            getLuaIndex(ilg);
+                var nonNullableTemp = isNullableType ? ilg.DeclareReusableLocal(nonNullableType) : null;
 
-            if (clrType == typeof(LuaValue) || clrType.IsLuaObject())
-            {
-                getLuaType(ilg);
-            }
-
-            ilg.Emit(Call, true switch
-            {
-                _ when clrType == typeof(LuaValue) => MetamethodContext._loadValue,
-                _ when clrType.IsBoolean()         => _lua_toboolean,
-                _ when clrType.IsLightUserdata()   => _lua_touserdata,
-                _ when clrType.IsInteger()         => _lua_tointeger,
-                _ when clrType.IsNumber()          => _lua_tonumber,
-                _ when clrType.IsString()          => _lua_tostring,
-                _ when clrType.IsLuaObject()       => MetamethodContext._loadLuaObject,
-                _ when clrType.IsClrObject()       => MetamethodContext._loadClrEntity,
-                _                                  => throw new InvalidOperationException()
-            });
-
-            if (clrType.IsInteger() && clrType != typeof(long) && clrType != typeof(ulong))
-            {
-                // Verify that the integer can be converted without overflow or underflow.
-
-                using var temp = ilg.DeclareReusableLocal(typeof(long));
-                using var result = ilg.DeclareReusableLocal(clrType);
-
-                ilg.Emit(Stloc, temp);
-
-                ilg.BeginExceptionBlock();
+                if (nonNullableType == typeof(LuaValue) || nonNullableType.IsLuaObject() ||
+                    nonNullableType.IsClrObject())
                 {
-                    ilg.Emit(Ldloc, temp);
-                    ilg.Emit(true switch
+                    ilg.Emit(Ldarg_0);  // Required for `MetamethodContext` methods
+                }
+
+                ilg.Emit(Ldarg_1);
+                getLuaIndex(ilg);
+
+                if (nonNullableType == typeof(LuaValue) || nonNullableType.IsLuaObject())
+                {
+                    getLuaType(ilg);
+                }
+
+                ilg.Emit(Call, true switch
+                {
+                    _ when nonNullableType == typeof(LuaValue) => MetamethodContext._loadValue,
+                    _ when nonNullableType.IsBoolean()         => _lua_toboolean,
+                    _ when nonNullableType.IsLightUserdata()   => _lua_touserdata,
+                    _ when nonNullableType.IsInteger()         => _lua_tointeger,
+                    _ when nonNullableType.IsNumber()          => _lua_tonumber,
+                    _ when nonNullableType.IsString()          => _lua_tostring,
+                    _ when nonNullableType.IsLuaObject()       => MetamethodContext._loadLuaObject,
+                    _ when nonNullableType.IsClrObject()       => MetamethodContext._loadClrEntity,
+                    _                                          => throw new InvalidOperationException()
+                });
+
+                if (nonNullableType.IsInteger() && nonNullableType != typeof(long) && nonNullableType != typeof(ulong))
+                {
+                    // Verify that the integer can be converted without overflow or underflow.
+
+                    using var tempLong = ilg.DeclareReusableLocal(typeof(long));
+
+                    ilg.Emit(Stloc, tempLong);
+
+                    ilg.BeginExceptionBlock();
                     {
-                        _ when clrType == typeof(byte)   => Conv_Ovf_U1,
-                        _ when clrType == typeof(ushort) => Conv_Ovf_U2,
-                        _ when clrType == typeof(uint)   => Conv_Ovf_U4,
-                        _ when clrType == typeof(sbyte)  => Conv_Ovf_I1,
-                        _ when clrType == typeof(short)  => Conv_Ovf_I2,
-                        _                                => Conv_Ovf_I4
-                    });
-                    ilg.Emit(Stloc, result);
-                }
+                        ilg.Emit(Ldloc, tempLong);
+                        ilg.Emit(true switch
+                        {
+                            _ when nonNullableType == typeof(byte) => Conv_Ovf_U1,
+                            _ when nonNullableType == typeof(ushort) => Conv_Ovf_U2,
+                            _ when nonNullableType == typeof(uint) => Conv_Ovf_U4,
+                            _ when nonNullableType == typeof(sbyte) => Conv_Ovf_I1,
+                            _ when nonNullableType == typeof(short) => Conv_Ovf_I2,
+                            _ => Conv_Ovf_I4
+                        });
+                        ilg.Emit(Stloc, nonNullableTemp ?? temp);
+                    }
 
-                ilg.BeginCatchBlock(typeof(OverflowException));
+                    ilg.BeginCatchBlock(typeof(OverflowException));
+                    {
+                        ilg.Emit(Leave, isInvalidLuaValue);  // Not short form
+                    }
+
+                    ilg.EndExceptionBlock();
+                }
+                else if (nonNullableType == typeof(float))
                 {
-                    ilg.Emit(Leave, isInvalidLuaValue);  // Not short form
+                    ilg.Emit(Conv_R4);
+                    ilg.Emit(Stloc, nonNullableTemp ?? temp);
+                }
+                else if (nonNullableType == typeof(char))
+                {
+                    // Verify that the string has exactly one character.
+
+                    using var tempString = ilg.DeclareReusableLocal(typeof(string));
+
+                    ilg.Emit(Stloc, tempString);
+
+                    ilg.Emit(Ldloc, tempString);
+                    ilg.Emit(Call, _stringLength.GetMethod!);
+                    ilg.Emit(Ldc_I4_1);
+                    ilg.Emit(Bne_Un, isInvalidLuaValue);  // Not short form
+
+                    ilg.Emit(Ldloc, tempString);
+                    ilg.Emit(Ldc_I4_0);
+                    ilg.Emit(Call, _stringIndexer.GetMethod!);
+                    ilg.Emit(Stloc, nonNullableTemp ?? temp);
+                }
+                else if (nonNullableType.IsLuaObject() && nonNullableType != typeof(LuaObject))
+                {
+                    ilg.Emit(Castclass, nonNullableType);
+                    ilg.Emit(Stloc, nonNullableTemp ?? temp);
+                }
+                else if (nonNullableType.IsClrObject())
+                {
+                    // Verify that the object type is correct.
+
+                    using var tempObject = ilg.DeclareReusableLocal(typeof(object));
+
+                    ilg.Emit(Stloc, tempObject);
+
+                    ilg.Emit(Ldloc, tempObject);
+                    ilg.Emit(Isinst, nonNullableType);
+                    ilg.Emit(Brfalse, isInvalidLuaValue);  // Not short form
+
+                    ilg.Emit(Ldloc, tempObject);
+                    ilg.Emit(Unbox_Any, nonNullableType);
+                    ilg.Emit(Stloc, nonNullableTemp ?? temp);
+                }
+                else
+                {
+                    ilg.Emit(Stloc, nonNullableTemp ?? temp);
                 }
 
-                ilg.EndExceptionBlock();
+                if (isNullableType)
+                {
+                    ilg.Emit(Ldloca, temp);
+                    ilg.Emit(Ldloc, nonNullableTemp!);
+                    ilg.Emit(Call, clrType.GetConstructor(new[] { nonNullableType! })!);
+                }
 
-                ilg.Emit(Ldloc, result);
+                nonNullableTemp?.Dispose();
             }
-            else if (clrType == typeof(float))
-            {
-                ilg.Emit(Conv_R4);
-            }
-            else if (clrType == typeof(char))
-            {
-                // Verify that the string has exactly one character.
 
-                using var temp = ilg.DeclareReusableLocal(typeof(string));
-
-                ilg.Emit(Stloc, temp);
-
-                ilg.Emit(Ldloc, temp);
-                ilg.Emit(Call, _stringLength.GetMethod!);
-                ilg.Emit(Ldc_I4_1);
-                ilg.Emit(Bne_Un, isInvalidLuaValue);  // Not short form
-
-                ilg.Emit(Ldloc, temp);
-                ilg.Emit(Ldc_I4_0);
-                ilg.Emit(Call, _stringIndexer.GetMethod!);
-            }
-            else if (clrType.IsLuaObject() && clrType != typeof(LuaObject))
-            {
-                ilg.Emit(Castclass, clrType);
-            }
-            else if (clrType.IsClrObject())
-            {
-                // Verify that the type is correct.
-
-                var isStruct = clrType.IsClrStruct();
-                using var temp = ilg.DeclareReusableLocal(isStruct ? clrType.MakeByRefType() : clrType);
-
-                ilg.Emit(Isinst, clrType);
-                ilg.Emit(Stloc, temp);
-
-                ilg.Emit(Ldloc, temp);
-                ilg.Emit(Brfalse, isInvalidLuaValue);  // Not short form
-
-                ilg.Emit(Ldloc, temp);
-            }
+            ilg.MarkLabel(skip);
         }
 
         private static void EmitLuaPush(
-            ILGenerator ilg, Type clrType,
-            Action<ILGenerator> getClrValue)
+            ILGenerator ilg, Type clrType, LocalBuilder temp)
         {
-            clrType = clrType.Simplify();
+            Debug.Assert(clrType == temp.LocalType);
+            Debug.Assert(!clrType.IsByRefLike);
 
-            if (clrType == typeof(LuaValue) || clrType.IsLuaObject() || clrType.IsClrObject())
+            // First, unpack the type into the non-byref type, and then into the non-nullable type. This allows us to
+            // handle `ref int?` properly.
+
+            var isByRefType = clrType.IsByRef;
+            var nonByRefType = isByRefType ? clrType.GetElementType()! : clrType;
+
+            var isNullableType = Nullable.GetUnderlyingType(nonByRefType) is { };
+            var nonNullableType = Nullable.GetUnderlyingType(nonByRefType) ?? nonByRefType;
+
+            var skip = ilg.DefineLabel();
+
             {
-                ilg.Emit(Ldarg_0);  // Required for `MetamethodContext` methods
+                // Handle `null` if it is a valid value. This may occur if the type is not a value type or if it is a
+                // nullable type.
+
+                if (!clrType.IsValueType || isNullableType)
+                {
+                    var isNotNull = ilg.DefineLabel();
+                    var isNull = ilg.DefineLabel();
+
+                    // First, check if the value is `null`. Then we check if the nullable value is `null`. This allows
+                    // us to handle `ref int?` properly.
+
+                    if (!clrType.IsValueType)
+                    {
+                        ilg.Emit(Ldloc, temp);
+                        ilg.Emit(Brfalse_S, isNull);
+                    }
+
+                    if (isNullableType)
+                    {
+                        ilg.Emit(isByRefType ? Ldloc : Ldloca, temp);
+                        ilg.Emit(Call, nonByRefType.GetProperty(nameof(Nullable<int>.HasValue))!.GetMethod!);
+                        ilg.Emit(Brfalse_S, isNull);
+                    }
+
+                    ilg.Emit(Br_S, isNotNull);
+                    {
+                        ilg.MarkLabel(isNull);
+
+                        ilg.Emit(Ldarg_1);
+                        ilg.Emit(Call, _lua_pushnil);
+                        ilg.Emit(Br_S, skip);
+                    }
+
+                    ilg.MarkLabel(isNotNull);
+                }
             }
 
-            ilg.Emit(Ldarg_1);
-            getClrValue(ilg);
+            {
+                // Push the value onto the Lua stack.
 
-            if (clrType.IsSignedInteger() && clrType != typeof(long))
-            {
-                ilg.Emit(Conv_I8);
-            }
-            else if (clrType.IsUnsignedInteger() && clrType != typeof(ulong))
-            {
-                ilg.Emit(Conv_U8);
-            }
-            else if (clrType == typeof(float))
-            {
-                ilg.Emit(Conv_R8);
-            }
-            else if (clrType == typeof(char))
-            {
-                ilg.Emit(Call, _charToString);
-            }
-            else if (clrType.IsClrStruct())
-            {
-                ilg.Emit(Box, clrType);
+                if (nonNullableType == typeof(LuaValue) || nonNullableType.IsLuaObject() ||
+                    nonNullableType.IsClrObject())
+                {
+                    ilg.Emit(Ldarg_0);  // Required for `MetamethodContext` methods
+                }
+
+                ilg.Emit(Ldarg_1);
+
+                if (!isNullableType)
+                {
+                    ilg.Emit(Ldloc, temp);
+
+                    if (isByRefType)
+                    {
+                        ilg.EmitLdind(nonByRefType);
+                    }
+                }
+                else
+                {
+                    ilg.Emit(isByRefType ? Ldloc : Ldloca, temp);
+                    ilg.Emit(Call, nonByRefType.GetProperty(nameof(Nullable<int>.Value))!.GetMethod!);
+                }
+
+                if (nonNullableType.IsSignedInteger())
+                {
+                    ilg.Emit(Conv_I8);
+                }
+                else if (nonNullableType.IsUnsignedInteger())
+                {
+                    ilg.Emit(Conv_U8);
+                }
+                else if (nonNullableType == typeof(float))
+                {
+                    ilg.Emit(Conv_R8);
+                }
+                else if (nonNullableType == typeof(char))
+                {
+                    ilg.Emit(Call, _charToString);
+                }
+                else if (nonNullableType.IsClrStruct())
+                {
+                    ilg.Emit(Box, nonNullableType);
+                }
+
+                ilg.Emit(Call, true switch
+                {
+                    _ when nonNullableType == typeof(LuaValue) => MetamethodContext._pushValue,
+                    _ when nonNullableType.IsBoolean()         => _lua_pushboolean,
+                    _ when nonNullableType.IsLightUserdata()   => _lua_pushlightuserdata,
+                    _ when nonNullableType.IsInteger()         => _lua_pushinteger,
+                    _ when nonNullableType.IsNumber()          => _lua_pushnumber,
+                    _ when nonNullableType.IsString()          => _lua_pushstring,
+                    _ when nonNullableType.IsLuaObject()       => MetamethodContext._pushLuaObject,
+                    _ when nonNullableType.IsClrObject()       => MetamethodContext._pushClrEntity,
+                    _                                          => throw new InvalidOperationException()
+                });
+
+                if (nonNullableType.IsString())
+                {
+                    ilg.Emit(Pop);  // Pop the return value
+                }
             }
 
-            ilg.Emit(Call, true switch
-            {
-                _ when clrType == typeof(LuaValue) => MetamethodContext._pushValue,
-                _ when clrType.IsBoolean()         => _lua_pushboolean,
-                _ when clrType.IsLightUserdata()   => _lua_pushlightuserdata,
-                _ when clrType.IsInteger()         => _lua_pushinteger,
-                _ when clrType.IsNumber()          => _lua_pushnumber,
-                _ when clrType.IsString()          => _lua_pushstring,
-                _ when clrType.IsLuaObject()       => MetamethodContext._pushLuaObject,
-                _ when clrType.IsClrObject()       => MetamethodContext._pushClrEntity,
-                _                                  => throw new InvalidOperationException()
-            });
-
-            if (clrType.IsString())
-            {
-                ilg.Emit(Pop);  // Pop the return value
-            }
+            ilg.MarkLabel(skip);
         }
 
         private static LocalBuilder EmitDeclareTarget(ILGenerator ilg, Type objType)
@@ -380,17 +513,18 @@ namespace Triton.Interop
                         case FieldInfo field:
                             var fieldType = field.FieldType;
 
-                            EmitLuaPush(ilg, fieldType,
-                                ilg => getFieldValue(ilg, field));
+                            {
+                                using var temp = ilg.DeclareReusableLocal(fieldType);
+
+                                getFieldValue(ilg, field);
+                                ilg.Emit(Stloc, temp);
+
+                                EmitLuaPush(ilg, fieldType, temp);
+                            }
                             break;
 
                         case PropertyInfo property:
                             var propertyType = property.PropertyType;
-                            var isByRef = propertyType.IsByRef;
-                            if (isByRef)
-                            {
-                                propertyType = propertyType.GetElementType()!;
-                            }
 
                             if (property.GetMethod?.IsPublic != true)
                             {
@@ -404,8 +538,14 @@ namespace Triton.Interop
                                 return;
                             }
 
-                            EmitLuaPush(ilg, propertyType,
-                                ilg => getPropertyValue(ilg, property));
+                            {
+                                using var temp = ilg.DeclareReusableLocal(propertyType);
+
+                                getPropertyValue(ilg, property);
+                                ilg.Emit(Stloc, temp);
+
+                                EmitLuaPush(ilg, propertyType, temp);
+                            }
                             break;
 
                         default:
@@ -495,17 +635,13 @@ namespace Triton.Interop
                                 return;
                             }
 
-                            EmitLuaLoad(ilg, fieldType,
-                                getValueLuaType,
-                                ilg => ilg.Emit(Ldc_I4_3),
-                                invalidFieldValue.Value);
-
                             {
-                                var isStruct = fieldType.IsClrStruct();
-                                using var temp = ilg.DeclareReusableLocal(
-                                    isStruct ? fieldType.MakeByRefType() : fieldType);
-                                ilg.Emit(Stloc, temp);
+                                using var temp = ilg.DeclareReusableLocal(fieldType);
 
+                                EmitLuaLoad(ilg, fieldType, temp,
+                                    getValueLuaType,
+                                    ilg => ilg.Emit(Ldc_I4_3),
+                                    invalidFieldValue.Value);
                                 setFieldValue(ilg, field, temp);
                             }
                             break;
@@ -534,17 +670,13 @@ namespace Triton.Interop
                                 return;
                             }
 
-                            EmitLuaLoad(ilg, propertyType,
-                                getValueLuaType,
-                                ilg => ilg.Emit(Ldc_I4_3),
-                                invalidPropertyValue.Value);
-
                             {
-                                var isStruct = propertyType.IsClrStruct();
-                                using var temp = ilg.DeclareReusableLocal(
-                                    isStruct ? propertyType.MakeByRefType() : propertyType);
-                                ilg.Emit(Stloc, temp);
+                                using var temp = ilg.DeclareReusableLocal(propertyType);
 
+                                EmitLuaLoad(ilg, propertyType, temp,
+                                    getValueLuaType,
+                                    ilg => ilg.Emit(Ldc_I4_3),
+                                    invalidPropertyValue.Value);
                                 setPropertyValue(ilg, property, temp);
                             }
                             break;
@@ -568,23 +700,21 @@ namespace Triton.Interop
         }
 
         private static void EmitCallMethod(
-            ILGenerator ilg, MethodBase clrMethodOrConstructor,
+            ILGenerator ilg, MethodBase clrMethod,
             Action<ILGenerator> getLuaArgCount,
             Action<ILGenerator, LocalBuilder> getLuaArgType,
             Action<ILGenerator, LocalBuilder> getLuaArgIndex,
             Action<ILGenerator, MethodBase, ILGeneratorExtensions.ReusableLocalBuilder[]> callClrMethod,
             Label isInvalidCall)
         {
-            // Declare local variables for each of the arguments.
-
-            var parameters = clrMethodOrConstructor.GetParameters();
+            var parameters = clrMethod.GetParameters();
             var args = parameters.Select(p => ilg.DeclareReusableLocal(p.ParameterType)).ToArray();
 
             {
                 // Use the argument count bounds to filter out calls with too few arguments or too many arguments. This
                 // is done using an unsigned comparison for optimal codegen.
 
-                var (minArgs, maxArgs) = clrMethodOrConstructor.GetArgCountBounds();
+                var (minArgs, maxArgs) = clrMethod.GetArgCountBounds();
 
                 getLuaArgCount(ilg);
                 ilg.Emit(Ldc_I4, minArgs);
@@ -594,6 +724,9 @@ namespace Triton.Interop
             }
 
             {
+                // Fill in the arguments for the call. We declare an argument index local in order to handle methods
+                // with a variable number of arguments.
+
                 using var argIndex = ilg.DeclareReusableLocal(typeof(int));
                 ilg.Emit(Ldc_I4_1);  // Starts at 1 to match Lua convention
                 ilg.Emit(Stloc, argIndex);
@@ -604,14 +737,13 @@ namespace Triton.Interop
                     var parameterType = parameters[i].ParameterType;
                     var arg = args[i];
 
-                    // If the parameter is a `params` array, then we construct an array with the rest of the Lua
-                    // arguments.
+                    // If the parameter is a `params` array, then construct an array with the rest of the Lua arguments.
 
                     if (parameter.IsParams())
                     {
                         var elementType = parameterType.GetElementType()!;
 
-                        // Create the array based on the number of remaining Lua arguments.
+                        // Create an empty array with a size equal to the number of remaining Lua arguments.
 
                         getLuaArgCount(ilg);
                         ilg.Emit(Ldloc, argIndex);
@@ -620,6 +752,8 @@ namespace Triton.Interop
                         ilg.Emit(Add);
                         ilg.Emit(Newarr, elementType);
                         ilg.Emit(Stloc, arg);
+
+                        // Fill in the array using the remaining Lua arguments.
 
                         using var arrIndex = ilg.DeclareReusableLocal(typeof(int));
                         ilg.Emit(Ldc_I4_0);
@@ -631,13 +765,12 @@ namespace Triton.Interop
                         {
                             var loopBody = ilg.DefineAndMarkLabel();
 
-                            EmitLuaLoad(ilg, elementType,
+                            using var temp = ilg.DeclareReusableLocal(elementType);
+
+                            EmitLuaLoad(ilg, elementType, temp,
                                 ilg => getLuaArgType(ilg, argIndex),
                                 ilg => getLuaArgIndex(ilg, argIndex),
                                 isInvalidCall);
-
-                            using var temp = ilg.DeclareReusableLocal(elementType);
-                            ilg.Emit(Stloc, temp);
 
                             ilg.Emit(Ldloc, argIndex);
                             ilg.Emit(Ldc_I4_1);
@@ -665,25 +798,34 @@ namespace Triton.Interop
 
                         break;
                     }
+
+                    EmitLuaLoad(ilg, parameterType, arg,
+                        ilg => getLuaArgType(ilg, argIndex),
+                        ilg => getLuaArgIndex(ilg, argIndex),
+                        isInvalidCall);
                 }
             }
 
-            switch (clrMethodOrConstructor)
+            var returnType = clrMethod.GetReturnType();
+            if (returnType == typeof(void))
             {
-                case ConstructorInfo clrConstructor:
-                    // TODO: handle constructors
-                    break;
+                callClrMethod(ilg, clrMethod, args);
 
-                case MethodInfo clrMethod:
-                    callClrMethod(ilg, clrMethodOrConstructor, args);
-                    break;
+                ilg.Emit(Ldc_I4_0);
+                ilg.Emit(Ret);
             }
+            else
+            {
+                using var temp = ilg.DeclareReusableLocal(returnType);
 
-            // TODO: return values
+                callClrMethod(ilg, clrMethod, args);
+                ilg.Emit(Stloc, temp);
 
-            var results = 0;
-            ilg.Emit(Ldc_I4, results);
-            ilg.Emit(Ret);
+                EmitLuaPush(ilg, returnType, temp);
+
+                ilg.Emit(Ldc_I4_1);
+                ilg.Emit(Ret);
+            }
             
             foreach (var arg in args)
             {
@@ -696,7 +838,7 @@ namespace Triton.Interop
             Action<ILGenerator> getLuaArgCount,
             Action<ILGenerator, LocalBuilder> getLuaArgType,
             Action<ILGenerator, LocalBuilder> getLuaArgIndex,
-            Action<ILGenerator, MethodBase, ILGeneratorExtensions.ReusableLocalBuilder[]> callMethod)
+            Action<ILGenerator, MethodBase, ILGeneratorExtensions.ReusableLocalBuilder[]> callClrMethod)
         {
             var nextMethods = ilg.DefineLabels(methods.Count);
 
@@ -706,7 +848,7 @@ namespace Triton.Interop
                     getLuaArgCount,
                     getLuaArgType,
                     getLuaArgIndex,
-                    callMethod,
+                    callClrMethod,
                     nextMethods[i]);
 
                 ilg.MarkLabel(nextMethods[i]);

@@ -190,49 +190,27 @@ namespace Triton.Interop
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="value">The Lua value.</param>
-        public void PushValue(IntPtr state, LuaValue value) =>
-            _environment.PushValue(state, value);
+        public void PushValue(IntPtr state, LuaValue value) => _environment.PushValue(state, value);
 
         /// <summary>
         /// Pushes the given Lua object onto the stack.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="obj">The Lua object.</param>
-        public void PushLuaObject(IntPtr state, LuaObject? obj)
-        {
-            if (obj is null)
-            {
-                lua_pushnil(state);
-            }
-            else
-            {
-                _environment.PushLuaObject(state, obj);
-            }
-        }
+        public void PushLuaObject(IntPtr state, LuaObject obj) => _environment.PushLuaObject(state, obj);
 
         /// <summary>
         /// Pushes the given CLR entity onto the stack.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="entity">The CLR entity.</param>
-        public void PushClrEntity(IntPtr state, object? entity)
-        {
-            if (entity is null)
-            {
-                lua_pushnil(state);
-            }
-            else
-            {
-                _environment.PushClrEntity(state, entity);
-            }
-        }
+        public void PushClrEntity(IntPtr state, object entity) => _environment.PushClrEntity(state, entity);
 
         /// <summary>
         /// Pushes the given CLR type onto the stack.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="type">The CLR type.</param>
-        public void PushClrType(IntPtr state, Type type) =>
-            _environment.PushClrEntity(state, new ProxyClrType(type));
+        public void PushClrType(IntPtr state, Type type) => _environment.PushClrEntity(state, new ProxyClrType(type));
     }
 }

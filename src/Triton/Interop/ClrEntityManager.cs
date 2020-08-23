@@ -258,7 +258,7 @@ namespace Triton.Interop
         private int ToStringMetamethod(IntPtr state)
         {
             var entity = Load(state, 1);
-            lua_pushstring(state, entity.ToString());
+            lua_pushstring(state, entity.ToString() ?? string.Empty);
             return 1;
         }
     }
