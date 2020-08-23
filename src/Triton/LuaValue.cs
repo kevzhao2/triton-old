@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -64,7 +65,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Acts as a proxy for generic CLR types with the same names.
+        /// Acts as a proxy for generic CLR types.
         /// </summary>
         internal sealed class ProxyGenericClrTypes
         {

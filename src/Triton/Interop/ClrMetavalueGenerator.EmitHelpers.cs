@@ -28,7 +28,7 @@ namespace Triton.Interop
 
         private static readonly Type[] _metamethodParameterTypes = new[] { typeof(MetamethodContext), typeof(IntPtr) };
 
-        private readonly List<LuaCFunction> _generatedMetamethods = new List<LuaCFunction>();
+        private readonly List<LuaCFunction> _generatedFunctions = new List<LuaCFunction>();
 
         private static Lazy<Label> LazyEmitErrorMemberName(ILGenerator ilg, string format) =>
             new Lazy<Label>(() =>
@@ -564,17 +564,18 @@ namespace Triton.Interop
 
         private void EmitIndexTypeArgs(
            ILGenerator ilg,
-           Action<ILGenerator> getKeyLuaType,
+           Action<ILGenerator> getLuaKeyType,
+           Action<ILGenerator> getLuaIndex,
            Action<ILGenerator, LocalBuilder> typeArgsAction)
         {
             var isUserdata = ilg.DefineLabel();
             var isNotTable = ilg.DefineLabel();
 
-            getKeyLuaType(ilg);
+            getLuaKeyType(ilg);
             ilg.Emit(Ldc_I4_7);
             ilg.Emit(Beq_S, isUserdata);
 
-            getKeyLuaType(ilg);
+            getLuaKeyType(ilg);
             ilg.Emit(Ldc_I4_5);
             ilg.Emit(Bne_Un, isNotTable);  // Not short form
             {
@@ -584,8 +585,8 @@ namespace Triton.Interop
 
                 ilg.Emit(Ldarg_0);
                 ilg.Emit(Ldarg_1);
-                ilg.Emit(Ldc_I4_2);
-                getKeyLuaType(ilg);
+                getLuaIndex(ilg);
+                getLuaKeyType(ilg);
                 ilg.Emit(Call, MetamethodContext._loadClrTypes);
                 ilg.Emit(Stloc, typeArgs);
 
@@ -857,24 +858,26 @@ namespace Triton.Interop
             }
         }
 
-        private LuaCFunction GenerateMetamethod(string name, Action<ILGenerator, MetamethodContext> emitAction)
+        private void PushFunction(IntPtr state, string name, Action<ILGenerator, MetamethodContext> emit)
         {
-            var context = new MetamethodContext(_environment);
+            var context = new MetamethodContext(_environment, this);
             var method = new DynamicMethod(name, typeof(int), _metamethodParameterTypes, typeof(MetamethodContext));
             var ilg = method.GetILGenerator();
 
-            emitAction(ilg, context);
+            emit(ilg, context);
 
-            var metamethod = (LuaCFunction)method.CreateDelegate(typeof(LuaCFunction), context);
-            LuaCFunction protectedMetamethod = ProtectedMetamethod;
-            _generatedMetamethods.Add(protectedMetamethod);  // Prevent garbage collection
-            return protectedMetamethod;
+            var function = (LuaCFunction)method.CreateDelegate(typeof(LuaCFunction), context);
+            LuaCFunction protectedFunction = ProtectedFunction;
+            _generatedFunctions.Add(protectedFunction);  // Prevent garbage collection
 
-            int ProtectedMetamethod(IntPtr state)
+            lua_pushcfunction(state, protectedFunction);
+            return;
+
+            int ProtectedFunction(IntPtr state)
             {
                 try
                 {
-                    return metamethod(state);
+                    return function(state);
                 }
                 catch (Exception ex)
                 {

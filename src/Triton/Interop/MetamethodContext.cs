@@ -48,12 +48,17 @@ namespace Triton.Interop
         internal static readonly MethodInfo _pushClrType =
             typeof(MetamethodContext).GetMethod(nameof(PushClrType))!;
 
+        internal static readonly MethodInfo _pushClrMethods =
+            typeof(MetamethodContext).GetMethod(nameof(PushClrMethods))!;
+
         private readonly LuaEnvironment _environment;
+        private readonly ClrMetavalueGenerator _metavalueGenerator;
         private readonly Dictionary<IntPtr, int> _memberNameToIndex = new Dictionary<IntPtr, int>();
 
-        internal MetamethodContext(LuaEnvironment environment)
+        internal MetamethodContext(LuaEnvironment environment, ClrMetavalueGenerator metavalueGenerator)
         {
             _environment = environment;
+            _metavalueGenerator = metavalueGenerator;
         }
 
         /// <summary>
@@ -190,27 +195,39 @@ namespace Triton.Interop
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="value">The Lua value.</param>
-        public void PushValue(IntPtr state, LuaValue value) => _environment.PushValue(state, value);
+        public void PushValue(IntPtr state, LuaValue value) =>
+            _environment.PushValue(state, value);
 
         /// <summary>
         /// Pushes the given Lua object onto the stack.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="obj">The Lua object.</param>
-        public void PushLuaObject(IntPtr state, LuaObject obj) => _environment.PushLuaObject(state, obj);
+        public void PushLuaObject(IntPtr state, LuaObject obj) =>
+            _environment.PushLuaObject(state, obj);
 
         /// <summary>
         /// Pushes the given CLR entity onto the stack.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="entity">The CLR entity.</param>
-        public void PushClrEntity(IntPtr state, object entity) => _environment.PushClrEntity(state, entity);
+        public void PushClrEntity(IntPtr state, object entity) =>
+            _environment.PushClrEntity(state, entity);
 
         /// <summary>
         /// Pushes the given CLR type onto the stack.
         /// </summary>
         /// <param name="state">The Lua state.</param>
         /// <param name="type">The CLR type.</param>
-        public void PushClrType(IntPtr state, Type type) => _environment.PushClrEntity(state, new ProxyClrType(type));
+        public void PushClrType(IntPtr state, Type type) =>
+            _environment.PushClrEntity(state, new ProxyClrType(type));
+
+        /// <summary>
+        /// Pushes the given CLR methods onto the stack.
+        /// </summary>
+        /// <param name="state">The Lua state.</param>
+        /// <param name="methods">The CLR methods.</param>
+        public void PushClrMethods(IntPtr state, IReadOnlyList<MethodInfo> methods) =>
+            _metavalueGenerator.PushMethodsFunction(state, methods);
     }
 }

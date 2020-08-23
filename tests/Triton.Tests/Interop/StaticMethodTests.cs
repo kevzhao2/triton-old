@@ -9,14 +9,24 @@ namespace Triton.Interop
 {
     public class StaticMethodTests
     {
-        public class DefaultValueMethod
+        public class GenericMethod
         {
-
+            public static T Identity<T>(T value) => value;
         }
 
         public class ParamsMethod
         {
             public static int Sum(params int[] values) => values.Sum();
+        }
+
+        [Fact]
+        public void GenericMethod_OneArg()
+        {
+            using var environment = new LuaEnvironment();
+            environment["Int32"] = LuaValue.FromClrType(typeof(int));
+            environment["GenericMethod"] = LuaValue.FromClrType(typeof(GenericMethod));
+
+            environment.Eval("assert(GenericMethod.Identity[Int32](1234) == 1234)");
         }
 
         [Fact]

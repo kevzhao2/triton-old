@@ -104,6 +104,9 @@ namespace Triton
         internal static readonly MethodInfo _lua_pushstring =
             typeof(NativeMethods).GetMethod(nameof(lua_pushstring), new[] { typeof(IntPtr), typeof(string) })!;
 
+        internal static readonly MethodInfo _lua_remove =
+            typeof(NativeMethods).GetMethod(nameof(lua_remove))!;
+
         internal static readonly MethodInfo _lua_type =
             typeof(NativeMethods).GetMethod(nameof(lua_type))!;
 

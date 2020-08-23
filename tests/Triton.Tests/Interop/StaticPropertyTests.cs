@@ -127,8 +127,14 @@ namespace Triton.Interop
             [SuppressMessage("CodeQuality", "IDE0052:Remove unread private members", Justification = "Testing")]
             private static int _value;
 
-            public static int PrivateGetterValue { private get; set; }
-            public static int NoGetterValue { set => _value = value; }
+            public static int PrivateGetter { private get; set; }
+            public static int NoGetter { set => _value = value; }
+        }
+
+        public class NonWritableProperty
+        {
+            public static int PrivateSetter { get; private set; }
+            public static int NoSetter => 1234;
         }
 
         public class ByRefLikeProperty
@@ -947,8 +953,8 @@ namespace Triton.Interop
             environment["NonReadableProperty"] = LuaValue.FromClrType(typeof(NonReadableProperty));
 
             var ex = Assert.Throws<LuaRuntimeException>(
-                () => environment.Eval("_ = NonReadableProperty.PrivateGetterValue"));
-            Assert.Contains("attempt to get non-readable property 'PrivateGetterValue'", ex.Message);
+                () => environment.Eval("_ = NonReadableProperty.PrivateGetter"));
+            Assert.Contains("attempt to get non-readable property 'PrivateGetter'", ex.Message);
         }
 
         [Fact]
@@ -957,9 +963,29 @@ namespace Triton.Interop
             using var environment = new LuaEnvironment();
             environment["NonReadableProperty"] = LuaValue.FromClrType(typeof(NonReadableProperty));
 
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("_ = NonReadableProperty.NoGetter"));
+            Assert.Contains("attempt to get non-readable property 'NoGetter'", ex.Message);
+        }
+
+        [Fact]
+        public void NonWritable_GetPrivateSetter_RaisesLuaError()
+        {
+            using var environment = new LuaEnvironment();
+            environment["NonWritableProperty"] = LuaValue.FromClrType(typeof(NonWritableProperty));
+
             var ex = Assert.Throws<LuaRuntimeException>(
-                () => environment.Eval("_ = NonReadableProperty.NoGetterValue"));
-            Assert.Contains("attempt to get non-readable property 'NoGetterValue'", ex.Message);
+                () => environment.Eval("NonWritableProperty.PrivateSetter = 1234"));
+            Assert.Contains("attempt to set non-writable property 'PrivateSetter'", ex.Message);
+        }
+
+        [Fact]
+        public void NonWritable_GetNoSetter_RaisesLuaError()
+        {
+            using var environment = new LuaEnvironment();
+            environment["NonWritableProperty"] = LuaValue.FromClrType(typeof(NonWritableProperty));
+
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("NonWritableProperty.NoSetter = 1234"));
+            Assert.Contains("attempt to set non-writable property 'NoSetter'", ex.Message);
         }
 
         [Fact]
