@@ -29,8 +29,8 @@ namespace Triton.Interop
         public void GenericClass_Ctor()
         {
             using var environment = new LuaEnvironment();
-            environment["String"] = LuaValue.FromClrType(typeof(string));
-            environment["GenericClass"] = LuaValue.FromGenericClrTypes(typeof(GenericClass<>));
+            environment["String"] = LuaValue.FromClrTypes(typeof(string));
+            environment["GenericClass"] = LuaValue.FromClrTypes(typeof(GenericClass<>));
 
             environment.Eval("gc = GenericClass[String]('test')");
 
@@ -41,7 +41,7 @@ namespace Triton.Interop
         public void Struct_Ctor()
         {
             using var environment = new LuaEnvironment();
-            environment["Struct"] = LuaValue.FromClrType(typeof(Struct));
+            environment["Struct"] = LuaValue.FromClrTypes(typeof(Struct));
 
             environment.Eval("gc = Struct(123456789)");
         }

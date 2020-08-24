@@ -184,8 +184,7 @@ namespace Triton.Interop
             Type? LoadClrType(IntPtr state, int index) =>
                _environment.LoadClrEntity(state, index) switch
                {
-                   ProxyClrType { Type: var type } => type,
-                   ProxyGenericClrTypes { Types: var types } => types.FirstOrDefault(t => !t.IsGenericTypeDefinition),
+                   ProxyClrTypes { Types: var types } => types.FirstOrDefault(t => !t.IsGenericTypeDefinition),
                    _ => null
                };
         }
@@ -220,7 +219,7 @@ namespace Triton.Interop
         /// <param name="state">The Lua state.</param>
         /// <param name="type">The CLR type.</param>
         public void PushClrType(IntPtr state, Type type) =>
-            _environment.PushClrEntity(state, new ProxyClrType(type));
+            _environment.PushClrEntity(state, new ProxyClrTypes(new[] { type }));
 
         /// <summary>
         /// Pushes the given CLR methods onto the stack.

@@ -202,12 +202,8 @@ namespace Triton.Interop
             {
                 switch (entity)
                 {
-                    case ProxyClrType { Type: var type }:
-                        _metavalueGenerator.PushTypeMetatable(state, type);
-                        break;
-
-                    case ProxyGenericClrTypes { Types: var types }:
-                        _metavalueGenerator.PushGenericTypesMetatable(state, types);
+                    case ProxyClrTypes { Types: var types }:
+                        _metavalueGenerator.PushTypesMetatable(state, types);
                         break;
 
                     default:

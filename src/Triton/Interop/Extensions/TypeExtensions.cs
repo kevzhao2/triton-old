@@ -16,6 +16,18 @@ namespace Triton.Interop.Extensions
     internal static class TypeExtensions
     {
         /// <summary>
+        /// Gets the type's <see langword="public"/> fields.
+        /// </summary>
+        /// <param name="type">The type.</param>
+        /// <param name="isStatic">
+        /// <see langword="true"/> to get static fields, <see langword="false"/> to get instance fields.
+        /// </param>
+        /// <returns>The type's <see langword="public"/> fields.</returns>
+        public static IEnumerable<FieldInfo> GetPublicFields(this Type type, bool isStatic) =>
+            type.GetFields(Public | (isStatic ? Static | FlattenHierarchy : Instance))
+                .Where(f => !f.IsSpecialName);
+
+        /// <summary>
         /// Gets the type's <see langword="public"/> <see langword="static"/> fields.
         /// </summary>
         /// <param name="type">The type.</param>
@@ -31,6 +43,36 @@ namespace Triton.Interop.Extensions
         /// <returns>The type's <see langword="public"/> instance fields.</returns>
         public static IEnumerable<FieldInfo> GetPublicInstanceFields(this Type type) =>
             type.GetFields(Public | Instance)
+                .Where(f => !f.IsSpecialName);
+
+        /// <summary>
+        /// Gets the type's <see langword="public"/> <see langword="static"/> events.
+        /// </summary>
+        /// <param name="type">The type.</param>
+        /// <returns>The type's <see langword="public"/> <see langword="static"/> events.</returns>
+        public static IEnumerable<EventInfo> GetPublicStaticEvents(this Type type) =>
+            type.GetEvents(Public | Static | FlattenHierarchy)
+                .Where(f => !f.IsSpecialName);
+
+        /// <summary>
+        /// Gets the type's <see langword="public"/> instance events.
+        /// </summary>
+        /// <param name="type">The type.</param>
+        /// <returns>The type's <see langword="public"/> instance events.</returns>
+        public static IEnumerable<EventInfo> GetPublicInstanceEvents(this Type type) =>
+            type.GetEvents(Public | Instance)
+                .Where(f => !f.IsSpecialName);
+
+        /// <summary>
+        /// Gets the type's <see langword="public"/> properties.
+        /// </summary>
+        /// <param name="type">The type.</param>
+        /// <param name="isStatic">
+        /// <see langword="true"/> to get static properties, <see langword="false"/> to get instance properties.
+        /// </param>
+        /// <returns>The type's <see langword="public"/> properties.</returns>
+        public static IEnumerable<PropertyInfo> GetPublicProperties(this Type type, bool isStatic) =>
+            type.GetProperties(Public | (isStatic ? Static | FlattenHierarchy : Instance))
                 .Where(f => !f.IsSpecialName);
 
         /// <summary>
@@ -50,6 +92,18 @@ namespace Triton.Interop.Extensions
         public static IEnumerable<PropertyInfo> GetPublicInstanceProperties(this Type type) =>
             type.GetProperties(Public | Instance)
                 .Where(p => !p.IsSpecialName);
+
+        /// <summary>
+        /// Gets the type's <see langword="public"/> methods.
+        /// </summary>
+        /// <param name="type">The type.</param>
+        /// <param name="isStatic">
+        /// <see langword="true"/> to get static methods, <see langword="false"/> to get instance methods.
+        /// </param>
+        /// <returns>The type's <see langword="public"/> methods.</returns>
+        public static IEnumerable<MethodInfo> GetPublicMethods(this Type type, bool isStatic) =>
+            type.GetMethods(Public | (isStatic ? Static | FlattenHierarchy : Instance))
+                .Where(f => !f.IsSpecialName);
 
         /// <summary>
         /// Gets the type's <see langword="public"/> <see langword="static"/> methods.

@@ -23,8 +23,8 @@ namespace Triton.Interop
         public void GenericMethod_OneArg()
         {
             using var environment = new LuaEnvironment();
-            environment["Int32"] = LuaValue.FromClrType(typeof(int));
-            environment["GenericMethod"] = LuaValue.FromClrType(typeof(GenericMethod));
+            environment["Int32"] = LuaValue.FromClrTypes(typeof(int));
+            environment["GenericMethod"] = LuaValue.FromClrTypes(typeof(GenericMethod));
 
             environment.Eval("assert(GenericMethod.Identity[Int32](1234) == 1234)");
         }
@@ -33,7 +33,7 @@ namespace Triton.Interop
         public void ParamsMethod_NoArgs()
         {
             using var environment = new LuaEnvironment();
-            environment["ParamsMethod"] = LuaValue.FromClrType(typeof(ParamsMethod));
+            environment["ParamsMethod"] = LuaValue.FromClrTypes(typeof(ParamsMethod));
 
             environment.Eval("assert(ParamsMethod.Sum() == 0)");
         }
@@ -42,7 +42,7 @@ namespace Triton.Interop
         public void ParamsMethod_OneArg()
         {
             using var environment = new LuaEnvironment();
-            environment["ParamsMethod"] = LuaValue.FromClrType(typeof(ParamsMethod));
+            environment["ParamsMethod"] = LuaValue.FromClrTypes(typeof(ParamsMethod));
 
             environment.Eval("assert(ParamsMethod.Sum(1) == 1)");
         }
@@ -51,7 +51,7 @@ namespace Triton.Interop
         public void ParamsMethod_MultipleArgs()
         {
             using var environment = new LuaEnvironment();
-            environment["ParamsMethod"] = LuaValue.FromClrType(typeof(ParamsMethod));
+            environment["ParamsMethod"] = LuaValue.FromClrTypes(typeof(ParamsMethod));
 
             environment.Eval("assert(ParamsMethod.Sum(1, 2) == 3)");
             environment.Eval("assert(ParamsMethod.Sum(1, 2, 3) == 6)");

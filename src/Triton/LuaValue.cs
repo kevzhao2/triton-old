@@ -37,39 +37,11 @@ namespace Triton
         }
 
         /// <summary>
-        /// Acts as a proxy for a CLR type.
+        /// Acts as a proxy for CLR types.
         /// </summary>
-        internal sealed class ProxyClrType
+        internal sealed class ProxyClrTypes
         {
-            internal ProxyClrType(Type type)
-            {
-                Debug.Assert(!type.IsGenericTypeDefinition);
-
-                Type = type;
-            }
-
-            /// <summary>
-            /// Gets the CLR type.
-            /// </summary>
-            public Type Type { get; }
-
-            /// <inheritdoc/>
-            public override bool Equals(object? obj) => obj is ProxyClrType { Type: var type } && Type.Equals(type);
-
-            /// <inheritdoc/>
-            public override int GetHashCode() => Type.GetHashCode();
-
-            /// <inheritdoc/>
-            [ExcludeFromCodeCoverage]
-            public override string ToString() => Type.ToString();
-        }
-
-        /// <summary>
-        /// Acts as a proxy for generic CLR types.
-        /// </summary>
-        internal sealed class ProxyGenericClrTypes
-        {
-            internal ProxyGenericClrTypes(Type[] types)
+            internal ProxyClrTypes(Type[] types)
             {
                 Debug.Assert(types.All(t => t is { }));
                 Debug.Assert(types.Count(t => !t.IsGenericTypeDefinition) <= 1);
@@ -78,13 +50,13 @@ namespace Triton
             }
 
             /// <summary>
-            /// Gets the generic CLR types.
+            /// Gets the CLR types.
             /// </summary>
             public Type[] Types { get; }
 
             /// <inheritdoc/>
             public override bool Equals(object? obj) =>
-                obj is ProxyGenericClrTypes { Types: var types } && Types.SequenceEqual(types);
+                obj is ProxyClrTypes { Types: var types } && Types.SequenceEqual(types);
 
             /// <inheritdoc/>
             public override int GetHashCode() =>
@@ -186,19 +158,14 @@ namespace Triton
         public bool IsClrEntity => _objectType == ObjectType.ClrEntity && !IsPrimitive;
 
         /// <summary>
-        /// Gets a value indicating whether the Lua value is a CLR type.
+        /// Gets a value indicating whether the Lua value is CLR types.
         /// </summary>
-        public bool IsClrType => _objectOrTag is ProxyClrType;
-
-        /// <summary>
-        /// Gets a value indicating whether the Lua value is generic CLR types.
-        /// </summary>
-        public bool IsGenericClrTypes => _objectOrTag is ProxyGenericClrTypes;
+        public bool IsClrTypes => _objectOrTag is ProxyClrTypes;
 
         /// <summary>
         /// Gets a value indicating whether the Lua value is a CLR object.
         /// </summary>
-        public bool IsClrObject => IsClrEntity && !IsClrType && !IsGenericClrTypes;
+        public bool IsClrObject => IsClrEntity && !IsClrTypes;
 
         /// <summary>
         /// Creates a Lua value from the given boolean.
@@ -267,38 +234,15 @@ namespace Triton
         }
 
         /// <summary>
-        /// Creates a Lua value from the given CLR type.
+        /// Creates a Lua value from the given CLR types.
         /// </summary>
-        /// <param name="type">The CLR type.</param>
-        /// <returns>The resulting Lua value.</returns>
-        /// <exception cref="ArgumentException"><paramref name="type"/> is generic.</exception>
-        /// <exception cref="ArgumentNullException"><paramref name="type"/> is <see langword="null"/>.</exception>
-        public static LuaValue FromClrType(Type type)
-        {
-            if (type is null)
-            {
-                throw new ArgumentNullException(nameof(type));
-            }
-
-            if (type.IsGenericTypeDefinition)
-            {
-                throw new ArgumentException("Type is generic", nameof(type));
-            }
-
-            FromClrEntity(new ProxyClrType(type), out var value);
-            return value;
-        }
-
-        /// <summary>
-        /// Creates a Lua value from the given generic CLR types.
-        /// </summary>
-        /// <param name="types">The generic CLR types.</param>
+        /// <param name="types">The CLR types.</param>
         /// <returns>The resulting Lua value.</returns>
         /// <exception cref="ArgumentException">
         /// <paramref name="types"/> contains <see langword="null"/> or more than one non-generic type.
         /// </exception>
         /// <exception cref="ArgumentNullException"><paramref name="types"/> is <see langword="null"/>.</exception>
-        public static LuaValue FromGenericClrTypes(params Type[] types)
+        public static LuaValue FromClrTypes(params Type[] types)
         {
             if (types is null)
             {
@@ -315,7 +259,7 @@ namespace Triton
                 throw new ArgumentException("Types contains more than one non-generic type", nameof(types));
             }
 
-            FromClrEntity(new ProxyGenericClrTypes(types), out var value);
+            FromClrEntity(new ProxyClrTypes(types), out var value);
             return value;
         }
 
@@ -483,8 +427,7 @@ namespace Triton
                 ObjectType.LuaObject    => $"<Lua object: {_objectOrTag}>",
                 _                       => _objectOrTag switch
                 {
-                    ProxyClrType _         => $"<CLR type: {_objectOrTag}>",
-                    ProxyGenericClrTypes _ => $"<generic CLR types: {_objectOrTag}>",
+                    ProxyClrTypes _        => $"<CLR types: {_objectOrTag}>",
                     _                      => $"<CLR object: {_objectOrTag}>"
                 }
             }
@@ -539,22 +482,12 @@ namespace Triton
                 : throw new InvalidCastException();
 
         /// <summary>
-        /// Converts the Lua value into a CLR type.
-        /// </summary>
-        /// <returns>The resulting CLR type.</returns>
-        /// <exception cref="InvalidCastException">The Lua value is not a CLR type.</exception>
-        public Type AsClrType() =>
-            _objectOrTag is ProxyClrType { Type: var type }
-                ? type
-                : throw new InvalidCastException();
-
-        /// <summary>
-        /// Converts the Lua value into generic CLR types.
+        /// Converts the Lua value into CLR types.
         /// </summary>
         /// <returns>The resulting generic CLR types.</returns>
-        /// <exception cref="InvalidCastException">The Lua value is not generic CLR types.</exception>
-        public Type[] AsGenericClrTypes() =>
-            _objectOrTag is ProxyGenericClrTypes { Types: var types }
+        /// <exception cref="InvalidCastException">The Lua value is not CLR types.</exception>
+        public Type[] AsClrTypes() =>
+            _objectOrTag is ProxyClrTypes { Types: var types }
                 ? types
                 : throw new InvalidCastException();
 

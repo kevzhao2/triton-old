@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using Triton.Interop.Extensions;
 using static System.Reflection.Emit.OpCodes;
 using static Triton.NativeMethods;
@@ -47,44 +48,29 @@ namespace Triton.Interop
         }
 
         /// <summary>
-        /// Pushes the given CLR type's metatable onto the stack.
+        /// Pushes the given CLR types' metatable onto the stack.
         /// </summary>
         /// <param name="state">The Lua state.</param>
-        /// <param name="type">The CLR type.</param>
-        public void PushTypeMetatable(IntPtr state, Type type)
+        /// <param name="types">The CLR types.</param>
+        public void PushTypesMetatable(IntPtr state, IReadOnlyList<Type> types)
         {
-            lua_createtable(state, 0, 5);
+            var nonGenericType = types.FirstOrDefault(t => !t.IsGenericTypeDefinition);
+            var genericTypes = types.Where(t => t.IsGenericTypeDefinition).ToList();
 
-            PushTypeIndexMetavalue(state, type, null);
+            var hasNonGenericType = nonGenericType is { };
+            var hasGenericTypes = genericTypes.Count > 0;
+
+            lua_newtable(state);
+
+            PushIndexMetavalue(state, types, isStatic: true);
             lua_setfield(state, -2, "__index");
 
-            PushTypeNewIndexMetavalue(state, type);
-            lua_setfield(state, -2, "__newindex");
-
-            PushTypeCallMetavalue(state, type);
-            lua_setfield(state, -2, "__call");
-        }
-
-        /// <summary>
-        /// Pushes the given generic CLR types' metatable onto the stack.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="types">The generic CLR types.</param>
-        public void PushGenericTypesMetatable(IntPtr state, Type[] types)
-        {
-            var maybeNonGenericType = types.SingleOrDefault(t => !t.IsGenericTypeDefinition);
-
-            lua_createtable(state, 0, maybeNonGenericType is null ? 3 : 5);
-
-            PushTypeIndexMetavalue(state, maybeNonGenericType, types);
-            lua_setfield(state, -2, "__index");
-
-            if (maybeNonGenericType is { } nonGenericType)
+            if (hasNonGenericType)
             {
-                PushTypeNewIndexMetavalue(state, nonGenericType);
+                PushNewIndexMetamethod(state, nonGenericType!, isStatic: true);
                 lua_setfield(state, -2, "__newindex");
 
-                PushTypeCallMetavalue(state, nonGenericType);
+                PushTypeCallMetavalue(state, nonGenericType!);
                 lua_setfield(state, -2, "__call");
             }
         }
@@ -99,11 +85,11 @@ namespace Triton.Interop
             lua_createtable(state, 0, 5);
 
             lua_rawgeti(state, LUA_REGISTRYINDEX, _wrapObjectIndexRef);
-            PushObjectIndexMetavalue(state, objType);
+            PushIndexMetavalue(state, new[] { objType }, isStatic: false);
             lua_pcall(state, 1, 1, 0);
             lua_setfield(state, -2, "__index");
 
-            PushObjectNewIndexMetavalue(state, objType);
+            PushNewIndexMetamethod(state, objType, isStatic: false);
             lua_setfield(state, -2, "__newindex");
         }
 
@@ -117,182 +103,7 @@ namespace Triton.Interop
             Debug.Assert(methods.All(m => !m.IsGenericMethodDefinition),
                 "Methods should not be generic");
 
-            PushMethodsValue(state, methods);
-        }
-
-        private void PushTypeIndexMetavalue(IntPtr state, Type? maybeNonGenericType, Type[]? maybeGenericTypes)
-        {
-            // If there is a non-generic type, then the metavalue should be a table with the cacheable members
-            // pre-populated. Otherwise, the metavalue is just the `__index` metamethod.
-
-            if (maybeNonGenericType is { } nonGenericType)
-            {
-                lua_newtable(state);
-
-                foreach (var constField in nonGenericType.GetPublicStaticFields().Where(f => f.IsLiteral))
-                {
-                    _environment.PushObject(state, constField.GetValue(null));
-                    lua_setfield(state, -2, constField.Name);
-                }
-
-                // TODO: pre-populate events
-
-                foreach (var group in nonGenericType.GetPublicStaticMethods().GroupBy(m => m.Name))
-                {
-                    PushMethodsValue(state, group.ToList());
-                    lua_setfield(state, -2, group.Key);
-                }
-
-                // TODO: pre-populate nested types
-
-                lua_createtable(state, 0, 1);
-            }
-
-            PushFunction(state, "__index", (ilg, context) =>
-            {
-                var keyType = EmitDeclareKeyType(ilg);
-
-                // If there is a non-generic type, then support indexing non-cacheable members.
-
-                if (maybeNonGenericType is { })
-                {
-                    var fields = maybeNonGenericType.GetPublicStaticFields().Where(f => !f.IsLiteral);  // No consts
-                    var properties = maybeNonGenericType.GetPublicStaticProperties();
-                    var members = fields.Cast<MemberInfo>().Concat(properties).ToList();
-                    context.SetMembers(state, members);
-
-                    EmitIndexMembers(ilg, members,
-                        ilg => ilg.Emit(Ldloc, keyType),
-                        (ilg, field) =>
-                        {
-                            ilg.Emit(Ldsfld, field);
-                        },
-                        (ilg, property) =>
-                        {
-                            ilg.Emit(Call, property.GetMethod!);
-                        });
-                }
-
-                // If there are generic types, then support indexing generics.
-
-                if (maybeGenericTypes is { })
-                {
-                    var arityToType = maybeGenericTypes
-                        .Where(t => t.IsGenericTypeDefinition)
-                        .ToDictionary(t => t.GetGenericArguments().Length);
-                    var minArity = arityToType.Keys.Min();
-                    var maxArity = arityToType.Keys.Max();
-
-                    EmitIndexTypeArgs(ilg,
-                        ilg => ilg.Emit(Ldloc, keyType),
-                        ilg => ilg.Emit(Ldc_I4_2),
-                        (ilg, typeArgs) =>
-                        {
-                            var exit = ilg.BeginExceptionBlock();
-                            {
-                                var cases = ilg.DefineLabels(maxArity - minArity + 1);
-
-                                ilg.Emit(Ldloc, typeArgs);
-                                ilg.Emit(Ldlen);
-                                ilg.Emit(Ldc_I4, minArity);
-                                ilg.Emit(Sub);
-                                ilg.Emit(Switch, cases);
-
-                                ilg.MarkLabels(cases.Where((_, i) => !arityToType.ContainsKey(i + minArity)));
-
-                                ilg.Emit(Ldarg_1);
-                                ilg.Emit(Ldstr, "attempt to construct generic type with invalid arity");
-                                ilg.Emit(Call, _luaL_error);
-                                ilg.Emit(Pop);
-                                ilg.Emit(Leave, exit);  // Not short form
-
-                                foreach (var (@case, type) in cases
-                                    .Select((@case, i) => (@case, type: arityToType.GetValueOrDefault(i + minArity)))
-                                    .Where(t => t.type is { }))
-                                {
-                                    ilg.MarkLabel(@case);
-
-                                    ilg.Emit(Ldarg_0);
-                                    ilg.Emit(Ldarg_1);
-                                    ilg.Emit(Ldtoken, type);
-                                    ilg.Emit(Call, _typeGetTypeFromHandle);
-                                    ilg.Emit(Ldloc, typeArgs);
-                                    ilg.Emit(Callvirt, _typeMakeGenericType);
-                                    ilg.Emit(Call, MetamethodContext._pushClrType);
-                                    ilg.Emit(Leave, exit);  // Not short form
-                                }
-                            }
-
-                            ilg.BeginCatchBlock(typeof(ArgumentException));
-                            {
-                                ilg.Emit(Pop);
-                                ilg.Emit(Ldarg_1);
-                                ilg.Emit(Ldstr, "attempt to construct generic type with invalid constraints");
-                                ilg.Emit(Call, _luaL_error);
-                                ilg.Emit(Pop);
-                            }
-
-                            ilg.EndExceptionBlock();
-
-                            ilg.Emit(Ldc_I4_1);
-                            ilg.Emit(Ret);
-                        });
-                }
-
-                ilg.Emit(Ldc_I4_0);
-                ilg.Emit(Ret);
-            });
-
-            if (maybeNonGenericType is { })
-            {
-                lua_setfield(state, -2, "__index");
-
-                lua_setmetatable(state, -2);
-            }
-        }
-
-        private void PushTypeNewIndexMetavalue(IntPtr state, Type type)
-        {
-            PushFunction(state, "__newindex", (ilg, context) =>
-            {
-                var keyType = EmitDeclareKeyType(ilg);
-                var valueType = EmitDeclareValueType(ilg);
-
-                {
-                    var fields = type.GetPublicStaticFields();
-                    var properties = type.GetPublicStaticProperties();
-                    var members = fields.Cast<MemberInfo>().Concat(properties).ToList();
-                    context.SetMembers(state, members);
-
-                    EmitNewIndexMembers(ilg, members,
-                        ilg => ilg.Emit(Ldloc, keyType),
-                        ilg => ilg.Emit(Ldloc, valueType),
-                        (ilg, field, temp) =>
-                        {
-                            ilg.Emit(Ldloc, temp);
-                            ilg.Emit(Stsfld, field);
-                        },
-                        (ilg, property, temp) =>
-                        {
-                            var propertyType = property.PropertyType;
-
-                            if (propertyType.IsByRef)
-                            {
-                                ilg.Emit(Call, property.GetMethod!);
-                                ilg.Emit(Ldloc, temp);
-                                ilg.EmitStind(propertyType.GetElementType()!);
-                            }
-                            else
-                            {
-                                ilg.Emit(Ldloc, temp);
-                                ilg.Emit(Call, property.SetMethod!);
-                            }
-                        });
-                }
-
-                ilg.Emit(Ldc_I4_0);
-                ilg.Emit(Ret);
-            });
+            PushMethodsValue(state, methods, methods[0].IsStatic);
         }
 
         private void PushTypeCallMetavalue(IntPtr state, Type type) =>
@@ -353,28 +164,62 @@ namespace Triton.Interop
                 ilg.Emit(Ret);
             });
 
-        private void PushObjectIndexMetavalue(IntPtr state, Type objType)
+        private void PushIndexMetavalue(IntPtr state, IReadOnlyList<Type> types, bool isStatic)
         {
+            Debug.Assert(types.Count > 0,
+                "Types should not be empty");
+            Debug.Assert(types.Count(t => !t.IsGenericTypeDefinition) <= 1,
+                "Types should contain at most one non-generic type");
+            Debug.Assert(isStatic || types.Count == 1,
+                "Non-static should imply a single type");
+
+            var nonGenericType = types.SingleOrDefault(t => !t.IsGenericTypeDefinition);
+            var genericTypes = types.Where(t => t.IsGenericTypeDefinition).ToList();
+
+            var hasNonGenericType = nonGenericType is { };
+            var hasGenericTypes = genericTypes.Count > 0;
+
+            // Create the table and pre-populate the cacheable members: constants (if applicable), nested types (if
+            // applicable), events, and methods.
+
             lua_newtable(state);
 
-            // TODO: pre-populate events
-
-            foreach (var group in objType.GetPublicInstanceMethods().GroupBy(m => m.Name))
+            if (hasNonGenericType)
             {
-                PushMethodsValue(state, group.ToList());
-                lua_setfield(state, -2, group.Key);
+                if (isStatic)
+                {
+                    foreach (var constField in nonGenericType!.GetPublicStaticFields().Where(f => f.IsLiteral))
+                    {
+                        _environment.PushObject(state, constField.GetValue(null));
+                        lua_setfield(state, -2, constField.Name);
+                    }
+
+                    // TODO: nested types
+                }
+
+                // TODO: events
+
+                foreach (var group in nonGenericType!.GetPublicMethods(isStatic).GroupBy(m => m.Name))
+                {
+                    PushMethodsValue(state, group.ToList(), isStatic);
+                    lua_setfield(state, -2, group.Key);
+                }
             }
+
+            // Create the metatable with an `__index` metamethod to support accessing the non-cacheable members (if
+            // applicable) and constructing generic types (if applicable).
 
             lua_createtable(state, 0, 1);
 
             PushFunction(state, "__index", (ilg, context) =>
             {
-                var target = EmitDeclareTarget(ilg, objType);
+                var target = isStatic ? null : EmitDeclareTarget(ilg, nonGenericType!);
                 var keyType = EmitDeclareKeyType(ilg);
 
+                if (hasNonGenericType)
                 {
-                    var fields = objType.GetPublicInstanceFields();
-                    var properties = objType.GetPublicInstanceProperties();
+                    var fields = nonGenericType!.GetPublicFields(isStatic).Where(f => !f.IsLiteral);  // No consts
+                    var properties = nonGenericType!.GetPublicProperties(isStatic);
                     var members = fields.Cast<MemberInfo>().Concat(properties).ToList();
                     context.SetMembers(state, members);
 
@@ -382,13 +227,84 @@ namespace Triton.Interop
                         ilg => ilg.Emit(Ldloc, keyType),
                         (ilg, field) =>
                         {
-                            ilg.Emit(Ldloc, target);
-                            ilg.Emit(Ldfld, field);
+                            if (!isStatic)
+                            {
+                                ilg.Emit(Ldloc, target!);
+                            }
+
+                            ilg.Emit(isStatic ? Ldsfld : Ldfld, field);
                         },
                         (ilg, property) =>
                         {
-                            ilg.Emit(Ldloc, target);
-                            ilg.EmitCall(property.GetMethod!);
+                            if (!isStatic)
+                            {
+                                ilg.Emit(Ldloc, target!);
+                            }
+
+                            ilg.Emit(isStatic ? Call : Callvirt, property.GetMethod!);
+                        });
+                }
+
+                if (hasGenericTypes)
+                {
+                    var arityToType = genericTypes
+                        .Where(t => t.IsGenericTypeDefinition)
+                        .ToDictionary(t => t.GetGenericArguments().Length);
+                    var minArity = arityToType.Keys.Min();
+                    var maxArity = arityToType.Keys.Max();
+
+                    EmitIndexTypeArgs(ilg,
+                        ilg => ilg.Emit(Ldloc, keyType),
+                        (ilg, typeArgs) =>
+                        {
+                            var exit = ilg.BeginExceptionBlock();
+                            {
+                                var cases = ilg.DefineLabels(maxArity - minArity + 1);
+
+                                ilg.Emit(Ldloc, typeArgs);
+                                ilg.Emit(Ldlen);
+                                ilg.Emit(Ldc_I4, minArity);
+                                ilg.Emit(Sub);
+                                ilg.Emit(Switch, cases);
+
+                                ilg.MarkLabels(cases.Where((_, i) => !arityToType.ContainsKey(i + minArity)));
+
+                                ilg.Emit(Ldarg_1);
+                                ilg.Emit(Ldstr, "attempt to construct generic type with invalid arity");
+                                ilg.Emit(Call, _luaL_error);
+                                ilg.Emit(Pop);
+                                ilg.Emit(Leave, exit);  // Not short form
+
+                                foreach (var (@case, type) in cases
+                                    .Select((@case, i) => (@case, type: arityToType.GetValueOrDefault(i + minArity)))
+                                    .Where(t => t.type is { }))
+                                {
+                                    ilg.MarkLabel(@case);
+
+                                    ilg.Emit(Ldarg_0);
+                                    ilg.Emit(Ldarg_1);
+                                    ilg.Emit(Ldtoken, type);
+                                    ilg.Emit(Call, _typeGetTypeFromHandle);
+                                    ilg.Emit(Ldloc, typeArgs);
+                                    ilg.Emit(Callvirt, _typeMakeGenericType);
+                                    ilg.Emit(Call, MetamethodContext._pushClrType);
+                                    ilg.Emit(Leave, exit);  // Not short form
+                                }
+                            }
+
+                            ilg.BeginCatchBlock(typeof(ArgumentException));
+                            {
+                                ilg.Emit(Pop);
+                                ilg.Emit(Ldarg_1);
+                                ilg.Emit(Ldstr, "attempt to construct generic type with invalid constraints");
+                                ilg.Emit(Call, _luaL_error);
+                                ilg.Emit(Pop);
+                            }
+
+                            ilg.EndExceptionBlock();
+
+                            ilg.Emit(Ldc_I4_1);
+                            ilg.Emit(Ret);
                         });
                 }
 
@@ -403,17 +319,28 @@ namespace Triton.Interop
             lua_setmetatable(state, -2);
         }
 
-        private void PushObjectNewIndexMetavalue(IntPtr state, Type objType) =>
+        private void PushNewIndexMetamethod(IntPtr state, Type type, bool isStatic) =>
             PushFunction(state, "__newindex", (ilg, context) =>
             {
-                var target = EmitDeclareTarget(ilg, objType);
+                var target = isStatic ? null : EmitDeclareTarget(ilg, type);
                 var keyType = EmitDeclareKeyType(ilg);
                 var valueType = EmitDeclareValueType(ilg);
 
+                // Support indexing of the members.
+
                 {
-                    var fields = objType.GetPublicInstanceFields();
-                    var properties = objType.GetPublicInstanceProperties();
-                    var members = fields.Cast<MemberInfo>().Concat(properties).ToList();
+                    var fields = isStatic ? type.GetPublicStaticFields() : type.GetPublicInstanceFields();
+                    var events = isStatic ? type.GetPublicStaticEvents() : type.GetPublicInstanceEvents();
+                    var properties = isStatic ? type.GetPublicStaticProperties() : type.GetPublicInstanceProperties();
+                    var methods = isStatic ? type.GetPublicStaticMethods() : type.GetPublicInstanceMethods();
+                    var nestedTypes = isStatic ? type.GetPublicNestedTypes() : Array.Empty<Type>();
+
+                    var members = fields.Cast<MemberInfo>()
+                        .Concat(events)
+                        .Concat(properties)
+                        .Concat(methods.GroupBy(m => m.Name).Select(g => g.First()))
+                        .Concat(nestedTypes)
+                        .ToList();
                     context.SetMembers(state, members);
 
                     EmitNewIndexMembers(ilg, members,
@@ -421,35 +348,52 @@ namespace Triton.Interop
                         ilg => ilg.Emit(Ldloc, valueType),
                         (ilg, field, temp) =>
                         {
-                            ilg.Emit(Ldloc, target);
+                            if (!isStatic)
+                            {
+                                ilg.Emit(Ldloc, target!);
+                            }
+
                             ilg.Emit(Ldloc, temp);
                             ilg.Emit(Stfld, field);
                         },
                         (ilg, property, temp) =>
                         {
                             var propertyType = property.PropertyType;
+                            var isByRef = property.PropertyType.IsByRef;
 
-                            if (propertyType.IsByRef)
+                            if (!isStatic)
                             {
-                                ilg.Emit(Ldloc, target);
-                                ilg.EmitCall(property.GetMethod!);
+                                ilg.Emit(Ldloc, target!);
+                            }
+
+                            if (isByRef)
+                            {
+                                ilg.Emit(isStatic ? Call : Callvirt, property.GetMethod!);
                                 ilg.Emit(Ldloc, temp);
                                 ilg.EmitStind(propertyType.GetElementType()!);
                             }
                             else
                             {
-                                ilg.Emit(Ldloc, target);
                                 ilg.Emit(Ldloc, temp);
-                                ilg.EmitCall(property.SetMethod!);
+                                ilg.Emit(isStatic ? Call : Callvirt, property.SetMethod!);
                             }
                         });
+                }
+
+                // If not static, support indexing to access arrays and indexers.
+
+                if (!isStatic)
+                {
+                    // TODO: array access
+
+                    // TODO: indexer access
                 }
 
                 ilg.Emit(Ldc_I4_0);
                 ilg.Emit(Ret);
             });
 
-        private void PushMethodsValue(IntPtr state, IReadOnlyList<MethodInfo> methods)
+        private void PushMethodsValue(IntPtr state, IReadOnlyList<MethodInfo> methods, bool isStatic)
         {
             Debug.Assert(methods.Count > 0,
                 "Methods should not be empty");
@@ -488,7 +432,6 @@ namespace Triton.Interop
 
                     EmitIndexTypeArgs(ilg,
                         ilg => ilg.Emit(Ldloc, keyType),
-                        ilg => ilg.Emit(Ldc_I4_2),
                         (ilg, typeArgs) =>
                         {
                             var exit = ilg.BeginExceptionBlock();

@@ -488,7 +488,7 @@ namespace Triton.Interop
 
         private static void EmitIndexMembers(
             ILGenerator ilg, IReadOnlyList<MemberInfo> members,
-            Action<ILGenerator> getKeyLuaType,
+            Action<ILGenerator> getLuaKeyType,
             Action<ILGenerator, FieldInfo> getFieldValue,
             Action<ILGenerator, PropertyInfo> getPropertyValue)
         {
@@ -509,7 +509,7 @@ namespace Triton.Interop
             ilg.MarkLabel(skip);
 
             EmitSwitchMembers(ilg, members,
-                getKeyLuaType,
+                getLuaKeyType,
                 (ilg, member) =>
                 {
                     switch (member)
@@ -565,7 +565,6 @@ namespace Triton.Interop
         private void EmitIndexTypeArgs(
            ILGenerator ilg,
            Action<ILGenerator> getLuaKeyType,
-           Action<ILGenerator> getLuaIndex,
            Action<ILGenerator, LocalBuilder> typeArgsAction)
         {
             var isUserdata = ilg.DefineLabel();
@@ -585,7 +584,7 @@ namespace Triton.Interop
 
                 ilg.Emit(Ldarg_0);
                 ilg.Emit(Ldarg_1);
-                getLuaIndex(ilg);
+                ilg.Emit(Ldc_I4_2);
                 getLuaKeyType(ilg);
                 ilg.Emit(Call, MetamethodContext._loadClrTypes);
                 ilg.Emit(Stloc, typeArgs);
@@ -598,8 +597,8 @@ namespace Triton.Interop
 
         private static void EmitNewIndexMembers(
             ILGenerator ilg, IReadOnlyList<MemberInfo> members,
-            Action<ILGenerator> getKeyLuaType,
-            Action<ILGenerator> getValueLuaType,
+            Action<ILGenerator> getLuaKeyType,
+            Action<ILGenerator> getLuaValueType,
             Action<ILGenerator, FieldInfo, LocalBuilder> setFieldValue,
             Action<ILGenerator, PropertyInfo, LocalBuilder> setPropertyValue)
         {
@@ -620,7 +619,7 @@ namespace Triton.Interop
             var isInvalidMember = LazyEmitErrorMemberName(ilg, "attempt to set invalid member '{0}'");
 
             EmitSwitchMembers(ilg, members,
-                getKeyLuaType,
+                getLuaKeyType,
                 (ilg, member) =>
                 {
                     switch (member)
@@ -644,7 +643,7 @@ namespace Triton.Interop
                                 using var temp = ilg.DeclareReusableLocal(fieldType);
 
                                 EmitLuaLoad(ilg, fieldType, temp,
-                                    getValueLuaType,
+                                    getLuaValueType,
                                     ilg => ilg.Emit(Ldc_I4_3),
                                     invalidFieldValue.Value);
                                 setFieldValue(ilg, field, temp);
@@ -679,7 +678,7 @@ namespace Triton.Interop
                                 using var temp = ilg.DeclareReusableLocal(propertyType);
 
                                 EmitLuaLoad(ilg, propertyType, temp,
-                                    getValueLuaType,
+                                    getLuaValueType,
                                     ilg => ilg.Emit(Ldc_I4_3),
                                     invalidPropertyValue.Value);
                                 setPropertyValue(ilg, property, temp);
