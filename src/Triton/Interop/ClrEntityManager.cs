@@ -158,7 +158,7 @@ namespace Triton.Interop
             return 1;
         }*/
 
-        private readonly ClrMetavalueGenerator _metavalueGenerator;
+        private readonly ClrMetatableGenerator _metavalueGenerator;
 
         // Cache the metatables for CLR objects, since generating a metatable is a _very_ expensive operation.
 
@@ -173,7 +173,7 @@ namespace Triton.Interop
 
         internal ClrEntityManager(IntPtr state, LuaEnvironment environment)
         {
-            _metavalueGenerator = new ClrMetavalueGenerator(state, environment);
+            _metavalueGenerator = new ClrMetatableGenerator(state, environment);
 
             _gcMetamethod = GcMetamethod;  // Prevent garbage collection of the delegate
             lua_pushcfunction(state, _gcMetamethod);

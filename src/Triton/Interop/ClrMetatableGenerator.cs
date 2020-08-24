@@ -15,25 +15,28 @@ using Debug = System.Diagnostics.Debug;
 namespace Triton.Interop
 {
     /// <summary>
-    /// Generates metavalues for CLR entities.
+    /// Generates metatables for CLR entities.
     /// </summary>
-    internal sealed partial class ClrMetavalueGenerator
+    internal sealed partial class ClrMetatableGenerator
     {
-        private static readonly MethodInfo _typeGetTypeFromHandle =
-            typeof(Type).GetMethod(nameof(Type.GetTypeFromHandle))!;
-
-        private static readonly MethodInfo _typeMakeGenericType =
-            typeof(Type).GetMethod(nameof(Type.MakeGenericType))!;
-
         private readonly LuaEnvironment _environment;
+
+        // The `__index` metavalues are nested (i.e., the metavalue is a table which itself has an `__index`
+        // metamethod).
+        //
+        // Normally, the table would be passed to the nested metamethod, but this is undesirable for object metamethods.
+        //
+        // In order to work around this, we have a higher order function which wraps the metavalue, producing a function
+        // which will attempt to `rawget` the metavalue, and if that fails, calls the metavalue's `__index` metamethod,
+        // passing the object instead.
 
         private readonly int _wrapObjectIndexRef;
 
-        internal ClrMetavalueGenerator(IntPtr state, LuaEnvironment environment)
+        internal ClrMetatableGenerator(IntPtr state, LuaEnvironment environment)
         {
             _environment = environment;
 
-            luaL_loadstring(state, @"
+            var status = luaL_loadstring(state, @"
                 local t = ...
                 local __index = getmetatable(t).__index
                 return function(obj, key)
@@ -44,6 +47,8 @@ namespace Triton.Interop
                         return __index(obj, key)
                     end
                 end");
+            Debug.Assert(status == LuaStatus.Ok);
+
             _wrapObjectIndexRef = luaL_ref(state, LUA_REGISTRYINDEX);
         }
 
@@ -54,13 +59,10 @@ namespace Triton.Interop
         /// <param name="types">The CLR types.</param>
         public void PushTypesMetatable(IntPtr state, IReadOnlyList<Type> types)
         {
-            var nonGenericType = types.FirstOrDefault(t => !t.IsGenericTypeDefinition);
-            var genericTypes = types.Where(t => t.IsGenericTypeDefinition).ToList();
-
+            var nonGenericType = types.SingleOrDefault(t => !t.IsGenericTypeDefinition);
             var hasNonGenericType = nonGenericType is { };
-            var hasGenericTypes = genericTypes.Count > 0;
 
-            lua_newtable(state);
+            lua_createtable(state, 0, hasNonGenericType ? 5 : 3);
 
             PushIndexMetavalue(state, types, isStatic: true);
             lua_setfield(state, -2, "__index");
@@ -70,7 +72,7 @@ namespace Triton.Interop
                 PushNewIndexMetamethod(state, nonGenericType!, isStatic: true);
                 lua_setfield(state, -2, "__newindex");
 
-                PushTypeCallMetavalue(state, nonGenericType!);
+                PushCallMetamethod(state, nonGenericType!, isStatic: true);
                 lua_setfield(state, -2, "__call");
             }
         }
@@ -82,7 +84,9 @@ namespace Triton.Interop
         /// <param name="objType">The CLR object type.</param>
         public void PushObjectMetatable(IntPtr state, Type objType)
         {
-            lua_createtable(state, 0, 5);
+            var isDelegate = objType.IsSubclassOf(typeof(Delegate));
+
+            lua_createtable(state, 0, isDelegate ? 5 : 4);
 
             lua_rawgeti(state, LUA_REGISTRYINDEX, _wrapObjectIndexRef);
             PushIndexMetavalue(state, new[] { objType }, isStatic: false);
@@ -91,6 +95,11 @@ namespace Triton.Interop
 
             PushNewIndexMetamethod(state, objType, isStatic: false);
             lua_setfield(state, -2, "__newindex");
+
+            if (isDelegate)
+            {
+                // TODO: __call
+            }
         }
 
         /// <summary>
@@ -106,7 +115,356 @@ namespace Triton.Interop
             PushMethodsValue(state, methods, methods[0].IsStatic);
         }
 
-        private void PushTypeCallMetavalue(IntPtr state, Type type) =>
+        private void PushIndexMetavalue(IntPtr state, IReadOnlyList<Type> types, bool isStatic)
+        {
+            Debug.Assert(types.Count > 0);
+            Debug.Assert(types.Count(t => !t.IsGenericTypeDefinition) <= 1);
+            Debug.Assert(isStatic || types.Count == 1);
+
+            var nonGenericType = types.SingleOrDefault(t => !t.IsGenericTypeDefinition);
+            var genericTypes = types.Where(t => t.IsGenericTypeDefinition).ToList();
+
+            var hasNonGenericType = nonGenericType is { };
+            var hasGenericTypes = genericTypes.Count > 0;
+
+            // Create the table and pre-populate the cacheable members: constants (if applicable), nested types (if
+            // applicable), events, and methods.
+
+            lua_newtable(state);
+
+            if (hasNonGenericType)
+            {
+                if (isStatic)
+                {
+                    foreach (var constField in nonGenericType!.GetPublicFields(isStatic: true).Where(f => f.IsLiteral))
+                    {
+                        _environment.PushObject(state, constField.GetValue(null));
+                        lua_setfield(state, -2, constField.Name);
+                    }
+
+                    // TODO: nested types
+                }
+
+                // TODO: events
+
+                foreach (var group in nonGenericType!.GetPublicMethods(isStatic).GroupBy(m => m.Name))
+                {
+                    PushMethodsValue(state, group.ToList(), isStatic);
+                    lua_setfield(state, -2, group.Key);
+                }
+            }
+
+            // Create the metatable with an `__index` metamethod to support accessing non-cacheable members (if
+            // applicable), constructing generic types (if applicable), and accessing indexers (if applicable).
+
+            lua_createtable(state, 0, 1);
+
+            PushFunction(state, "__index", (ilg, context) =>
+            {
+                var target = isStatic ? null : EmitDeclareTarget(ilg, nonGenericType!);
+                var keyType = EmitDeclareKeyType(ilg);
+                if (hasNonGenericType)
+                {
+                    EmitAccessNonCacheableMembers();
+                }
+
+                var (numKeys, keyTypes) = EmitFlattenKey(ilg, keyType);
+                if (hasGenericTypes)
+                {
+                    EmitConstructGenericTypes();
+                }
+                else if (!isStatic)
+                {
+                    if (nonGenericType!.IsArray)
+                    {
+                        EmitAccessArrayIndexer();
+                    }
+                    else
+                    {
+                        EmitAccessIndexers();
+                    }
+                }
+
+                ilg.Emit(Ldc_I4_0);
+                ilg.Emit(Ret);
+                return;
+
+                void EmitAccessNonCacheableMembers()
+                {
+                    var fields = nonGenericType!.GetPublicFields(isStatic).Where(f => !f.IsLiteral);  // No consts
+                    var properties = nonGenericType!.GetPublicProperties(isStatic);
+
+                    var members = fields.Cast<MemberInfo>()
+                        .Concat(properties)
+                        .ToList();
+                    context.SetMembers(state, members);
+
+                    var isNotString = ilg.DefineLabel();
+                    var isNonReadableProperty = LazyEmitErrorMemberName(
+                        ilg, "attempt to get non-readable property '{0}'");
+                    var isByRefLikeProperty = LazyEmitErrorMemberName(
+                        ilg, "attempt to get byref-like property '{0}'");
+
+                    ilg.Emit(Ldloc, keyType);
+                    ilg.Emit(Ldc_I4_4);
+                    ilg.Emit(Bne_Un, isNotString);  // Not short form
+                    {
+                        var cases = ilg.DefineLabels(members.Count);
+
+                        ilg.Emit(Ldarg_0);
+                        ilg.Emit(Ldarg_1);  // Lua state
+                        ilg.Emit(Call, MetamethodContext._matchMemberName);
+                        ilg.Emit(Switch, cases);
+
+                        ilg.Emit(Ldc_I4_0);
+                        ilg.Emit(Ret);
+
+                        for (var i = 0; i < members.Count; ++i)
+                        {
+                            ilg.MarkLabel(cases[i]);
+
+                            switch (members[i])
+                            {
+                                case FieldInfo field:
+                                    var fieldType = field.FieldType;
+
+                                    {
+                                        using var temp = ilg.DeclareReusableLocal(fieldType);
+
+                                        if (!isStatic)
+                                        {
+                                            ilg.Emit(Ldloc, target!);
+                                        }
+                                        ilg.Emit(isStatic ? Ldsfld : Ldfld, field);
+                                        ilg.Emit(Stloc, temp);
+
+                                        EmitLuaPush(ilg, fieldType, temp);
+                                    }
+                                    break;
+
+                                case PropertyInfo property:
+                                    var propertyType = property.PropertyType;
+
+                                    if (property.GetMethod?.IsPublic != true)
+                                    {
+                                        ilg.Emit(Br, isNonReadableProperty.Value);  // Not short form
+                                        continue;
+                                    }
+
+                                    if (propertyType.IsByRefLike)
+                                    {
+                                        ilg.Emit(Br, isByRefLikeProperty.Value);  // Not short form
+                                        continue;
+                                    }
+
+                                    {
+                                        using var temp = ilg.DeclareReusableLocal(propertyType);
+
+                                        if (!isStatic)
+                                        {
+                                            ilg.Emit(Ldloc, target!);
+                                        }
+                                        ilg.Emit(isStatic ? Call : Callvirt, property.GetMethod);
+                                        ilg.Emit(Stloc, temp);
+
+                                        EmitLuaPush(ilg, propertyType, temp);
+                                    }
+                                    break;
+
+                                default:
+                                    throw new InvalidOperationException();
+                            }
+
+                            ilg.Emit(Ldc_I4_1);
+                            ilg.Emit(Ret);
+                        }
+                    }
+
+                    ilg.MarkLabel(isNotString);
+                }
+
+                void EmitConstructGenericTypes()
+                {
+                    var arityToType = genericTypes
+                        .Where(t => t.IsGenericTypeDefinition)
+                        .ToDictionary(t => t.GetGenericArguments().Length);
+                    var minArity = arityToType.Keys.Min();
+                    var maxArity = arityToType.Keys.Max();
+
+                    var typeArgs = ilg.DeclareLocal(typeof(Type[]));
+
+                    var cases = ilg.DefineLabels(maxArity - minArity + 1);
+
+                    ilg.Emit(Ldarg_0);
+                    ilg.Emit(Ldarg_1);  // Lua state
+                    ilg.Emit(Ldc_I4_3);  // Keys
+                    ilg.Emit(Ldloc, numKeys);
+                    ilg.Emit(Ldloc, keyTypes);
+                    ilg.Emit(Call, MetamethodContext._loadClrTypes);
+                    ilg.Emit(Dup);
+                    ilg.Emit(Stloc, typeArgs);
+
+                    ilg.Emit(Ldlen);
+                    ilg.Emit(Ldc_I4, minArity);
+                    ilg.Emit(Sub);
+                    ilg.Emit(Switch, cases);
+
+                    ilg.MarkLabels(cases.Where((_, i) => !arityToType.ContainsKey(i + minArity)));
+
+                    ilg.Emit(Ldarg_1);
+                    ilg.Emit(Ldstr, "attempt to construct generic type with invalid arity");
+                    ilg.Emit(Call, _luaL_error);
+                    ilg.Emit(Ret);
+
+                    foreach (var (@case, type) in cases
+                        .Select((@case, i) => (@case, type: arityToType.GetValueOrDefault(i + minArity)))
+                        .Where(t => t.type is { }))
+                    {
+                        ilg.MarkLabel(@case);
+
+                        ilg.Emit(Ldarg_0);
+                        ilg.Emit(Ldarg_1);  // Lua state
+                        ilg.Emit(Ldtoken, type);
+                        ilg.Emit(Ldloc, typeArgs);
+                        ilg.Emit(Call, MetamethodContext._pushGenericClrType);
+
+                        ilg.Emit(Ldc_I4_1);
+                        ilg.Emit(Ret);
+                    }
+                }
+
+                void EmitAccessArrayIndexer()
+                {
+                    // TODO: implement this
+
+                    ilg.Emit(Ldarg_1);
+                    ilg.Emit(Ldstr, "attempt to index array with invalid arguments");
+                    ilg.Emit(Call, _luaL_error);
+                    ilg.Emit(Ret);
+                }
+
+                void EmitAccessIndexers()
+                {
+                    var indexers = nonGenericType!.GetPublicIndexers().Select(i => i.GetMethod!).ToList();
+
+                    EmitCallMethods(
+                        ilg, indexers,
+                        ilg => ilg.Emit(Ldloc, numKeys),
+                        (ilg, argIndex) =>
+                        {
+                            ilg.Emit(Ldloc, keyTypes);
+                            ilg.Emit(Ldloc, argIndex);
+                            ilg.Emit(Ldc_I4_1);
+                            ilg.Emit(Sub);
+                            ilg.Emit(Conv_I);
+                            ilg.Emit(Ldc_I4_4);
+                            ilg.Emit(Mul);
+                            ilg.Emit(Add);
+                            ilg.Emit(Ldind_I4);
+                        },
+                        (ilg, argIndex) =>
+                        {
+                            ilg.Emit(Ldloc, argIndex);
+                            ilg.Emit(Ldc_I4_2);
+                            ilg.Emit(Add);
+                        },
+                        (ilg, indexer, args, result) =>
+                        {
+                            ilg.Emit(Ldloc, target!);
+                            foreach (var arg in args)
+                            {
+                                ilg.Emit(Ldloc, arg);
+                            }
+
+                            ilg.Emit(Callvirt, (MethodInfo)indexer);
+                            ilg.Emit(Stloc, result!);
+                        });
+
+                    ilg.Emit(Ldarg_1);
+                    ilg.Emit(Ldstr, "attempt to call indexer with invalid arguments");
+                    ilg.Emit(Call, _luaL_error);
+                    ilg.Emit(Ret);
+                }
+            });
+            lua_setfield(state, -2, "__index");
+
+            lua_setmetatable(state, -2);
+        }
+
+        private void PushNewIndexMetamethod(IntPtr state, Type type, bool isStatic) =>
+            PushFunction(state, "__newindex", (ilg, context) =>
+            {
+                var target = isStatic ? null : EmitDeclareTarget(ilg, type);
+                var keyType = EmitDeclareKeyType(ilg);
+                var valueType = EmitDeclareValueType(ilg);
+
+                // Support indexing of the members.
+
+                {
+                    var fields = type.GetPublicFields(isStatic);
+                    var events = type.GetPublicEvents(isStatic);
+                    var properties = type.GetPublicProperties(isStatic);
+                    var methods = type.GetPublicMethods(isStatic).GroupBy(m => m.Name).Select(g => g.First());
+                    var nestedTypes = isStatic ? type.GetPublicNestedTypes() : Array.Empty<Type>();
+
+                    var members = fields.Cast<MemberInfo>()
+                        .Concat(events)
+                        .Concat(properties)
+                        .Concat(methods)
+                        .Concat(nestedTypes)
+                        .ToList();
+                    context.SetMembers(state, members);
+
+                    EmitNewIndexMembers(ilg, members,
+                        ilg => ilg.Emit(Ldloc, keyType),
+                        ilg => ilg.Emit(Ldloc, valueType),
+                        (ilg, field, temp) =>
+                        {
+                            if (!isStatic)
+                            {
+                                ilg.Emit(Ldloc, target!);
+                            }
+
+                            ilg.Emit(Ldloc, temp);
+                            ilg.Emit(Stfld, field);
+                        },
+                        (ilg, property, temp) =>
+                        {
+                            var propertyType = property.PropertyType;
+                            var isByRef = property.PropertyType.IsByRef;
+
+                            if (!isStatic)
+                            {
+                                ilg.Emit(Ldloc, target!);
+                            }
+
+                            if (isByRef)
+                            {
+                                ilg.Emit(isStatic ? Call : Callvirt, property.GetMethod!);
+                                ilg.Emit(Ldloc, temp);
+                                ilg.EmitStind(propertyType.GetElementType()!);
+                            }
+                            else
+                            {
+                                ilg.Emit(Ldloc, temp);
+                                ilg.Emit(isStatic ? Call : Callvirt, property.SetMethod!);
+                            }
+                        });
+                }
+
+                // If not static, support indexing to access arrays and indexers.
+
+                if (!isStatic)
+                {
+                    // TODO: array access
+                    // TODO: indexer access
+                }
+
+                ilg.Emit(Ldc_I4_0);
+                ilg.Emit(Ret);
+            });
+
+        private void PushCallMetamethod(IntPtr state, Type type, bool isStatic) =>
             PushFunction(state, "__call", (ilg, _) =>
             {
                 var constructors = type.GetConstructors();
@@ -161,235 +519,6 @@ namespace Triton.Interop
                 ilg.Emit(Ldarg_1);
                 ilg.Emit(Ldstr, "attempt to construct type with invalid arguments");
                 ilg.Emit(Call, _luaL_error);
-                ilg.Emit(Ret);
-            });
-
-        private void PushIndexMetavalue(IntPtr state, IReadOnlyList<Type> types, bool isStatic)
-        {
-            Debug.Assert(types.Count > 0,
-                "Types should not be empty");
-            Debug.Assert(types.Count(t => !t.IsGenericTypeDefinition) <= 1,
-                "Types should contain at most one non-generic type");
-            Debug.Assert(isStatic || types.Count == 1,
-                "Non-static should imply a single type");
-
-            var nonGenericType = types.SingleOrDefault(t => !t.IsGenericTypeDefinition);
-            var genericTypes = types.Where(t => t.IsGenericTypeDefinition).ToList();
-
-            var hasNonGenericType = nonGenericType is { };
-            var hasGenericTypes = genericTypes.Count > 0;
-
-            // Create the table and pre-populate the cacheable members: constants (if applicable), nested types (if
-            // applicable), events, and methods.
-
-            lua_newtable(state);
-
-            if (hasNonGenericType)
-            {
-                if (isStatic)
-                {
-                    foreach (var constField in nonGenericType!.GetPublicStaticFields().Where(f => f.IsLiteral))
-                    {
-                        _environment.PushObject(state, constField.GetValue(null));
-                        lua_setfield(state, -2, constField.Name);
-                    }
-
-                    // TODO: nested types
-                }
-
-                // TODO: events
-
-                foreach (var group in nonGenericType!.GetPublicMethods(isStatic).GroupBy(m => m.Name))
-                {
-                    PushMethodsValue(state, group.ToList(), isStatic);
-                    lua_setfield(state, -2, group.Key);
-                }
-            }
-
-            // Create the metatable with an `__index` metamethod to support accessing the non-cacheable members (if
-            // applicable) and constructing generic types (if applicable).
-
-            lua_createtable(state, 0, 1);
-
-            PushFunction(state, "__index", (ilg, context) =>
-            {
-                var target = isStatic ? null : EmitDeclareTarget(ilg, nonGenericType!);
-                var keyType = EmitDeclareKeyType(ilg);
-
-                if (hasNonGenericType)
-                {
-                    var fields = nonGenericType!.GetPublicFields(isStatic).Where(f => !f.IsLiteral);  // No consts
-                    var properties = nonGenericType!.GetPublicProperties(isStatic);
-                    var members = fields.Cast<MemberInfo>().Concat(properties).ToList();
-                    context.SetMembers(state, members);
-
-                    EmitIndexMembers(ilg, members,
-                        ilg => ilg.Emit(Ldloc, keyType),
-                        (ilg, field) =>
-                        {
-                            if (!isStatic)
-                            {
-                                ilg.Emit(Ldloc, target!);
-                            }
-
-                            ilg.Emit(isStatic ? Ldsfld : Ldfld, field);
-                        },
-                        (ilg, property) =>
-                        {
-                            if (!isStatic)
-                            {
-                                ilg.Emit(Ldloc, target!);
-                            }
-
-                            ilg.Emit(isStatic ? Call : Callvirt, property.GetMethod!);
-                        });
-                }
-
-                if (hasGenericTypes)
-                {
-                    var arityToType = genericTypes
-                        .Where(t => t.IsGenericTypeDefinition)
-                        .ToDictionary(t => t.GetGenericArguments().Length);
-                    var minArity = arityToType.Keys.Min();
-                    var maxArity = arityToType.Keys.Max();
-
-                    EmitIndexTypeArgs(ilg,
-                        ilg => ilg.Emit(Ldloc, keyType),
-                        (ilg, typeArgs) =>
-                        {
-                            var exit = ilg.BeginExceptionBlock();
-                            {
-                                var cases = ilg.DefineLabels(maxArity - minArity + 1);
-
-                                ilg.Emit(Ldloc, typeArgs);
-                                ilg.Emit(Ldlen);
-                                ilg.Emit(Ldc_I4, minArity);
-                                ilg.Emit(Sub);
-                                ilg.Emit(Switch, cases);
-
-                                ilg.MarkLabels(cases.Where((_, i) => !arityToType.ContainsKey(i + minArity)));
-
-                                ilg.Emit(Ldarg_1);
-                                ilg.Emit(Ldstr, "attempt to construct generic type with invalid arity");
-                                ilg.Emit(Call, _luaL_error);
-                                ilg.Emit(Pop);
-                                ilg.Emit(Leave, exit);  // Not short form
-
-                                foreach (var (@case, type) in cases
-                                    .Select((@case, i) => (@case, type: arityToType.GetValueOrDefault(i + minArity)))
-                                    .Where(t => t.type is { }))
-                                {
-                                    ilg.MarkLabel(@case);
-
-                                    ilg.Emit(Ldarg_0);
-                                    ilg.Emit(Ldarg_1);
-                                    ilg.Emit(Ldtoken, type);
-                                    ilg.Emit(Call, _typeGetTypeFromHandle);
-                                    ilg.Emit(Ldloc, typeArgs);
-                                    ilg.Emit(Callvirt, _typeMakeGenericType);
-                                    ilg.Emit(Call, MetamethodContext._pushClrType);
-                                    ilg.Emit(Leave, exit);  // Not short form
-                                }
-                            }
-
-                            ilg.BeginCatchBlock(typeof(ArgumentException));
-                            {
-                                ilg.Emit(Pop);
-                                ilg.Emit(Ldarg_1);
-                                ilg.Emit(Ldstr, "attempt to construct generic type with invalid constraints");
-                                ilg.Emit(Call, _luaL_error);
-                                ilg.Emit(Pop);
-                            }
-
-                            ilg.EndExceptionBlock();
-
-                            ilg.Emit(Ldc_I4_1);
-                            ilg.Emit(Ret);
-                        });
-                }
-
-                // TODO: support array indexers
-                // TODO: support indexers
-
-                ilg.Emit(Ldc_I4_0);
-                ilg.Emit(Ret);
-            });
-            lua_setfield(state, -2, "__index");
-
-            lua_setmetatable(state, -2);
-        }
-
-        private void PushNewIndexMetamethod(IntPtr state, Type type, bool isStatic) =>
-            PushFunction(state, "__newindex", (ilg, context) =>
-            {
-                var target = isStatic ? null : EmitDeclareTarget(ilg, type);
-                var keyType = EmitDeclareKeyType(ilg);
-                var valueType = EmitDeclareValueType(ilg);
-
-                // Support indexing of the members.
-
-                {
-                    var fields = isStatic ? type.GetPublicStaticFields() : type.GetPublicInstanceFields();
-                    var events = isStatic ? type.GetPublicStaticEvents() : type.GetPublicInstanceEvents();
-                    var properties = isStatic ? type.GetPublicStaticProperties() : type.GetPublicInstanceProperties();
-                    var methods = isStatic ? type.GetPublicStaticMethods() : type.GetPublicInstanceMethods();
-                    var nestedTypes = isStatic ? type.GetPublicNestedTypes() : Array.Empty<Type>();
-
-                    var members = fields.Cast<MemberInfo>()
-                        .Concat(events)
-                        .Concat(properties)
-                        .Concat(methods.GroupBy(m => m.Name).Select(g => g.First()))
-                        .Concat(nestedTypes)
-                        .ToList();
-                    context.SetMembers(state, members);
-
-                    EmitNewIndexMembers(ilg, members,
-                        ilg => ilg.Emit(Ldloc, keyType),
-                        ilg => ilg.Emit(Ldloc, valueType),
-                        (ilg, field, temp) =>
-                        {
-                            if (!isStatic)
-                            {
-                                ilg.Emit(Ldloc, target!);
-                            }
-
-                            ilg.Emit(Ldloc, temp);
-                            ilg.Emit(Stfld, field);
-                        },
-                        (ilg, property, temp) =>
-                        {
-                            var propertyType = property.PropertyType;
-                            var isByRef = property.PropertyType.IsByRef;
-
-                            if (!isStatic)
-                            {
-                                ilg.Emit(Ldloc, target!);
-                            }
-
-                            if (isByRef)
-                            {
-                                ilg.Emit(isStatic ? Call : Callvirt, property.GetMethod!);
-                                ilg.Emit(Ldloc, temp);
-                                ilg.EmitStind(propertyType.GetElementType()!);
-                            }
-                            else
-                            {
-                                ilg.Emit(Ldloc, temp);
-                                ilg.Emit(isStatic ? Call : Callvirt, property.SetMethod!);
-                            }
-                        });
-                }
-
-                // If not static, support indexing to access arrays and indexers.
-
-                if (!isStatic)
-                {
-                    // TODO: array access
-
-                    // TODO: indexer access
-                }
-
-                ilg.Emit(Ldc_I4_0);
                 ilg.Emit(Ret);
             });
 

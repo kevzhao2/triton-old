@@ -45,17 +45,17 @@ namespace Triton.Interop
         internal static readonly MethodInfo _pushClrEntity =
             typeof(MetamethodContext).GetMethod(nameof(PushClrEntity))!;
 
-        internal static readonly MethodInfo _pushClrType =
-            typeof(MetamethodContext).GetMethod(nameof(PushClrType))!;
+        internal static readonly MethodInfo _pushGenericClrType =
+            typeof(MetamethodContext).GetMethod(nameof(PushGenericClrType))!;
 
         internal static readonly MethodInfo _pushClrMethods =
             typeof(MetamethodContext).GetMethod(nameof(PushClrMethods))!;
 
         private readonly LuaEnvironment _environment;
-        private readonly ClrMetavalueGenerator _metavalueGenerator;
+        private readonly ClrMetatableGenerator _metavalueGenerator;
         private readonly Dictionary<IntPtr, int> _memberNameToIndex = new Dictionary<IntPtr, int>();
 
-        internal MetamethodContext(LuaEnvironment environment, ClrMetavalueGenerator metavalueGenerator)
+        internal MetamethodContext(LuaEnvironment environment, ClrMetatableGenerator metavalueGenerator)
         {
             _environment = environment;
             _metavalueGenerator = metavalueGenerator;
@@ -135,51 +135,33 @@ namespace Triton.Interop
             _environment.LoadClrEntity(state, index);
 
         /// <summary>
-        /// Loads CLR types from a value on the stack.
+        /// Loads CLR types from the keys on the stack.
         /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="index">The index.</param>
-        /// <param name="type">The type of the value.</param>
-        /// <returns>The resulting CLR types.</returns>
-        public Type[] LoadClrTypes(IntPtr state, int index, LuaType type)
+        /// <param name="state"></param>
+        /// <param name="startIndex"></param>
+        /// <param name="numKeys"></param>
+        /// <param name="keyTypes"></param>
+        /// <returns></returns>
+        public unsafe Type[] LoadClrTypes(IntPtr state, int startIndex, int numKeys, LuaType* keyTypes)
         {
-            if (type == LuaType.Userdata)
+            var types = new Type[numKeys];
+            for (var i = 0; i < numKeys; ++i)
             {
-                var clrType = LoadClrType(state, index);
-                if (clrType is null)
+                if (keyTypes[i] != LuaType.Userdata)
                 {
                     luaL_error(state, "attempt to index generics with non-type arg");
                 }
 
-                return new[] { clrType };
-            }
-            else if (type == LuaType.Table)
-            {
-                var length = (int)lua_rawlen(state, index);
-                var types = new Type[length];
-                for (var i = 1; i <= length; ++i)
+                var type = LoadClrType(state, startIndex + i);
+                if (type is null)
                 {
-                    if (lua_rawgeti(state, index, i) != LuaType.Userdata)
-                    {
-                        luaL_error(state, "attempt to index generics with non-type arg");
-                    }
-
-                    var clrType = LoadClrType(state, -1);
-                    if (clrType is null)
-                    {
-                        luaL_error(state, "attempt to index generics with non-type arg");
-                    }
-
-                    types[i - 1] = clrType;
+                    luaL_error(state, "attempt to index generics with non-type arg");
                 }
 
-                lua_pop(state, length);
-                return types;
+                types[i] = type;
             }
-            else
-            {
-                throw new InvalidOperationException();
-            }
+
+            return types;
 
             Type? LoadClrType(IntPtr state, int index) =>
                _environment.LoadClrEntity(state, index) switch
@@ -213,13 +195,18 @@ namespace Triton.Interop
         public void PushClrEntity(IntPtr state, object entity) =>
             _environment.PushClrEntity(state, entity);
 
-        /// <summary>
-        /// Pushes the given CLR type onto the stack.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="type">The CLR type.</param>
-        public void PushClrType(IntPtr state, Type type) =>
-            _environment.PushClrEntity(state, new ProxyClrTypes(new[] { type }));
+        public void PushGenericClrType(IntPtr state, RuntimeTypeHandle type, Type[] typeArgs)
+        {
+            try
+            {
+                var constructedType = Type.GetTypeFromHandle(type).MakeGenericType(typeArgs);
+                _environment.PushClrEntity(state, new ProxyClrTypes(new[] { constructedType }));
+            }
+            catch (ArgumentException)
+            {
+                luaL_error(state, "attempt to construct generic type with invalid constraints");
+            }
+        }
 
         /// <summary>
         /// Pushes the given CLR methods onto the stack.

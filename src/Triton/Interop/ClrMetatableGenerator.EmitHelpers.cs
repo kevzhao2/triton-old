@@ -15,7 +15,7 @@ using Debug = System.Diagnostics.Debug;
 
 namespace Triton.Interop
 {
-    internal partial class ClrMetavalueGenerator
+    internal partial class ClrMetatableGenerator
     {
         private static readonly PropertyInfo _stringLength =
             typeof(string).GetProperty(nameof(string.Length))!;
@@ -454,6 +454,113 @@ namespace Triton.Interop
             return argCount;
         }
 
+        private static (LocalBuilder numKeys, LocalBuilder keyTypes) EmitFlattenKey(
+            ILGenerator ilg, LocalBuilder keyType)
+        {
+            var numKeys = ilg.DeclareLocal(typeof(int));
+            var keyTypes = ilg.DeclareLocal(typeof(LuaType*));
+
+            {
+                // Determine the number of keys and set up the key types.
+
+                var isNotTable = ilg.DefineLabel();
+                var skip = ilg.DefineLabel();
+
+                ilg.Emit(Ldloc, keyType);
+                ilg.Emit(Ldc_I4_5);
+                ilg.Emit(Bne_Un_S, isNotTable);
+                {
+                    ilg.Emit(Ldarg_1);  // Lua state
+                    ilg.Emit(Ldc_I4_2);  // Key
+                    ilg.Emit(Call, _lua_rawlen);
+                    ilg.Emit(Conv_I4);
+                    ilg.Emit(Br_S, skip);
+                }
+
+                ilg.MarkLabel(isNotTable);
+                {
+                    ilg.Emit(Ldc_I4_1);
+                }
+
+                ilg.MarkLabel(skip);
+
+                ilg.Emit(Dup);
+                ilg.Emit(Stloc, numKeys);
+
+                ilg.Emit(Conv_U);
+                ilg.Emit(Ldc_I4_4);
+                ilg.Emit(Mul_Ovf_Un);
+                ilg.Emit(Localloc);
+                ilg.Emit(Stloc, keyTypes);
+            }
+
+            {
+                // Push the keys onto the stack while filling in the key types.
+
+                var isNotTable = ilg.DefineLabel();
+                var skip = ilg.DefineLabel();
+
+                ilg.Emit(Ldloc, keyType);
+                ilg.Emit(Ldc_I4_5);
+                ilg.Emit(Bne_Un_S, isNotTable);
+                {
+                    using var tableIndex = ilg.DeclareReusableLocal(typeof(int));
+                    ilg.Emit(Ldc_I4_1);  // 1-based indices
+                    ilg.Emit(Stloc, tableIndex);
+
+                    var loopHead = ilg.DefineLabel();
+
+                    ilg.Emit(Br_S, loopHead);
+                    {
+                        var loopBody = ilg.DefineAndMarkLabel();
+
+                        ilg.Emit(Ldloc, keyTypes);
+                        ilg.Emit(Ldloc, tableIndex);
+                        ilg.Emit(Ldc_I4_1);
+                        ilg.Emit(Sub);
+                        ilg.Emit(Conv_I);
+                        ilg.Emit(Ldc_I4_4);
+                        ilg.Emit(Mul);
+                        ilg.Emit(Add);
+                        ilg.Emit(Ldarg_1);  // Lua state
+                        ilg.Emit(Ldc_I4_2);  // Key
+                        ilg.Emit(Ldloc, tableIndex);
+                        ilg.Emit(Conv_I8);
+                        ilg.Emit(Call, _lua_rawgeti);
+                        ilg.Emit(Stind_I4);
+
+                        ilg.Emit(Ldloc, tableIndex);
+                        ilg.Emit(Ldc_I4_1);
+                        ilg.Emit(Add);
+                        ilg.Emit(Stloc, tableIndex);
+
+                        ilg.MarkLabel(loopHead);
+
+                        ilg.Emit(Ldloc, tableIndex);
+                        ilg.Emit(Ldloc, numKeys);
+                        ilg.Emit(Ble_S, loopBody);
+                    }
+
+                    ilg.Emit(Br_S, skip);
+                }
+
+                ilg.MarkLabel(isNotTable);
+                {
+                    ilg.Emit(Ldarg_1);  // Lua state
+                    ilg.Emit(Ldc_I4_2);  // Key
+                    ilg.Emit(Call, _lua_pushvalue);
+
+                    ilg.Emit(Ldloc, keyTypes);
+                    ilg.Emit(Ldloc, keyType);
+                    ilg.Emit(Stind_I4);
+                }
+
+                ilg.MarkLabel(skip);
+            }
+
+            return (numKeys, keyTypes);
+        }
+
         private static void EmitSwitchMembers(
             ILGenerator ilg, IReadOnlyList<MemberInfo> members,
             Action<ILGenerator> getKeyLuaType,
@@ -484,82 +591,6 @@ namespace Triton.Interop
             }
 
             ilg.MarkLabel(isNotString);
-        }
-
-        private static void EmitIndexMembers(
-            ILGenerator ilg, IReadOnlyList<MemberInfo> members,
-            Action<ILGenerator> getLuaKeyType,
-            Action<ILGenerator, FieldInfo> getFieldValue,
-            Action<ILGenerator, PropertyInfo> getPropertyValue)
-        {
-            var isNonReadableProperty = LazyEmitErrorMemberName(ilg, "attempt to get non-readable property '{0}'");
-            var isByRefLikeProperty = LazyEmitErrorMemberName(ilg, "attempt to get byref-like property '{0}'");
-
-            var skip = ilg.DefineLabel();
-            var isInvalidMember = ilg.DefineLabel();
-
-            ilg.Emit(Br_S, skip);
-            {
-                ilg.MarkLabel(isInvalidMember);
-
-                ilg.Emit(Ldc_I4_0);
-                ilg.Emit(Ret);
-            }
-
-            ilg.MarkLabel(skip);
-
-            EmitSwitchMembers(ilg, members,
-                getLuaKeyType,
-                (ilg, member) =>
-                {
-                    switch (member)
-                    {
-                        case FieldInfo field:
-                            var fieldType = field.FieldType;
-
-                            {
-                                using var temp = ilg.DeclareReusableLocal(fieldType);
-
-                                getFieldValue(ilg, field);
-                                ilg.Emit(Stloc, temp);
-
-                                EmitLuaPush(ilg, fieldType, temp);
-                            }
-                            break;
-
-                        case PropertyInfo property:
-                            var propertyType = property.PropertyType;
-
-                            if (property.GetMethod?.IsPublic != true)
-                            {
-                                ilg.Emit(Br, isNonReadableProperty.Value);  // Not short form
-                                return;
-                            }
-
-                            if (propertyType.IsByRefLike)
-                            {
-                                ilg.Emit(Br, isByRefLikeProperty.Value);  // Not short form
-                                return;
-                            }
-
-                            {
-                                using var temp = ilg.DeclareReusableLocal(propertyType);
-
-                                getPropertyValue(ilg, property);
-                                ilg.Emit(Stloc, temp);
-
-                                EmitLuaPush(ilg, propertyType, temp);
-                            }
-                            break;
-
-                        default:
-                            throw new InvalidOperationException();
-                    }
-
-                    ilg.Emit(Ldc_I4_1);
-                    ilg.Emit(Ret);
-                },
-                isInvalidMember);
         }
 
         private void EmitIndexTypeArgs(

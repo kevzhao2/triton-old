@@ -86,6 +86,9 @@ namespace Triton
         internal static readonly MethodInfo _lua_tostring =
             typeof(NativeMethods).GetMethod(nameof(lua_tostring))!;
 
+        internal static readonly MethodInfo _lua_pop =
+            typeof(NativeMethods).GetMethod(nameof(lua_pop))!;
+
         internal static readonly MethodInfo _lua_pushboolean =
             typeof(NativeMethods).GetMethod(nameof(lua_pushboolean))!;
 
@@ -103,6 +106,15 @@ namespace Triton
 
         internal static readonly MethodInfo _lua_pushstring =
             typeof(NativeMethods).GetMethod(nameof(lua_pushstring), new[] { typeof(IntPtr), typeof(string) })!;
+
+        internal static readonly MethodInfo _lua_pushvalue =
+            typeof(NativeMethods).GetMethod(nameof(lua_pushvalue))!;
+
+        internal static readonly MethodInfo _lua_rawgeti =
+            typeof(NativeMethods).GetMethod(nameof(lua_rawgeti))!;
+
+        internal static readonly MethodInfo _lua_rawlen =
+            typeof(NativeMethods).GetMethod(nameof(lua_rawlen))!;
 
         internal static readonly MethodInfo _lua_remove =
             typeof(NativeMethods).GetMethod(nameof(lua_remove))!;
