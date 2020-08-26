@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using static System.Reflection.Emit.OpCodes;
+using Debug = System.Diagnostics.Debug;
 
 namespace Triton.Interop.Extensions
 {
@@ -114,6 +115,48 @@ namespace Triton.Interop.Extensions
             foreach (var label in labels)
             {
                 ilg.MarkLabel(label);
+            }
+        }
+
+        /// <summary>
+        /// Emits a load field for the given target and field.
+        /// </summary>
+        /// <param name="ilg">The IL generator.</param>
+        /// <param name="target">The target.</param>
+        /// <param name="field">The field.</param>
+        public static void EmitLdfld(this ILGenerator ilg, LocalBuilder? target, FieldInfo field)
+        {
+            Debug.Assert(target is null == field.IsStatic);
+
+            if (target is null)
+            {
+                ilg.Emit(Ldsfld, field);
+            }
+            else
+            {
+                ilg.Emit(Ldloc, target);
+                ilg.Emit(Ldfld, field);
+            }
+        }
+
+        /// <summary>
+        /// Emits a call for the given target and method.
+        /// </summary>
+        /// <param name="ilg">The IL generator.</param>
+        /// <param name="target">The target.</param>
+        /// <param name="method">The method.</param>
+        public static void EmitCall(this ILGenerator ilg, LocalBuilder? target, MethodInfo method)
+        {
+            Debug.Assert(target is null == method.IsStatic);
+
+            if (target is null)
+            {
+                ilg.Emit(Call, method);
+            }
+            else
+            {
+                ilg.Emit(Ldloc, target);
+                ilg.Emit(Callvirt, method);
             }
         }
 

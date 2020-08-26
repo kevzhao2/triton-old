@@ -463,27 +463,10 @@ namespace Triton.Interop
             {
                 // Determine the number of keys and set up the key types.
 
-                var isNotTable = ilg.DefineLabel();
-                var skip = ilg.DefineLabel();
-
+                ilg.Emit(Ldarg_0);
+                ilg.Emit(Ldarg_1);  // Lua state
                 ilg.Emit(Ldloc, keyType);
-                ilg.Emit(Ldc_I4_5);
-                ilg.Emit(Bne_Un_S, isNotTable);
-                {
-                    ilg.Emit(Ldarg_1);  // Lua state
-                    ilg.Emit(Ldc_I4_2);  // Key
-                    ilg.Emit(Call, _lua_rawlen);
-                    ilg.Emit(Conv_I4);
-                    ilg.Emit(Br_S, skip);
-                }
-
-                ilg.MarkLabel(isNotTable);
-                {
-                    ilg.Emit(Ldc_I4_1);
-                }
-
-                ilg.MarkLabel(skip);
-
+                ilg.Emit(Call, MetamethodContext._getNumKeys);
                 ilg.Emit(Dup);
                 ilg.Emit(Stloc, numKeys);
 
@@ -561,6 +544,94 @@ namespace Triton.Interop
             return (numKeys, keyTypes);
         }
 
+        private static LocalBuilder EmitDeclareSzArrayIndex(
+            ILGenerator ilg, LocalBuilder keyType)
+        {
+            {
+                var isNumber = ilg.DefineLabel();
+
+                ilg.Emit(Ldloc, keyType);
+                ilg.Emit(Ldc_I4_3);
+                ilg.Emit(Beq_S, isNumber);
+
+                var isNotInteger = ilg.DefineAndMarkLabel();
+                {
+                    ilg.Emit(Ldarg_1);  // Lua state
+                    ilg.Emit(Ldstr, "attempt to access array with non-integer index");
+                    ilg.Emit(Call, _luaL_error);
+                    ilg.Emit(Ret);
+                }
+
+                ilg.MarkLabel(isNumber);
+
+                ilg.Emit(Ldarg_1);  // Lua state
+                ilg.Emit(Ldc_I4_2);  // Key
+                ilg.Emit(Call, _lua_isinteger);
+                ilg.Emit(Brfalse_S, isNotInteger);
+            }
+
+            var index = ilg.DeclareLocal(typeof(int));
+            ilg.Emit(Ldarg_1);  // Lua state
+            ilg.Emit(Ldc_I4_2);  // Key
+            ilg.Emit(Call, _lua_tointeger);
+            ilg.Emit(Stloc, index);
+
+            return index;
+        }
+
+        private static LocalBuilder EmitDeclareArrayIndices(
+            ILGenerator ilg, LocalBuilder keyType, int numIndices)
+        {
+            var (numKeys, keyTypes) = EmitFlattenKey(ilg, keyType);
+
+            {
+                var isCorrectNumberOfIndices = ilg.DefineLabel();
+
+                ilg.Emit(Ldloc, numKeys);
+                ilg.Emit(Ldc_I4, numIndices);
+                ilg.Emit(Beq_S, isCorrectNumberOfIndices);
+                {
+                    ilg.Emit(Ldarg_1);  // Lua state
+                    ilg.Emit(Ldstr, "attempt to access array with incorrect number of indices");
+                    ilg.Emit(Call, _luaL_error);
+                    ilg.Emit(Ret);
+                }
+
+                ilg.MarkLabel(isCorrectNumberOfIndices);
+            }
+
+            {
+                using var indexIndex = ilg.DeclareReusableLocal(typeof(int));
+                ilg.Emit(Ldc_I4_0);
+                ilg.Emit(Stloc, indexIndex);
+
+                for (var i = 0; i < numIndices; ++i)
+                {
+                    ilg.Emit(Ldc_I4, i);
+                    ilg.Emit(Conv_I);
+
+                }
+            }
+
+        }
+
+        private static LocalBuilder EmitConstructTypeArgs(
+            ILGenerator ilg, LocalBuilder keyType)
+        {
+            var (numKeys, keyTypes) = EmitFlattenKey(ilg, keyType);
+
+            var typeArgs = ilg.DeclareLocal(typeof(Type[]));
+            ilg.Emit(Ldarg_0);
+            ilg.Emit(Ldarg_1);  // Lua state
+            ilg.Emit(Ldc_I4_3);  // Keys
+            ilg.Emit(Ldloc, numKeys);
+            ilg.Emit(Ldloc, keyTypes);
+            ilg.Emit(Call, MetamethodContext._constructTypeArgs);
+            ilg.Emit(Stloc, typeArgs);
+
+            return typeArgs;
+        }
+
         private static void EmitSwitchMembers(
             ILGenerator ilg, IReadOnlyList<MemberInfo> members,
             Action<ILGenerator> getKeyLuaType,
@@ -617,7 +688,7 @@ namespace Triton.Interop
                 ilg.Emit(Ldarg_1);
                 ilg.Emit(Ldc_I4_2);
                 getLuaKeyType(ilg);
-                ilg.Emit(Call, MetamethodContext._loadClrTypes);
+                ilg.Emit(Call, MetamethodContext._constructTypeArgs);
                 ilg.Emit(Stloc, typeArgs);
 
                 typeArgsAction(ilg, typeArgs);
