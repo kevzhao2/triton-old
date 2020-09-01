@@ -20,7 +20,7 @@
 
 using System;
 using BenchmarkDotNet.Running;
-using Triton.Benchmarks.Interop;
+using Triton.Benchmarks.Interop.Micro;
 
 namespace Triton.Benchmarks
 {
@@ -28,7 +28,7 @@ namespace Triton.Benchmarks
     {
         static void Main()
         {
-            BenchmarkRunner.Run<InstanceMethod>();
+            BenchmarkRunner.Run<DelegateCall>();
             Console.ReadKey(true);
         }
     }

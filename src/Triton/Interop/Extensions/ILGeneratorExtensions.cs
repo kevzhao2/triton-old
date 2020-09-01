@@ -140,6 +140,27 @@ namespace Triton.Interop.Extensions
         }
 
         /// <summary>
+        /// Emits a store field for the given target and field.
+        /// </summary>
+        /// <param name="ilg">The IL generator.</param>
+        /// <param name="target">The target.</param>
+        /// <param name="field">The field.</param>
+        public static void EmitStfld(this ILGenerator ilg, LocalBuilder? target, FieldInfo field)
+        {
+            Debug.Assert(target is null == field.IsStatic);
+
+            if (target is null)
+            {
+                ilg.Emit(Stsfld, field);
+            }
+            else
+            {
+                ilg.Emit(Ldloc, target);
+                ilg.Emit(Stfld, field);
+            }
+        }
+
+        /// <summary>
         /// Emits a call for the given target and method.
         /// </summary>
         /// <param name="ilg">The IL generator.</param>
@@ -306,6 +327,50 @@ namespace Triton.Interop.Extensions
                 _ when type == typeof(double)  => Stind_R8,
                 _                              => Stind_Ref
             });
+        }
+
+        /// <summary>
+        /// Declares a local variable of type <see cref="Span{T}"/> with the given length and maximum stack-allocated
+        /// length.
+        /// </summary>
+        /// <typeparam name="T">The type of element.</typeparam>
+        /// <param name="ilg">The IL generator.</param>
+        /// <param name="length">The length of the span.</param>
+        /// <param name="maxStackLength">The maximum stack-allocated length.</param>
+        /// <returns>The local variable.</returns>
+        public static LocalBuilder DeclareLocalSpan<T>(this ILGenerator ilg, LocalBuilder length, int maxStackLength)
+        {
+            var span = ilg.DeclareLocal(typeof(Span<T>));
+
+            var isArray = ilg.DefineLabel();
+            var skip = ilg.DefineLabel();
+
+            ilg.Emit(Ldloc, length);
+            ilg.Emit(Ldc_I4, maxStackLength);
+            ilg.Emit(Bgt_S, isArray);
+            {
+                ilg.Emit(Ldloc, length);
+                ilg.Emit(Ldc_I4, Unsafe.SizeOf<T>());
+                ilg.Emit(Mul);
+                ilg.Emit(Conv_U);
+                ilg.Emit(Localloc);
+                ilg.Emit(Ldloc, length);
+                ilg.Emit(Newobj, typeof(Span<T>).GetConstructor(new[] { typeof(void*), typeof(int) })!);
+                ilg.Emit(Stloc, span);
+
+                ilg.Emit(Br_S, skip);
+            }
+
+            ilg.MarkLabel(isArray);
+
+            ilg.Emit(Ldloc, length);
+            ilg.Emit(Newarr, typeof(T));
+            ilg.Emit(Call, typeof(Span<T>).GetMethod("op_Implicit", new[] { typeof(T[]) })!);
+            ilg.Emit(Stloc, span);
+
+            ilg.MarkLabel(skip);
+
+            return span;
         }
     }
 }

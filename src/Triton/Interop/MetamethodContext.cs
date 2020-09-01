@@ -5,7 +5,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using static Triton.LuaValue;
@@ -18,12 +17,6 @@ namespace Triton.Interop
     /// </summary>
     internal sealed class MetamethodContext
     {
-        internal static readonly MethodInfo _errorMemberName =
-            typeof(MetamethodContext).GetMethod(nameof(ErrorMemberName))!;
-
-        internal static readonly MethodInfo _matchMemberName =
-            typeof(MetamethodContext).GetMethod(nameof(MatchMemberName))!;
-
         internal static readonly MethodInfo _loadValue =
             typeof(MetamethodContext).GetMethod(nameof(LoadValue))!;
 
@@ -51,8 +44,17 @@ namespace Triton.Interop
         internal static readonly MethodInfo _constructTypeArgs =
             typeof(MetamethodContext).GetMethod(nameof(ConstructTypeArgs))!;
 
+        internal static readonly MethodInfo _getArrayIndex =
+            typeof(MetamethodContext).GetMethod(nameof(GetSzArrayIndex))!;
+
+        internal static readonly MethodInfo _getArrayIndices =
+            typeof(MetamethodContext).GetMethod(nameof(GetArrayIndices))!;
+
+        internal static readonly MethodInfo _getTypeArgs =
+            typeof(MetamethodContext).GetMethod(nameof(GetTypeArgs))!;
+
         internal static readonly MethodInfo _constructAndPushGenericType =
-            typeof(MetamethodContext).GetMethod(nameof(ConstructAndPushGenericType))!;
+            typeof(MetamethodContext).GetMethod(nameof(PushGenericType))!;
 
         private readonly LuaEnvironment _environment;
         private readonly ClrMetatableGenerator _metavalueGenerator;
@@ -86,24 +88,6 @@ namespace Triton.Interop
             }
             _ = luaL_ref(state, LUA_REGISTRYINDEX);
         }
-
-        /// <summary>
-        /// Raises an error using the member name.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="format">The format string.</param>
-        /// <returns>The number of results.</returns>
-        [DoesNotReturn]
-        public int ErrorMemberName(IntPtr state, string format) =>
-            luaL_error(state, string.Format(format, lua_tostring(state, 2)));
-
-        /// <summary>
-        /// Matches the member name, returning the member's index (or <c>-1</c> if it does not exist).
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <returns>The member's index (or <c>-1</c> if it does not exist).</returns>
-        public int MatchMemberName(IntPtr state) =>
-            _memberNameToIndex.TryGetValue(lua_tolstring(state, 2, IntPtr.Zero), out var index) ? index : -1;
 
         /// <summary>
         /// Loads a Lua value from a value on the stack.
@@ -205,7 +189,139 @@ namespace Triton.Interop
                };
         }
 
-        public void ConstructAndPushGenericType(IntPtr state, RuntimeTypeHandle type, Type[] typeArgs)
+        public static void GetArgTypes(IntPtr state, Span<LuaType> argTypes)
+        {
+            for (var i = 0; i < argTypes.Length; ++i)
+            {
+                argTypes[i] = lua_type(state, i - argTypes.Length);
+            }
+        }
+
+        public static int GetIndexerArgCount(IntPtr state, int index, LuaType keyType) =>
+            keyType switch
+            {
+                LuaType.Table => (int)lua_rawlen(state, index),
+                _             => 1
+            };
+
+        public static void GetKeyTypes(IntPtr state, int index, LuaType keyType, LuaType valueType, Span<LuaType> types)
+        {
+            if (keyType == LuaType.Table)
+            {
+                var length = types.Length - (valueType != LuaType.None ? 1 : 0);
+                for (var i = 1; i <= length; ++i)
+                {
+                    types[i - 1] = lua_rawgeti(state, index, i);
+                }
+
+                if (valueType != LuaType.None)
+                {
+                    lua_pushvalue(state, 3);
+                }
+            }
+            else
+            {
+                types[0] = keyType;
+            }
+
+            if (valueType != LuaType.None)
+            {
+                types[^1] = valueType;
+            }
+        }
+
+        public int GetMemberIndex(IntPtr state, int index) =>
+            _memberNameToIndex.TryGetValue(lua_tolstring(state, index, IntPtr.Zero), out var memberIndex)
+                ? memberIndex
+                : -1;
+
+        public static int GetSzArrayIndex(IntPtr state, int index, LuaType keyType) =>
+            (keyType == LuaType.Number && lua_isinteger(state, index))
+                ? (int)lua_tointeger(state, index)
+                : luaL_error(state, "attempt to access array with non-integer index");
+
+        public static void GetArrayIndices(IntPtr state, int index, LuaType keyType, Span<int> indices)
+        {
+            if (keyType == LuaType.Number)
+            {
+                if (1 != indices.Length)
+                {
+                    luaL_error(state, "attempt to access array with incorrect number of indices");
+                }
+
+                indices[0] = lua_isinteger(state, index)
+                    ? (int)lua_tointeger(state, index)
+                    : luaL_error(state, "attempt to access array with non-integer index");
+            }
+            else if (keyType == LuaType.Table)
+            {
+                if ((int)lua_rawlen(state, index) != indices.Length)
+                {
+                    luaL_error(state, "attempt to access array with incorrect number of indices");
+                }
+
+                for (var i = 0; i < indices.Length; ++i)
+                {
+                    indices[i] = (lua_rawgeti(state, index, i + 1) == LuaType.Number && lua_isinteger(state, -1))
+                        ? (int)lua_tointeger(state, -1)
+                        : luaL_error(state, "attempt to access array with non-integer index");
+                }
+            }
+            else
+            {
+                luaL_error(state, "attempt to access array with non-integer index");
+            }
+        }
+
+        public Type[] GetTypeArgs(IntPtr state, int index, LuaType keyType)
+        {
+            if (keyType == LuaType.Userdata)
+            {
+                var type = ToClrType(state, index);
+                if (type is null)
+                {
+                    luaL_error(state, "attempt to construct generic with non-type arg");
+                    return null!;
+                }
+
+                return new[] { type };
+            }
+            else if (keyType == LuaType.Table)
+            {
+                var types = new Type[(int)lua_rawlen(state, index)];
+                for (var i = 0; i < types.Length; ++i)
+                {
+                    if (lua_rawgeti(state, index, i + 1) != LuaType.Userdata)
+                    {
+                        luaL_error(state, "attempt to construct generic with non-type arg");
+                        return null!;
+                    }
+
+                    var type = ToClrType(state, index);
+                    if (type is null)
+                    {
+                        luaL_error(state, "attempt to construct generic with non-type arg");
+                        return null!;
+                    }
+
+                    types[i] = type;
+                }
+
+                return types;
+            }
+            else
+            {
+                luaL_error(state, "attempt to construct generic with non-type arg");
+                return null!;
+            }
+
+            Type? ToClrType(IntPtr state, int index) =>
+                _environment.LoadClrEntity(state, index) is ProxyClrTypes { Types: var types }
+                    ? types.FirstOrDefault(t => !t.IsGenericTypeDefinition)
+                    : null;
+        }
+
+        public void PushGenericType(IntPtr state, RuntimeTypeHandle type, Type[] typeArgs)
         {
             try
             {

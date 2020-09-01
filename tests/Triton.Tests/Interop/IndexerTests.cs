@@ -20,5 +20,18 @@ namespace Triton.Interop
             environment.Eval("list:Add(1)");
             environment.Eval("assert(list[0] == 1)");
         }
+
+        [Fact]
+        public void Set()
+        {
+            using var environment = new LuaEnvironment();
+            environment["Int32"] = LuaValue.FromClrTypes(typeof(int));
+            environment["List"] = LuaValue.FromClrTypes(typeof(List<>));
+
+            environment.Eval("list = List[Int32]()");
+            environment.Eval("list:Add(1)");
+            environment.Eval("list[0] = 2");
+            environment.Eval("assert(list[0] == 2)");
+        }
     }
 }
