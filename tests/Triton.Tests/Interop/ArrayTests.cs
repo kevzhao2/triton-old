@@ -2,6 +2,7 @@
 //
 // Licensed under the MIT license. See the LICENSE file in the project root for more information.
 
+using System;
 using Xunit;
 
 namespace Triton.Interop
@@ -9,59 +10,77 @@ namespace Triton.Interop
     public class ArrayTests
     {
         [Fact]
-        public void Int_Get()
+        public void Get_SzArray()
         {
-            using var environment = new LuaEnvironment();
-            environment["array"] = LuaValue.FromClrObject(new int[] { 1, 2, 3, 4 });
+            var array = new[] { 1, 2, 3, 4 };
 
-            environment.Eval("assert(array[0] == 1)");
+            using var environment = new LuaEnvironment();
+            environment["array"] = LuaValue.FromClrObject(array);
+
             environment.Eval("assert(array[1] == 2)");
-            environment.Eval("assert(array[2] == 3)");
-            environment.Eval("assert(array[3] == 4)");
         }
 
         [Fact]
-        public void Int_Set()
+        public void Get_NonSzArray_SingleDimensional()
+        {
+            var array = Array.CreateInstance(typeof(int), new[] { 4 }, new[] { 1 });
+            array.SetValue(2, 1);
+
+            using var environment = new LuaEnvironment();
+            environment["array"] = LuaValue.FromClrObject(array);
+
+            environment.Eval("assert(array[1] == 2)");
+        }
+
+        [Fact]
+        public void Get_NonSzArray_MultiDimensional()
+        {
+            var array = new int[4, 4];
+            array[1, 2] = 3;
+
+            using var environment = new LuaEnvironment();
+            environment["array"] = LuaValue.FromClrObject(array);
+
+            environment.Eval("assert(array[{1, 2}] == 3)");
+        }
+
+        [Fact]
+        public void Set_SzArray()
         {
             var array = new int[4];
 
             using var environment = new LuaEnvironment();
             environment["array"] = LuaValue.FromClrObject(array);
 
-            environment.Eval("array[0] = 1");
             environment.Eval("array[1] = 2");
-            environment.Eval("array[2] = 3");
-            environment.Eval("array[3] = 4");
 
-            Assert.Equal(1, array[0]);
             Assert.Equal(2, array[1]);
-            Assert.Equal(3, array[2]);
-            Assert.Equal(4, array[3]);
         }
 
         [Fact]
-        public void Int_MultiDimensional_Get()
+        public void Set_NonSzArray_SingleDimensional()
         {
-            var array = new int[10, 10];
-            array[1, 2] = 34;
+            var array = Array.CreateInstance(typeof(int), new[] { 4 }, new[] { 1 });
 
             using var environment = new LuaEnvironment();
             environment["array"] = LuaValue.FromClrObject(array);
 
-            environment.Eval("assert(array[{1, 2}] == 34)");
+            environment.Eval("array[1] = 2");
+
+            Assert.Equal(2, array.GetValue(1));
         }
 
         [Fact]
-        public void Int_MultiDimensional_Set()
+        public void Set_NonSzArray_MultiDimensional()
         {
-            var array = new int[10, 10];
+            var array = new int[4, 4];
 
             using var environment = new LuaEnvironment();
             environment["array"] = LuaValue.FromClrObject(array);
 
-            environment.Eval("array[{1, 2}] = 34");
+            environment.Eval("array[{1, 2}] = 3");
 
-            Assert.Equal(34, array[1, 2]);
+            Assert.Equal(3, array[1, 2]);
         }
     }
 }

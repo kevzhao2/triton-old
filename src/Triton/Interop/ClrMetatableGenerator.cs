@@ -22,14 +22,14 @@ namespace Triton.Interop
     {
         private readonly LuaEnvironment _environment;
 
-        // The `__index` metavalues are nested (i.e., the metavalue is a table which itself has an `__index`
-        // metamethod).
+        // The `__index` metavalue is nested (i.e., it is a table which has an `__index` metamethod).
         //
-        // Normally, the table would be passed to the nested metamethod, but this is undesirable for object metamethods.
+        // Normally, the table would be passed to the nested metamethod, but this is undesirable for objects, since the
+        // object is lost.
         //
-        // In order to work around this, we have a higher order function which wraps the metavalue, producing a function
-        // which will attempt to `rawget` the metavalue, and if that fails, calls the metavalue's `__index` metamethod,
-        // passing the object instead.
+        // In order to work around this, we use a function which wraps the table, producing a function which will use
+        // `rawget` on the table, and failing that, calls the `__index` metamethod but passing the object instead of the
+        // table.
 
         private readonly int _wrapObjectIndexRef;
 
@@ -37,7 +37,7 @@ namespace Triton.Interop
         {
             _environment = environment;
 
-            var status = luaL_loadstring(state, @"
+            _ = luaL_loadstring(state, @"
                 local t = ...
                 local __index = getmetatable(t).__index
                 return function(obj, key)
@@ -48,8 +48,6 @@ namespace Triton.Interop
                         return __index(obj, key)
                     end
                 end");
-            Debug.Assert(status == LuaStatus.Ok);
-
             _wrapObjectIndexRef = luaL_ref(state, LUA_REGISTRYINDEX);
         }
 
@@ -60,20 +58,19 @@ namespace Triton.Interop
         /// <param name="types">The CLR types.</param>
         public void PushTypesMetatable(IntPtr state, IReadOnlyList<Type> types)
         {
-            var nonGenericType = types.SingleOrDefault(t => !t.IsGenericTypeDefinition);
-            var hasNonGenericType = nonGenericType is { };
+            var type = types.SingleOrDefault(t => !t.IsGenericTypeDefinition);
 
-            lua_createtable(state, 0, hasNonGenericType ? 5 : 3);
+            lua_createtable(state, 0, type is not null ? 5 : 3);
 
             PushIndexMetavalue(state, types, isStatic: true);
             lua_setfield(state, -2, "__index");
 
-            if (hasNonGenericType)
+            if (type is not null)
             {
-                PushNewIndexMetamethod(state, nonGenericType!, isStatic: true);
+                PushNewIndexMetamethod(state, type, isStatic: true);
                 lua_setfield(state, -2, "__newindex");
 
-                PushCallMetamethod(state, nonGenericType!, isStatic: true);
+                PushCallMetamethod(state, type, isStatic: true);
                 lua_setfield(state, -2, "__call");
             }
         }
@@ -102,19 +99,6 @@ namespace Triton.Interop
                 PushCallMetamethod(state, objType, isStatic: false);
                 lua_setfield(state, -2, "__call");
             }
-        }
-
-        /// <summary>
-        /// Pushes the given methods' function onto the stack.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="methods">The methods.</param>
-        public void PushMethodsFunction(IntPtr state, IReadOnlyList<MethodInfo> methods)
-        {
-            Debug.Assert(methods.All(m => !m.IsGenericMethodDefinition),
-                "Methods should not be generic");
-
-            PushMethodsValue(state, methods, methods[0].IsStatic);
         }
 
         private void PushIndexMetavalue(IntPtr state, IReadOnlyList<Type> types, bool isStatic)
@@ -157,7 +141,7 @@ namespace Triton.Interop
 
                 foreach (var (name, methods) in type.GetPublicMethods(isStatic).GroupBy(m => m.Name))
                 {
-                    PushMethodsValue(state, methods.ToList(), isStatic);
+                    PushMethods(state, methods.ToList(), isStatic);
                     lua_setfield(state, -2, name);
                 }
             }
@@ -617,7 +601,32 @@ namespace Triton.Interop
                 }
             });
 
-        private void PushMethodsValue(IntPtr state, IReadOnlyList<MethodInfo> methods, bool isStatic)
+        private void PushMethods(IntPtr state, IReadOnlyList<MethodInfo> allMethods, bool isStatic)
+        {
+            var methods = allMethods.Where(m => !m.IsGenericMethodDefinition).ToList();
+            var genericMethods = allMethods.Where(m => m.IsGenericMethodDefinition).ToList();
+
+            if (methods.Count > 0)
+            {
+                PushFunction(state, "__call", (ilg, _) =>
+                {
+                    var target = !isStatic ? EmitDeclareTarget(ilg, methods[0].DeclaringType!) : null;
+                    var argCount = EmitDeclareArgCount(ilg, target is not null ? 1 : 0);
+                    var argTypes = EmitDeclareArgTypes(ilg, argCount);
+
+                    EmitCallMethods(ilg, target, methods, argCount, argTypes);
+
+                    EmitLuaError(ilg, "attempt to call method with invalid args");
+                    ilg.Emit(Ret);
+                });
+            }
+            else
+            {
+                lua_newtable(state);
+            }
+        }
+
+        /*private void PushMethodsValue(IntPtr state, IReadOnlyList<MethodInfo> methods, bool isStatic)
         {
             Debug.Assert(methods.Count > 0,
                 "Methods should not be empty");
@@ -802,6 +811,6 @@ namespace Triton.Interop
             {
                 lua_setmetatable(state, -2);
             }
-        }
+        }*/
     }
 }

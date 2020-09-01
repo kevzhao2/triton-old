@@ -35,27 +35,6 @@ namespace Triton.Interop
         internal static readonly MethodInfo _pushClrEntity =
             typeof(MetamethodContext).GetMethod(nameof(PushClrEntity))!;
 
-        internal static readonly MethodInfo _pushClrMethods =
-            typeof(MetamethodContext).GetMethod(nameof(PushClrMethods))!;
-
-        internal static readonly MethodInfo _getNumKeys =
-            typeof(MetamethodContext).GetMethod(nameof(GetNumKeys))!;
-
-        internal static readonly MethodInfo _constructTypeArgs =
-            typeof(MetamethodContext).GetMethod(nameof(ConstructTypeArgs))!;
-
-        internal static readonly MethodInfo _getArrayIndex =
-            typeof(MetamethodContext).GetMethod(nameof(GetSzArrayIndex))!;
-
-        internal static readonly MethodInfo _getArrayIndices =
-            typeof(MetamethodContext).GetMethod(nameof(GetArrayIndices))!;
-
-        internal static readonly MethodInfo _getTypeArgs =
-            typeof(MetamethodContext).GetMethod(nameof(GetTypeArgs))!;
-
-        internal static readonly MethodInfo _constructAndPushGenericType =
-            typeof(MetamethodContext).GetMethod(nameof(PushGenericType))!;
-
         private readonly LuaEnvironment _environment;
         private readonly ClrMetatableGenerator _metavalueGenerator;
         private readonly Dictionary<IntPtr, int> _memberNameToIndex = new Dictionary<IntPtr, int>();
@@ -145,50 +124,6 @@ namespace Triton.Interop
         public void PushClrEntity(IntPtr state, object entity) =>
             _environment.PushClrEntity(state, entity);
 
-        /// <summary>
-        /// Pushes the given CLR methods onto the stack.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="methods">The CLR methods.</param>
-        public void PushClrMethods(IntPtr state, IReadOnlyList<MethodInfo> methods) =>
-            _metavalueGenerator.PushMethodsFunction(state, methods);
-
-        public int GetNumKeys(IntPtr state, LuaType type) =>
-            type switch
-            {
-                LuaType.Table => (int)lua_rawlen(state, 2),
-                _             => 1
-            };
-
-        public unsafe Type[] ConstructTypeArgs(IntPtr state, int startIndex, int numKeys, LuaType* keyTypes)
-        {
-            var types = new Type[numKeys];
-            for (var i = 0; i < numKeys; ++i)
-            {
-                if (keyTypes[i] != LuaType.Userdata)
-                {
-                    luaL_error(state, "attempt to construct generic with non-type arg");
-                }
-
-                var type = LoadClrType(state, startIndex + i);
-                if (type is null)
-                {
-                    luaL_error(state, "attempt to construct generic with non-type arg");
-                }
-
-                types[i] = type;
-            }
-
-            return types;
-
-            Type? LoadClrType(IntPtr state, int index) =>
-               _environment.LoadClrEntity(state, index) switch
-               {
-                   ProxyClrTypes { Types: var types } => types.FirstOrDefault(t => !t.IsGenericTypeDefinition),
-                   _ => null
-               };
-        }
-
         public static void GetArgTypes(IntPtr state, Span<LuaType> argTypes)
         {
             for (var i = 0; i < argTypes.Length; ++i)
@@ -238,7 +173,7 @@ namespace Triton.Interop
         public static int GetSzArrayIndex(IntPtr state, int index, LuaType keyType) =>
             (keyType == LuaType.Number && lua_isinteger(state, index))
                 ? (int)lua_tointeger(state, index)
-                : luaL_error(state, "attempt to access array with non-integer index");
+                : luaL_error(state, "attempt to index array with non-integer index");
 
         public static void GetArrayIndices(IntPtr state, int index, LuaType keyType, Span<int> indices)
         {
@@ -246,30 +181,30 @@ namespace Triton.Interop
             {
                 if (1 != indices.Length)
                 {
-                    luaL_error(state, "attempt to access array with incorrect number of indices");
+                    luaL_error(state, "attempt to index array with incorrect number of indices");
                 }
 
                 indices[0] = lua_isinteger(state, index)
                     ? (int)lua_tointeger(state, index)
-                    : luaL_error(state, "attempt to access array with non-integer index");
+                    : luaL_error(state, "attempt to index array with non-integer index");
             }
             else if (keyType == LuaType.Table)
             {
                 if ((int)lua_rawlen(state, index) != indices.Length)
                 {
-                    luaL_error(state, "attempt to access array with incorrect number of indices");
+                    luaL_error(state, "attempt to index array with incorrect number of indices");
                 }
 
                 for (var i = 0; i < indices.Length; ++i)
                 {
                     indices[i] = (lua_rawgeti(state, index, i + 1) == LuaType.Number && lua_isinteger(state, -1))
                         ? (int)lua_tointeger(state, -1)
-                        : luaL_error(state, "attempt to access array with non-integer index");
+                        : luaL_error(state, "attempt to index array with non-integer index");
                 }
             }
             else
             {
-                luaL_error(state, "attempt to access array with non-integer index");
+                luaL_error(state, "attempt to index array with non-integer index");
             }
         }
 
@@ -280,7 +215,7 @@ namespace Triton.Interop
                 var type = ToClrType(state, index);
                 if (type is null)
                 {
-                    luaL_error(state, "attempt to construct generic with non-type arg");
+                    luaL_error(state, "attempt to index generic with non-type arg");
                     return null!;
                 }
 
@@ -293,14 +228,14 @@ namespace Triton.Interop
                 {
                     if (lua_rawgeti(state, index, i + 1) != LuaType.Userdata)
                     {
-                        luaL_error(state, "attempt to construct generic with non-type arg");
+                        luaL_error(state, "attempt to index generic with non-type arg");
                         return null!;
                     }
 
                     var type = ToClrType(state, index);
                     if (type is null)
                     {
-                        luaL_error(state, "attempt to construct generic with non-type arg");
+                        luaL_error(state, "attempt to index generic with non-type arg");
                         return null!;
                     }
 
@@ -311,7 +246,7 @@ namespace Triton.Interop
             }
             else
             {
-                luaL_error(state, "attempt to construct generic with non-type arg");
+                luaL_error(state, "attempt to index generic with non-type arg");
                 return null!;
             }
 

@@ -10,7 +10,7 @@ namespace Triton.Interop
     public class DelegateTests
     {
         [Fact]
-        public void Call()
+        public void Square()
         {
             using var environment = new LuaEnvironment();
             environment["square"] = LuaValue.FromClrObject(new Func<int, int>(x => x * x));
