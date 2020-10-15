@@ -1,87 +1,68 @@
-﻿// Copyright (c) 2020 Kevin Zhao. All rights reserved.
+﻿// Copyright (c) 2020 Kevin Zhao
 //
-// Licensed under the MIT license. See the LICENSE file in the project root for more information.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to
+// deal in the Software without restriction, including without limitation the
+// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+// sell copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+// IN THE SOFTWARE.
 
 using System;
 using System.Collections.Generic;
-using static Triton.NativeMethods;
+using static Triton.Lua;
+using static Triton.Lua.LuaType;
 
 namespace Triton
 {
     /// <summary>
-    /// Manages Lua objects. Controls the lifetime of <see cref="LuaObject"/>s and provides methods to manipulate and
-    /// retrieve them.
+    /// Manages Lua objects. Controls the lifetime of <see cref="LuaObject"/> instances and provides methods to
+    /// manipulate and retrieve them.
     /// </summary>
-    internal sealed class LuaObjectManager
+    internal sealed unsafe class LuaObjectManager
     {
         private readonly LuaEnvironment _environment;
 
-        // We would like to use the same `LuaObject` instances for the same Lua objects. This is accomplished by storing
-        // them inside of the Lua registry and using the following object cache.
+        private readonly Dictionary<IntPtr, (int @ref, WeakReference<LuaObject> weakRef)> _cache = new();
 
-        private readonly Dictionary<IntPtr, (int @ref, WeakReference<LuaObject> weakReference)> _objects =
-            new Dictionary<IntPtr, (int @ref, WeakReference<LuaObject> weakReference)>();
-
-        // In order to clean up Lua objects which have been garbage collected by the CLR, we will execute cleanups
-        // whenever a garbage collection is performed by Lua. This will enable the Lua objects to be removed from the
-        // registry, making them eligible for garbage collection by Lua.
-
-        private readonly LuaCFunction _gcMetamethod;
-        private readonly int _gcMetatableRef;
-
-        internal LuaObjectManager(IntPtr state, LuaEnvironment environment)
+        internal LuaObjectManager(LuaEnvironment environment)
         {
             _environment = environment;
-
-            _gcMetamethod = GcMetamethod;  // Prevent garbage collection of the delegate
-            lua_createtable(state, 0, 1);
-            lua_pushcfunction(state, _gcMetamethod);
-            lua_setfield(state, -2, "__gc");
-            _gcMetatableRef = luaL_ref(state, LUA_REGISTRYINDEX);
-
-            PushGarbage(state);
         }
 
-        /// <summary>
-        /// Interns the given Lua object in the cache.
-        /// </summary>
-        /// <param name="ptr">The Lua object pointer.</param>
-        /// <param name="obj">The Lua object.</param>
-        public void Intern(IntPtr ptr, LuaObject obj)
+        public TLuaObject Intern<TLuaObject>(IntPtr ptr, int @ref, TLuaObject obj) where TLuaObject : LuaObject
         {
-            _objects.Add(ptr, (obj._ref, new WeakReference<LuaObject>(obj)));
+            // The pointer may already exist in the cache. This can happen if the Lua object was garbage collected by
+            // the CLR and then reconstructed.
+
+            _cache[ptr] = (@ref, new(obj));
+            return obj;
         }
 
-        /// <summary>
-        /// Pushes the given Lua object onto the stack.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="obj">The Lua object.</param>
-        public void Push(IntPtr state, LuaObject obj)
-        {
-            if (obj._environment != _environment)
-            {
-                throw new InvalidOperationException("Lua object does not belong to this environment");
-            }
-
-            lua_rawgeti(state, LUA_REGISTRYINDEX, obj._ref);
-        }
-
-        /// <summary>
-        /// Loads a Lua object from a value on the stack.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="index">The index.</param>
-        /// <param name="type">The type of the value.</param>
-        /// <returns>The resulting Lua object.</returns>
-        public LuaObject Load(IntPtr state, int index, LuaType type)
+        public LuaObject Load(lua_State* state, int index, LuaType type)
         {
             LuaObject? obj;
 
+            // There are two cases:
+            // - If the Lua object is present in the cache, then the Lua object exists in the registry. However, the
+            //   Lua object may have been garbage collected by the CLR, so it is reconstructed if necessary.
+            // - If the Lua object is NOT present in the cache, then the Lua object is placed in the registry and
+            //   constructed.
+
             var ptr = lua_topointer(state, index);
-            if (_objects.TryGetValue(ptr, out var tuple))
+            if (_cache.TryGetValue((IntPtr)ptr, out var tuple))
             {
-                if (tuple.weakReference.TryGetTarget(out obj))
+                if (tuple.weakRef.TryGetTarget(out obj))
                 {
                     return obj;
                 }
@@ -94,46 +75,30 @@ namespace Triton
 
             obj = type switch
             {
-                LuaType.Table    => new LuaTable(state, _environment, tuple.@ref),
-                LuaType.Function => new LuaFunction(state, _environment, tuple.@ref),
-                _                => new LuaThread(ptr, _environment, tuple.@ref)
+                LUA_TTABLE    => new LuaTable(state, _environment, tuple.@ref),
+                LUA_TFUNCTION => new LuaFunction(state, _environment, tuple.@ref),
+                _             => new LuaThread((lua_State*)ptr, _environment, tuple.@ref)  // Special case for threads
             };
 
-            Intern(ptr, obj);
-            return obj;
+            return Intern((IntPtr)ptr, tuple.@ref, obj);
         }
 
-        private int GcMetamethod(IntPtr state)
+        public void Clean(lua_State* state)
         {
-            CleanRefs(state);
-            PushGarbage(state);
-            return 0;
-
-            void CleanRefs(IntPtr state)
+            var deadPtrs = new List<IntPtr>();
+            foreach (var (ptr, (@ref, weakRef)) in _cache)
             {
-                var deadPtrs = new List<IntPtr>();
-                foreach (var (ptr, (@ref, weakReference)) in _objects)
+                if (!weakRef.TryGetTarget(out _))
                 {
-                    if (!weakReference.TryGetTarget(out _))
-                    {
-                        luaL_unref(state, LUA_REGISTRYINDEX, @ref);
-                        deadPtrs.Add(ptr);
-                    }
-                }
-
-                foreach (var deadPtr in deadPtrs)
-                {
-                    _objects.Remove(deadPtr);
+                    luaL_unref(state, LUA_REGISTRYINDEX, @ref);
+                    deadPtrs.Add(ptr);
                 }
             }
-        }
 
-        private void PushGarbage(IntPtr state)
-        {
-            lua_newtable(state);
-            lua_rawgeti(state, LUA_REGISTRYINDEX, _gcMetatableRef);
-            lua_setmetatable(state, -2);
-            lua_pop(state, 1);
+            foreach (var deadPtr in deadPtrs)
+            {
+                _cache.Remove(deadPtr);
+            }
         }
     }
 }

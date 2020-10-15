@@ -18,48 +18,25 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using System;
-using System.Collections.Generic;
-using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Running;
+using static Triton.Lua;
 
-namespace Triton.Benchmarks
+namespace Triton.Interop
 {
-    [MemoryDiagnoser]
-    public class Benchmark
+    /// <summary>
+    /// Provides the base class for a static metamethod generator.
+    /// </summary>
+    internal unsafe abstract class StaticMetamethodGenerator : IMetamethodGenerator
     {
-        private readonly LuaEnvironment _environment = new();
+        public abstract string Name { get; }
 
-        private LuaTable _table;
+        /// <summary>
+        /// Gets a pointer to the metamethod.
+        /// </summary>
+        /// <value>A pointer to the metamethod.</value>
+        protected abstract delegate* unmanaged[Cdecl]<lua_State*, int> Metamethod { get; }
 
-        [GlobalSetup]
-        public void Setup()
-        {
-            _environment.ImportTypes(typeof(List<>).Assembly);
-        }
+        public bool IsApplicable(object entity, bool isTypes) => true;
 
-        [GlobalCleanup]
-        public void Cleanup()
-        {
-            _environment.Dispose();
-        }
-
-        [Benchmark]
-        public void Count()
-        {
-            _environment.Eval(@"
-                for i = 1, 1000000 do
-                    _ = tostring(System.Action)
-                end");
-        }
-    }
-
-    class Program
-    {
-        static void Main()
-        {
-            BenchmarkRunner.Run<Benchmark>();
-            Console.ReadKey(true);
-        }
+        public void PushMetamethod(lua_State* state, object entity, bool isTypes) => lua_pushcfunction(state, Metamethod);
     }
 }

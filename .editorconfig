@@ -213,7 +213,7 @@ dotnet_naming_symbols.async_method.applicable_kinds = method
 dotnet_naming_symbols.async_method.applicable_accessibilities = *
 dotnet_naming_symbols.async_method.required_modifiers = async
 
-dotnet_naming_symbols.camel_case.applicable_kinds = parameter, local
+dotnet_naming_symbols.camel_case.applicable_kinds = local
 dotnet_naming_symbols.camel_case.applicable_accessibilities = *
 dotnet_naming_symbols.camel_case.required_modifiers =
 

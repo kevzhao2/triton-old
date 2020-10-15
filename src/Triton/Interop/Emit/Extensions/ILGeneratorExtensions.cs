@@ -18,48 +18,14 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using System;
-using System.Collections.Generic;
-using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Running;
+using System.Reflection.Emit;
 
-namespace Triton.Benchmarks
+namespace Triton.Interop.Emit.Extensions
 {
-    [MemoryDiagnoser]
-    public class Benchmark
+    /// <summary>
+    /// Provides extensions for the <see cref="ILGenerator"/> class.
+    /// </summary>
+    internal static class ILGeneratorExtensions
     {
-        private readonly LuaEnvironment _environment = new();
-
-        private LuaTable _table;
-
-        [GlobalSetup]
-        public void Setup()
-        {
-            _environment.ImportTypes(typeof(List<>).Assembly);
-        }
-
-        [GlobalCleanup]
-        public void Cleanup()
-        {
-            _environment.Dispose();
-        }
-
-        [Benchmark]
-        public void Count()
-        {
-            _environment.Eval(@"
-                for i = 1, 1000000 do
-                    _ = tostring(System.Action)
-                end");
-        }
-    }
-
-    class Program
-    {
-        static void Main()
-        {
-            BenchmarkRunner.Run<Benchmark>();
-            Console.ReadKey(true);
-        }
     }
 }

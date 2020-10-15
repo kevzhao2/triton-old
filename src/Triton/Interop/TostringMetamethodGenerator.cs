@@ -18,48 +18,29 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using System;
-using System.Collections.Generic;
-using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Running;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using static Triton.Lua;
 
-namespace Triton.Benchmarks
+namespace Triton.Interop
 {
-    [MemoryDiagnoser]
-    public class Benchmark
+    /// <summary>
+    /// Generates the <c>__tostring</c> metamethod for CLR entities.
+    /// </summary>
+    internal sealed unsafe class TostringMetamethodGenerator : StaticMetamethodGenerator
     {
-        private readonly LuaEnvironment _environment = new();
+        public override string Name => "__tostring";
 
-        private LuaTable _table;
+        protected override unsafe delegate* unmanaged[Cdecl]<lua_State*, int> Metamethod => &TostringMetamethod;
 
-        [GlobalSetup]
-        public void Setup()
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static int TostringMetamethod(lua_State* state)
         {
-            _environment.ImportTypes(typeof(List<>).Assembly);
-        }
+            var ptr = *(nint*)lua_topointer(state, 1);
+            var handle = GCHandle.FromIntPtr(ptr & ~1);
 
-        [GlobalCleanup]
-        public void Cleanup()
-        {
-            _environment.Dispose();
-        }
-
-        [Benchmark]
-        public void Count()
-        {
-            _environment.Eval(@"
-                for i = 1, 1000000 do
-                    _ = tostring(System.Action)
-                end");
-        }
-    }
-
-    class Program
-    {
-        static void Main()
-        {
-            BenchmarkRunner.Run<Benchmark>();
-            Console.ReadKey(true);
+            lua_pushstring(state, handle.Target!.ToString()!);  // Assume no exceptions
+            return 1;
         }
     }
 }

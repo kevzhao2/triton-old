@@ -1,22 +1,58 @@
-﻿// Copyright (c) 2020 Kevin Zhao. All rights reserved.
+﻿// Copyright (c) 2020 Kevin Zhao
 //
-// Licensed under the MIT license. See the LICENSE file in the project root for more information.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to
+// deal in the Software without restriction, including without limitation the
+// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+// sell copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+// IN THE SOFTWARE.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Triton.Interop;
-using static Triton.LuaValue;
-using static Triton.NativeMethods;
+using static Triton.Lua;
 
 namespace Triton
 {
     /// <summary>
     /// Represents a managed Lua environment. This is the entrypoint for embedding Lua into a CLR application.
+    /// 
+    /// <para/>
+    /// 
+    /// This class is <i>not</i> thread-safe.
     /// </summary>
-    public sealed class LuaEnvironment : IDisposable
+    public sealed unsafe class LuaEnvironment : IDisposable
     {
-        private readonly IntPtr _state;
+        private readonly lua_State* _state;
         private readonly LuaObjectManager _luaObjects;
         private readonly ClrEntityManager _clrEntities;
+
+        private readonly int _gcMetatableRef;
+
+        private readonly Lazy<ModuleBuilder> _lazyModuleBuilder = new(() =>
+        {
+            var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(
+                new("Triton.Interop.Emit.Generated"), AssemblyBuilderAccess.RunAndCollect);
+            return assemblyBuilder.DefineDynamicModule("Triton.Interop.Emit.Generated");
+        });
+
+        private LuaTable? _globals;
 
         private bool _isDisposed;
 
@@ -28,73 +64,189 @@ namespace Triton
             _state = luaL_newstate();
             luaL_openlibs(_state);
 
-            _luaObjects = new LuaObjectManager(_state, this);
-            _clrEntities = new ClrEntityManager(_state, this);
-        }
+            _luaObjects = new(this);
+            _clrEntities = new();
 
-        // A finalizer is infeasible -- if the Lua state were closed during a Lua -> CLR transition (which is possible
-        // since the finalizer runs on a separate thread), the CLR -> Lua transition would crash.
+            // Store a weak handle to the Lua environment. This allows us to retrieve the environment.
+
+            var handle = GCHandle.Alloc(this, GCHandleType.Weak);
+            *(IntPtr*)lua_getextraspace(_state) = GCHandle.ToIntPtr(handle);
+
+            // Set up a metatable with a `__gc` metamethod pointing to `GcMetamethod`. This allows us to invoke the
+            // `GarbageCollection` event whenever Lua performs a garbage collection.
+
+            lua_createtable(_state, 0, 1);
+            lua_pushcfunction(_state, &GcMetamethod);
+            lua_setfield(_state, -2, "__gc");
+            _gcMetatableRef = luaL_ref(_state, LUA_REGISTRYINDEX);
+
+            PushGarbage();
+        }
+        
+        /// <summary>
+        /// An event that occurs when a Lua garbage collection occurs.
+        /// </summary>
+        public event EventHandler? GarbageCollection;
 
         /// <summary>
-        /// Gets or sets the value of the given global.
+        /// Gets the environment's globals as a table.
         /// </summary>
-        /// <param name="global">The global.</param>
-        /// <returns>The value of the global.</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="global"/> is <see langword="null"/>.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
-        public LuaValue this[string global]
+        /// <value>The environment's globals as a table.</value>
+        public LuaTable Globals => _globals ??= new(_state, this, LUA_RIDX_GLOBALS);
+
+        internal ModuleBuilder ModuleBuilder => _lazyModuleBuilder.Value;
+
+        /// <summary>
+        /// Gets or sets the value of the global with the given name.
+        /// </summary>
+        /// <param name="name">The name of the global whose value to get or set.</param>
+        /// <value>The value of the global.</value>
+        /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
+        public LuaValue this[string name]
         {
             get
             {
-                if (global is null)
+                if (name is null)
                 {
-                    throw new ArgumentNullException(nameof(global));
+                    throw new ArgumentNullException(nameof(name));
                 }
 
-                ThrowIfDisposed();
+                CheckSelf();  // Performs validation
 
-                lua_settop(_state, 0);  // Reset stack
-
-                var type = lua_getglobal(_state, global);
-                LoadValue(_state, -1, type, out var value);
+                var type = lua_getglobal(_state, name);
+                LuaValue.FromLua(_state, -1, type, out var value);
                 return value;
             }
 
             set
             {
-                if (global is null)
+                if (name is null)
                 {
-                    throw new ArgumentNullException(nameof(global));
+                    throw new ArgumentNullException(nameof(name));
                 }
 
-                ThrowIfDisposed();
+                CheckSelf();  // Performs validation
 
-                lua_settop(_state, 0);  // Reset stack
-
-                PushValue(_state, value);
-                lua_setglobal(_state, global);
+                value.Push(_state);
+                lua_setglobal(_state, name);
             }
         }
 
-        /// <inheritdoc/>
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static int GcMetamethod(lua_State* state)
+        {
+            var environment = lua_getenvironment(state);
+            environment._luaObjects.Clean(state);
+            environment.GarbageCollection?.Invoke(environment, EventArgs.Empty);
+
+            environment.PushGarbage();
+            return 0;
+        }
+
+        /// <summary>
+        /// Dispose the Lua environment, freeing its unmanaged resources.
+        /// </summary>
         public void Dispose()
         {
-            if (!_isDisposed)
+            if (_isDisposed)
             {
-                lua_close(_state);
-
-                _isDisposed = true;
+                return;
             }
+
+            // To dispose of the environment, we must perform the following steps in a very specific order:
+            // 1. Retrieve the handle allocated in the constructor. This must be done before closing the state as the
+            //    handle would otherwise be lost.
+            // 2. Close the state. This must be done before freeing the handle as `GcMetamethod` relies on the handle
+            //    being valid.
+            // 3. Free the handle.
+
+            var handle = GCHandle.FromIntPtr(*(IntPtr*)lua_getextraspace(_state));
+            lua_close(_state);
+            handle.Free();
+
+            _isDisposed = true;
+        }
+
+        /// <summary>
+        /// Creates a new Lua table with the given initial capacities.
+        /// </summary>
+        /// <param name="arrayCapacity">The initial array capacity of the table.</param>
+        /// <param name="recordCapacity">The initial record capacity of the table.</param>
+        /// <returns>The resulting Lua table.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <paramref name="arrayCapacity"/> or <paramref name="recordCapacity"/> are negative.
+        /// </exception>
+        public LuaTable CreateTable(int arrayCapacity = 0, int recordCapacity = 0)
+        {
+            if (arrayCapacity < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(arrayCapacity), "Array capacity is negative");
+            }
+
+            if (recordCapacity < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(recordCapacity), "Record capacity is negative");
+            }
+
+            CheckSelf();  // Performs validation
+
+            lua_createtable(_state, arrayCapacity, recordCapacity);
+
+            var ptr = lua_topointer(_state, -1);
+            var @ref = luaL_ref(_state, LUA_REGISTRYINDEX);
+            var table = new LuaTable(_state, this, @ref);
+
+            return _luaObjects.Intern((IntPtr)ptr, @ref, table);
+        }
+
+        /// <summary>
+        /// Creates a new Lua function from the given Lua chunk.
+        /// </summary>
+        /// <param name="chunk">The Lua chunk to create a function from.</param>
+        /// <returns>The resulting Lua function.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="chunk"/> is <see langword="null"/>.</exception>
+        /// <exception cref="LuaLoadException">A Lua error occurred during loading.</exception>
+        public LuaFunction CreateFunction(string chunk)
+        {
+            if (chunk is null)
+            {
+                throw new ArgumentNullException(nameof(chunk));
+            }
+
+            CheckSelf();  // Performs validation
+
+            luaL_loadstring(_state, chunk);
+
+            var ptr = lua_topointer(_state, -1);
+            var @ref = luaL_ref(_state, LUA_REGISTRYINDEX);
+            var function = new LuaFunction(_state, this, @ref);
+
+            return _luaObjects.Intern((IntPtr)ptr, @ref, function);
+        }
+
+        /// <summary>
+        /// Creates a new Lua thread.
+        /// </summary>
+        /// <returns>The resulting Lua thread.</returns>
+        public LuaThread CreateThread()
+        {
+            CheckSelf();  // Performs validation
+
+            var ptr = lua_newthread(_state);
+            var @ref = luaL_ref(_state, LUA_REGISTRYINDEX);
+            var thread = new LuaThread(ptr, this, @ref);
+
+            return _luaObjects.Intern((IntPtr)ptr, @ref, thread);
         }
 
         /// <summary>
         /// Evaluates the given Lua chunk.
         /// </summary>
         /// <param name="chunk">The Lua chunk to evaluate.</param>
+        /// <returns>The results.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="chunk"/> is <see langword="null"/>.</exception>
-        /// <exception cref="LuaLoadException">A Lua error occurred during loading.</exception>
-        /// <exception cref="LuaRuntimeException">A Lua error occurred during runtime.</exception>
-        /// <exception cref="ObjectDisposedException">The Lua environment is disposed.</exception>
+        /// <exception cref="LuaLoadException">The evaluation results in a Lua load error.</exception>
+        /// <exception cref="LuaRuntimeException">The evaluation results in a Lua runtime error.</exception>
         public LuaResults Eval(string chunk)
         {
             if (chunk is null)
@@ -102,259 +254,77 @@ namespace Triton
                 throw new ArgumentNullException(nameof(chunk));
             }
 
+            CheckSelf();  // Performs validation
+
+            luaL_loadstring(_state, chunk);
+            return lua_pcall(_state, 0, -1, 0);
+        }
+
+        /// <summary>
+        /// Imports the public types from the given assembly as globals.
+        /// </summary>
+        /// <param name="assembly">The assembly to import public types from.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="assembly"/> is <see langword="null"/>.</exception>
+        public void ImportTypes(Assembly assembly)
+        {
+            if (assembly is null)
+            {
+                throw new ArgumentNullException(nameof(assembly));
+            }
+
             ThrowIfDisposed();
 
-            LoadString(_state, chunk);
-            return Call(_state, 0);
-        }
-
-        /// <summary>
-        /// Pushes the given object onto the stack.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="obj">The object.</param>
-        internal unsafe void PushObject(IntPtr state, object? obj)
-        {
-            switch (obj)
+            var tables = new Dictionary<string, LuaTable>
             {
-                case null:
-                    lua_pushnil(state);
-                    break;
+                [string.Empty] = Globals
+            };
 
-                case bool b:
-                    lua_pushboolean(state, b);
-                    break;
+            foreach (var grouping in assembly.ExportedTypes
+                .Where(t => !t.IsNested)
+                .GroupBy(t => t.FullName!.Split('`')[0]))
+            {
+                var index = grouping.Key.LastIndexOf('.');
+                var @namespace = grouping.Key[..index];
+                var name = grouping.Key[(index + 1)..];
 
-                case IntPtr p:
-                    lua_pushlightuserdata(state, p);
-                    break;
+                GetTable(@namespace)[name] = LuaValue.FromClrTypes(grouping.ToList());
+            }
 
-                case UIntPtr up:
-                    lua_pushlightuserdata(state, (IntPtr)up.ToPointer());
-                    break;
+            return;
 
-                case byte u1:
-                    lua_pushinteger(state, u1);
-                    break;
+            LuaTable GetTable(string @namespace)
+            {
+                if (tables.TryGetValue(@namespace, out var table))
+                {
+                    return table;
+                }
 
-                case sbyte i1:
-                    lua_pushinteger(state, i1);
-                    break;
+                var index = @namespace.LastIndexOf('.');
+                var parentNamespace = @namespace[..Math.Max(0, index)];
+                var childNamespace = @namespace[(index + 1)..];
 
-                case short i2:
-                    lua_pushinteger(state, i2);
-                    break;
+                var parent = GetTable(parentNamespace);
+                if (!parent.TryGetValue(childNamespace, out var value) ||
+                    !value.IsLuaObject || ((LuaObject)value) is not LuaTable child)
+                {
+                    child = CreateTable();
+                    parent[childNamespace] = child;
+                }
 
-                case ushort u2:
-                    lua_pushinteger(state, u2);
-                    break;
-
-                case int i4:
-                    lua_pushinteger(state, i4);
-                    break;
-
-                case uint u4:
-                    lua_pushinteger(state, u4);
-                    break;
-
-                case long i8:
-                    lua_pushinteger(state, i8);
-                    break;
-
-                case ulong u8:
-                    lua_pushinteger(state, (long)u8);
-                    break;
-
-                case float r4:
-                    lua_pushnumber(state, r4);
-                    break;
-
-                case double r8:
-                    lua_pushnumber(state, r8);
-                    break;
-
-                case string s:
-                    lua_pushstring(state, s);
-                    break;
-
-                case char c:
-                    lua_pushstring(state, c.ToString());
-                    break;
-
-                case LuaObject luaObj:
-                    PushLuaObject(state, luaObj);
-                    break;
-
-                default:
-                    PushClrEntity(state, obj);
-                    break;
+                tables.Add(@namespace, child);
+                return child;
             }
         }
 
-        /// <summary>
-        /// Pushes the given Lua value onto the stack.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="value">The Lua value.</param>
-        internal void PushValue(IntPtr state, in LuaValue value)
-        {
-            switch (value._objectOrTag)
-            {
-                case null:
-                    lua_pushnil(state);
-                    break;
+        internal void PushClrEntity(lua_State* state, object entity, bool isTypes) =>
+            _clrEntities.Push(state, entity, isTypes);
 
-                case PrimitiveTag { PrimitiveType: var primitiveType }:
-                    switch (primitiveType)
-                    {
-                        case PrimitiveType.Boolean:
-                            lua_pushboolean(state, value._boolean);
-                            break;
+        internal LuaObject LoadLuaObject(lua_State* state, int index, LuaType type) => 
+           _luaObjects.Load(state, index, type);
 
-                        case PrimitiveType.LightUserdata:
-                            lua_pushlightuserdata(state, value._lightUserdata);
-                            break;
+        internal object LoadClrEntity(lua_State* state, int index) =>
+            lua_tohandle(state, index).Target!;
 
-                        case PrimitiveType.Integer:
-                            lua_pushinteger(state, value._integer);
-                            break;
-
-                        default:
-                            lua_pushnumber(state, value._number);
-                            break;
-                    }
-
-                    break;
-
-                case { } obj:
-                    switch (value._objectType)
-                    {
-                        case ObjectType.String:
-                            lua_pushstring(state, (string)obj);
-                            break;
-
-                        case ObjectType.LuaObject:
-                            PushLuaObject(state, (LuaObject)obj);
-                            break;
-
-                        default:
-                            PushClrEntity(state, obj);
-                            break;
-                    }
-
-                    break;
-            }
-        }
-
-        /// <summary>
-        /// Pushes the given Lua object onto the stack.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="obj">The Lua object.</param>
-        internal void PushLuaObject(IntPtr state, LuaObject obj) => _luaObjects.Push(state, obj);
-
-        /// <summary>
-        /// Pushes the given CLR entity onto the stack.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="entity">The CLR entity.</param>
-        internal void PushClrEntity(IntPtr state, object entity) => _clrEntities.Push(state, entity);
-
-        /// <summary>
-        /// Loads a Lua value from a value on the stack.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="index">The index.</param>
-        /// <param name="value">The resulting Lua value.</param>
-        internal void LoadValue(IntPtr state, int index, out LuaValue value) =>
-            LoadValue(state, index, lua_type(state, index), out value);
-
-        /// <summary>
-        /// Loads a Lua value from a value on the stack.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="index">The index.</param>
-        /// <param name="type">The type of the value.</param>
-        /// <param name="value">The resulting Lua value.</param>
-        internal void LoadValue(IntPtr state, int index, LuaType type, out LuaValue value)
-        {
-            switch (type)
-            {
-                default:
-                    FromNil(out value);
-                    break;
-
-                case LuaType.Boolean:
-                    FromBoolean(lua_toboolean(state, index), out value);
-                    break;
-
-                case LuaType.LightUserdata:
-                    FromLightUserdata(lua_touserdata(state, index), out value);
-                    break;
-
-                case LuaType.Number:
-                    if (lua_isinteger(state, index))
-                    {
-                        FromInteger(lua_tointeger(state, index), out value);
-                    }
-                    else
-                    {
-                        FromNumber(lua_tonumber(state, index), out value);
-                    }
-                    break;
-
-                case LuaType.String:
-                    FromString(lua_tostring(state, index), out value);
-                    break;
-
-                case LuaType.Table:
-                case LuaType.Function:
-                case LuaType.Thread:
-                    FromLuaObject(LoadLuaObject(state, index, type), out value);
-                    break;
-
-                case LuaType.Userdata:
-                    FromClrEntity(LoadClrEntity(state, index), out value);
-                    break;
-            }
-        }
-
-        /// <summary>
-        /// Loads a Lua object from a value on the stack.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="index">The index.</param>
-        /// <param name="type">The type of the value.</param>
-        /// <returns>The resulting Lua object.</returns>
-        internal LuaObject LoadLuaObject(IntPtr state, int index, LuaType type) => _luaObjects.Load(state, index, type);
-
-        /// <summary>
-        /// Loads a CLR entity from a value on the stack.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="index">The index.</param>
-        /// <returns>The resulting CLR entity.</returns>
-        internal object LoadClrEntity(IntPtr state, int index) => _clrEntities.Load(state, index);
-
-        /// <summary>
-        /// Performs a function call with the given number of arguments.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="args">The number of arguments.</param>
-        /// <returns>The results.</returns>
-        internal LuaResults Call(IntPtr state, int args) => CallEpilogue(state, lua_pcall(_state, args, -1, 0));
-
-        /// <summary>
-        /// Performs a thread resume with the given number of arguments.
-        /// </summary>
-        /// <param name="state">The Lua state.</param>
-        /// <param name="args">The number of arguments.</param>
-        /// <returns>The results.</returns>
-        internal LuaResults Resume(IntPtr state, int args) => CallEpilogue(state, lua_resume(state, default, args));
-
-        /// <summary>
-        /// Throws an <see cref="ObjectDisposedException"/> if the Lua environment is disposed.
-        /// </summary>
         internal void ThrowIfDisposed()
         {
             if (_isDisposed)
@@ -363,24 +333,19 @@ namespace Triton
             }
         }
 
-        private void LoadString(IntPtr state, string chunk)
+        private void CheckSelf()
         {
-            if (luaL_loadstring(state, chunk) is var status && status != LuaStatus.Ok)
-            {
-                var message = lua_tostring(state, -1);
-                throw new LuaLoadException(message);
-            }
+            ThrowIfDisposed();
+
+            lua_settop(_state, 0);  // Reset stack
         }
 
-        private LuaResults CallEpilogue(IntPtr state, LuaStatus status)
+        private void PushGarbage()
         {
-            if (status != LuaStatus.Ok && status != LuaStatus.Yield)
-            {
-                var message = lua_tostring(state, -1);
-                throw new LuaRuntimeException(message);
-            }
-
-            return new LuaResults(state, this);
+            lua_newtable(_state);
+            lua_rawgeti(_state, LUA_REGISTRYINDEX, _gcMetatableRef);
+            lua_setmetatable(_state, -2);
+            lua_pop(_state, 1);
         }
     }
 }
