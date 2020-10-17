@@ -18,37 +18,33 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using static Triton.Lua;
+using System.Collections.Generic;
 
-namespace Triton.Interop
+namespace Triton.Interop.Emit.Extensions
 {
     /// <summary>
-    /// Generates the <c>__gc</c> metamethod for CLR entities.
+    /// Provides extensions to the <see cref="IDictionary{TKey, TValue}"/> interface.
     /// </summary>
-    internal sealed unsafe class GcMetamethodGenerator : StaticMetamethodGenerator
+    internal static class DictionaryExtensions
     {
-        /// <inheritdoc/>
-        public override string Name => "__gc";
-
-        /// <inheritdoc/>
-        protected override unsafe delegate* unmanaged[Cdecl]<lua_State*, int> Metamethod
+        /// <summary>
+        /// Gets the value associated with the specified key, or creates it if it does not exist.
+        /// </summary>
+        /// <typeparam name="TKey">The type of keys in the dictionary.</typeparam>
+        /// <typeparam name="TValue">The type of values in the dictionary.</typeparam>
+        /// <param name="dictionary">The dictionary.</param>
+        /// <param name="key">The key whose value to get.</param>
+        /// <returns>The resulting value.</returns>
+        public static TValue GetOrCreateValue<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key)
+            where TValue : new()
         {
-            get
+            if (!dictionary.TryGetValue(key, out var value))
             {
-                [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-                static int Metamethod(lua_State* state)
-                {
-                    var ptr = *(nint*)lua_topointer(state, 1);
-                    var handle = GCHandle.FromIntPtr(ptr & ~1);
-                    handle.Free();
-
-                    return 0;
-                }
-
-                return &Metamethod;
+                value = new();
+                dictionary.Add(key, value);
             }
+
+            return value;
         }
     }
 }

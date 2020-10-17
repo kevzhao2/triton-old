@@ -20,6 +20,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using Triton.Interop.Emit.Extensions;
@@ -28,7 +29,7 @@ using static Triton.Lua;
 
 namespace Triton.Interop.Emit
 {
-    internal unsafe partial class DynamicMetamethodGenerator
+    internal unsafe partial class DynamicMetavalueGenerator
     {
         private static readonly MethodInfo _lua_pushboolean = typeof(Lua).GetMethod(nameof(lua_pushboolean))!;
         private static readonly MethodInfo _lua_pushinteger = typeof(Lua).GetMethod(nameof(lua_pushinteger))!;
@@ -58,23 +59,12 @@ namespace Triton.Interop.Emit
             typeof(LuaEnvironment)
                 .GetMethod(nameof(LuaEnvironment.LoadClrEntity), BindingFlags.NonPublic | BindingFlags.Instance)!;
 
-        // Interns the given members' names in the Lua state for efficient string comparisons.
-        protected static IReadOnlyList<nint> InternMemberNames(lua_State* state, IReadOnlyList<MemberInfo> members)
+        // Emits code to generate a Lua error.
+        protected static void EmitLuaError(ILGenerator ilg, string message)
         {
-            lua_createtable(state, members.Count, 0);
-
-            var result = new List<nint>();
-            for (var i = 0; i < members.Count; ++i)
-            {
-                var ptr = lua_pushstring(state, members[i].Name);
-                lua_rawseti(state, -2, i + 1);
-
-                result.Add((nint)ptr);
-            }
-
-            _ = luaL_ref(state, LUA_REGISTRYINDEX);
-
-            return result;
+            ilg.Emit(Ldarg_0);  // Lua state
+            ilg.Emit(Ldstr, message);
+            ilg.Emit(Call, _luaL_error);
         }
 
         // Emits code to push a non-byref local variable onto the Lua stack.
@@ -244,19 +234,110 @@ namespace Triton.Interop.Emit
             return keyType;
         }
 
-        // Emits code to declare a `keyPtr` local variable, which is the pointer of the string key in the `__index`
-        // and `__newindex` metamethods.
-        protected static LocalBuilder EmitDeclareKeyPtr(ILGenerator ilg)
+        // Emits code to check the `keyType` local variable and perform a member access.
+        protected static void EmitMemberAccess(
+            ILGenerator ilg, LocalBuilder keyType, lua_State* state, IReadOnlyList<MemberInfo> members,
+            Action<ILGenerator, MemberInfo> emitMemberAccess,
+            Action<ILGenerator> emitInvalidAccess)
         {
-            var keyPtr = ilg.DeclareLocal(typeof(nint));
-            ilg.Emit(Ldarg_0);  // Lua state
-            ilg.Emit(Ldc_I4_2);  // Key
-            ilg.Emit(Ldc_I4_0);
-            ilg.Emit(Conv_I);
-            ilg.Emit(Call, _lua_tolstring);
-            ilg.Emit(Stloc, keyPtr);
+            var isNotString = ilg.DefineLabel();
 
-            return keyPtr;
+            ilg.Emit(Ldloc, keyType);
+            ilg.Emit(Ldc_I4_4);
+            ilg.Emit(Bne_Un, isNotString);  // Not short form
+            {
+                var keyPtr = ilg.DeclareLocal(typeof(nint));
+                ilg.Emit(Ldarg_0);  // Lua state
+                ilg.Emit(Ldc_I4_2);  // Key
+                ilg.Emit(Ldc_I4_0);
+                ilg.Emit(Conv_I);
+                ilg.Emit(Call, _lua_tolstring);
+                ilg.Emit(Stloc, keyPtr);
+
+                var ptrs = InternMemberNames();
+                var cases = ilg.DefineLabels(members.Count);
+                var defaultCase = ilg.DefineLabel();
+                EmitSwitch(keyPtr, ptrs.Zip(cases, (ptr, @case) => (ptr, @case)), defaultCase);
+
+                for (var i = 0; i < members.Count; ++i)
+                {
+                    ilg.MarkLabel(cases[i]);
+                    emitMemberAccess(ilg, members[i]);
+                }
+
+                ilg.MarkLabel(defaultCase);
+                emitInvalidAccess(ilg);
+            }
+
+            ilg.MarkLabel(isNotString);
+            return;
+
+            // Interns the member names in the Lua state for efficient string comparisons.
+            nint[] InternMemberNames()
+            {
+                lua_createtable(state, members.Count, 0);
+
+                var result = new nint[members.Count];
+                for (var i = 0; i < members.Count; ++i)
+                {
+                    var ptr = lua_pushstring(state, members[i].Name);
+                    lua_rawseti(state, -2, i + 1);
+
+                    result[i] = (nint)ptr;
+                }
+
+                _ = luaL_ref(state, LUA_REGISTRYINDEX);  // Prevent garbage collection
+
+                return result;
+            }
+
+            // Emits the optimal branching logic for switching on the `keyPtr` local variable.
+            void EmitSwitch(
+                LocalBuilder keyPtr, IEnumerable<(nint ptr, Label @case)> ptrsAndCases, Label defaultCase)
+            {
+                Helper(ptrsAndCases.OrderBy(t => t.ptr).ToArray().AsSpan());
+                return;
+
+                void Helper(Span<(nint ptr, Label @case)> ptrsAndCases)
+                {
+                    // If there are three or fewer elements, it is best to perform a linear search. Assuming a uniform
+                    // distribution of cases, the expected number of comparisons in a linear search is 2 as opposed to
+                    // 2.333 in a binary search.
+
+                    if (ptrsAndCases.Length < 4)
+                    {
+                        foreach (var (ptr, @case) in ptrsAndCases)
+                        {
+                            ilg.Emit(Ldloc, keyPtr);
+                            ilg.Emit(Ldc_I8, ptr);
+                            ilg.Emit(Conv_I);
+                            ilg.Emit(Beq, @case);  // Not short form
+                        }
+
+                        ilg.Emit(Br, defaultCase);  // Not short form
+                        return;
+                    }
+
+                    // Otherwise, perform a binary search so that the expected number of comparisons is O(log n).
+
+                    var midpoint = ptrsAndCases.Length / 2;
+
+                    var isGreaterOrEqual = ilg.DefineLabel();
+
+                    ilg.Emit(Ldloc, keyPtr);
+                    ilg.Emit(Ldc_I8, ptrsAndCases[midpoint].ptr);
+                    ilg.Emit(Conv_I);
+                    ilg.Emit(Bge, isGreaterOrEqual);  // Not short form
+                    {
+                        Helper(ptrsAndCases[0..midpoint]);
+                    }
+
+                    ilg.MarkLabel(isGreaterOrEqual);
+                    {
+                        Helper(ptrsAndCases[midpoint..]);
+                    }
+                }
+            }
         }
     }
 }

@@ -23,10 +23,11 @@ using static Triton.Lua;
 namespace Triton.Interop
 {
     /// <summary>
-    /// Provides the base class for a static metamethod generator.
+    /// Provides the base class for a static metamethod generator for CLR entities.
     /// </summary>
-    internal unsafe abstract class StaticMetamethodGenerator : IMetamethodGenerator
+    internal unsafe abstract class StaticMetamethodGenerator : IMetavalueGenerator
     {
+        /// <inheritdoc/>
         public abstract string Name { get; }
 
         /// <summary>
@@ -35,8 +36,10 @@ namespace Triton.Interop
         /// <value>A pointer to the metamethod.</value>
         protected abstract delegate* unmanaged[Cdecl]<lua_State*, int> Metamethod { get; }
 
+        /// <inheritdoc/>
         public bool IsApplicable(object entity, bool isTypes) => true;
 
-        public void PushMetamethod(lua_State* state, object entity, bool isTypes) => lua_pushcfunction(state, Metamethod);
+        /// <inheritdoc/>
+        public void Push(lua_State* state, object entity, bool isTypes) => lua_pushcfunction(state, Metamethod);
     }
 }

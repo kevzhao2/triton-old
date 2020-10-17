@@ -19,6 +19,7 @@
 // IN THE SOFTWARE.
 
 using System.Collections.Generic;
+using System.Linq;
 using Triton.Interop.Emit;
 using static Triton.Lua;
 
@@ -29,14 +30,12 @@ namespace Triton.Interop
     /// </summary>
     internal sealed unsafe class MetatableGenerator
     {
-        private static readonly List<IMetamethodGenerator> _metamethodGenerators = new()
+        private static readonly List<IMetavalueGenerator> _metavalueGenerators = new()
         {
             new GcMetamethodGenerator(),
             new TostringMetamethodGenerator(),
-            new IndexMetamethodGenerator()
+            new IndexMetavalueGenerator()
         };
-
-        private readonly List<IMetamethodGenerator> _filteredMetamethodGenerators = new(_metamethodGenerators.Count);
 
         private readonly Dictionary<object, int> _cachedMetatableRefs = new();
 
@@ -49,36 +48,28 @@ namespace Triton.Interop
                 return;
             }
 
-            Generate(state, entity, isTypes);
-            Cache(state, key);
-        }
+            Generate();
+            Cache();
+            return;
 
-        private void Generate(lua_State* state, object entity, bool isTypes)
-        {
-            // Reuse a list for zero allocation code.
-
-            _filteredMetamethodGenerators.Clear();
-            foreach (var generator in _metamethodGenerators)
+            void Generate()
             {
-                if (generator.IsApplicable(entity, isTypes))
+                var applicableGenerators = _metavalueGenerators.Where(g => g.IsApplicable(entity, isTypes)).ToList();
+
+                lua_createtable(state, 0, applicableGenerators.Count);
+                foreach (var generator in applicableGenerators)
                 {
-                    _filteredMetamethodGenerators.Add(generator);
+                    generator.Push(state, entity, isTypes);
+                    lua_setfield(state, -2, generator.Name);
                 }
             }
 
-            lua_createtable(state, 0, _filteredMetamethodGenerators.Count);
-            foreach (var generator in _filteredMetamethodGenerators)
+            void Cache()
             {
-                generator.PushMetamethod(state, entity, isTypes);
-                lua_setfield(state, -2, generator.Name);
+                lua_pushvalue(state, -1);
+                var metatableRef = luaL_ref(state, LUA_REGISTRYINDEX);
+                _cachedMetatableRefs.Add(key, metatableRef);
             }
-        }
-
-        private void Cache(lua_State* state, object key)
-        {
-            lua_pushvalue(state, -1);
-            var metatableRef = luaL_ref(state, LUA_REGISTRYINDEX);
-            _cachedMetatableRefs.Add(key, metatableRef);
         }
     }
 }

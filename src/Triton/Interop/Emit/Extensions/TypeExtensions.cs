@@ -202,5 +202,18 @@ namespace Triton.Interop.Emit.Extensions
         /// <see langword="true"/> if the type is a Lua value type; otherwise, <see langword="false"/>.
         /// </returns>
         public static bool IsLuaValue(this Type type) => type == typeof(LuaValue);
+
+        /// <summary>
+        /// Simplifies the type.
+        /// </summary>
+        /// <param name="type">The type.</param>
+        /// <returns>The simplified type.</returns>
+        public static Type Simplify(this Type type) =>
+            type switch
+            {
+                _ when type.IsPointer => typeof(IntPtr),
+                _ when type.IsEnum => type.GetEnumUnderlyingType(),
+                _ => type
+            };
     }
 }

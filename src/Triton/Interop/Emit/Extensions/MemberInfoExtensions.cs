@@ -18,37 +18,28 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using static Triton.Lua;
+using System;
+using System.Reflection;
 
-namespace Triton.Interop
+namespace Triton.Interop.Emit.Extensions
 {
     /// <summary>
-    /// Generates the <c>__gc</c> metamethod for CLR entities.
+    /// Provides extensions for the <see cref="MemberInfo"/> class.
     /// </summary>
-    internal sealed unsafe class GcMetamethodGenerator : StaticMetamethodGenerator
+    internal static class MemberInfoExtensions
     {
-        /// <inheritdoc/>
-        public override string Name => "__gc";
-
-        /// <inheritdoc/>
-        protected override unsafe delegate* unmanaged[Cdecl]<lua_State*, int> Metamethod
+        /// <summary>
+        /// Gets the underlying type.
+        /// </summary>
+        /// <param name="member">The member.</param>
+        /// <returns>The underlying type.</returns>
+        public static Type GetUnderlyingType(this MemberInfo member) => member.MemberType switch
         {
-            get
-            {
-                [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-                static int Metamethod(lua_State* state)
-                {
-                    var ptr = *(nint*)lua_topointer(state, 1);
-                    var handle = GCHandle.FromIntPtr(ptr & ~1);
-                    handle.Free();
-
-                    return 0;
-                }
-
-                return &Metamethod;
-            }
-        }
+            MemberTypes.Field    => ((FieldInfo)member).FieldType,
+            MemberTypes.Event    => ((EventInfo)member).EventHandlerType!,
+            MemberTypes.Property => ((PropertyInfo)member).PropertyType,
+            MemberTypes.Method   => ((MethodInfo)member).ReturnType,
+            _                    => throw new InvalidOperationException()
+        };
     }
 }

@@ -29,18 +29,26 @@ namespace Triton.Interop
     /// </summary>
     internal sealed unsafe class TostringMetamethodGenerator : StaticMetamethodGenerator
     {
+        /// <inheritdoc/>
         public override string Name => "__tostring";
 
-        protected override unsafe delegate* unmanaged[Cdecl]<lua_State*, int> Metamethod => &TostringMetamethod;
-
-        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-        private static int TostringMetamethod(lua_State* state)
+        /// <inheritdoc/>
+        protected override unsafe delegate* unmanaged[Cdecl]<lua_State*, int> Metamethod
         {
-            var ptr = *(nint*)lua_topointer(state, 1);
-            var handle = GCHandle.FromIntPtr(ptr & ~1);
+            get
+            {
+                [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+                static int Metamethod(lua_State* state)
+                {
+                    var ptr = *(nint*)lua_topointer(state, 1);
+                    var handle = GCHandle.FromIntPtr(ptr & ~1);
 
-            lua_pushstring(state, handle.Target!.ToString()!);  // Assume no exceptions
-            return 1;
+                    lua_pushstring(state, handle.Target!.ToString()!);  // Assume no exceptions
+                    return 1;
+                }
+
+                return &Metamethod;
+            }
         }
     }
 }
