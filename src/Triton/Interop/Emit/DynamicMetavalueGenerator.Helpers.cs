@@ -31,29 +31,9 @@ namespace Triton.Interop.Emit
 {
     internal unsafe partial class DynamicMetavalueGenerator
     {
-        private static readonly MethodInfo _lua_pushboolean = typeof(Lua).GetMethod(nameof(lua_pushboolean))!;
-        private static readonly MethodInfo _lua_pushinteger = typeof(Lua).GetMethod(nameof(lua_pushinteger))!;
-        private static readonly MethodInfo _lua_pushlightuserdata = typeof(Lua).GetMethod(nameof(lua_pushlightuserdata))!;
-        private static readonly MethodInfo _lua_pushnil = typeof(Lua).GetMethod(nameof(lua_pushnil))!;
-        private static readonly MethodInfo _lua_pushnumber = typeof(Lua).GetMethod(nameof(lua_pushnumber))!;
-        private static readonly MethodInfo _lua_pushstring = typeof(Lua).GetMethod(nameof(lua_pushstring))!;
-
         private static readonly MethodInfo _lua_tolstring = typeof(Lua).GetMethod(nameof(lua_tolstring))!;
 
         private static readonly MethodInfo _lua_type = typeof(Lua).GetMethod(nameof(lua_type))!;
-
-        private static readonly MethodInfo _charToString =
-            typeof(char).GetMethod(nameof(char.ToString), BindingFlags.Public | BindingFlags.Static)!;
-
-        private static readonly MethodInfo _luaValuePush =
-            typeof(LuaValue).GetMethod(nameof(LuaValue.Push), BindingFlags.NonPublic | BindingFlags.Instance)!;
-
-        private static readonly MethodInfo _luaObjectPush =
-            typeof(LuaObject).GetMethod(nameof(LuaObject.Push), BindingFlags.NonPublic | BindingFlags.Instance)!;
-
-        private static readonly MethodInfo _luaEnvironmentPushClrEntity =
-            typeof(LuaEnvironment)
-                .GetMethod(nameof(LuaEnvironment.PushClrEntity), BindingFlags.NonPublic | BindingFlags.Instance)!;
 
         private static readonly MethodInfo _luaEnvironmentLoadClrEntity =
             typeof(LuaEnvironment)
@@ -67,149 +47,13 @@ namespace Triton.Interop.Emit
             ilg.Emit(Call, _luaL_error);
         }
 
-        // Emits code to push a non-byref local variable onto the Lua stack.
-        protected static void EmitLuaPush(ILGenerator ilg, LocalBuilder value)
-        {
-            // Collapse the type into a simplified form. This greatly simplifies the code generation logic.
-
-            var type = value.LocalType;
-            if (type.IsPointer)
-            {
-                type = typeof(IntPtr);
-            }
-
-            var nonNullableType = Nullable.GetUnderlyingType(type) ?? type;
-            var isNullableType = nonNullableType != type;
-            if (nonNullableType.IsEnum)
-            {
-                nonNullableType = Enum.GetUnderlyingType(nonNullableType);
-            }
-
-            // Emit code to push the local variable onto the Lua stack. `null` needs to be handled if it is a valid
-            // value (i.e., the type is a non-value type or is `Nullable<T>`).
-
-            if (!type.IsValueType || isNullableType)
-            {
-                var skip = ilg.DefineLabel();
-                var isNotNull = ilg.DefineLabel();
-
-                if (isNullableType)
-                {
-                    ilg.Emit(Ldloca, value);
-                    ilg.Emit(Call, type.GetProperty(nameof(Nullable<int>.HasValue))!.GetMethod!);
-                }
-                else if (!type.IsValueType)
-                {
-                    ilg.Emit(Ldloc, value);
-                }
-                ilg.Emit(Brtrue_S, isNotNull);
-                {
-                    ilg.Emit(Ldarg_0);  // Lua state
-                    ilg.Emit(Call, _lua_pushnil);
-                    ilg.Emit(Br_S, skip);
-                }
-
-                ilg.MarkLabel(isNotNull);
-                {
-                    EmitLuaPush(ilg, value);
-                }
-
-                ilg.MarkLabel(skip);
-            }
-            else
-            {
-                EmitLuaPush(ilg, value);
-            }
-
-            return;
-
-            void EmitLuaPush(ILGenerator ilg, LocalBuilder value)
-            {
-                if (nonNullableType.IsLuaValue())
-                {
-                    EmitLoad(ilg, value);
-                    ilg.Emit(Ldarg_0);  // Lua state
-                    ilg.Emit(Call, _luaValuePush);
-                }
-                else if (nonNullableType.IsLuaObject())
-                {
-                    EmitLoad(ilg, value);
-                    ilg.Emit(Ldarg_0);  // Lua state
-                    ilg.Emit(Call, _luaObjectPush);
-                }
-                else if (nonNullableType.IsClrObject())
-                {
-                    ilg.Emit(Ldarg_1);  // Lua environment
-                    ilg.Emit(Ldarg_0);  // Lua state
-                    EmitLoad(ilg, value);
-                    ilg.Emit(Ldc_I4_0);
-                    ilg.Emit(Call, _luaEnvironmentPushClrEntity);
-                }
-                else
-                {
-                    ilg.Emit(Ldarg_0);  // Lua state
-                    EmitLoad(ilg, value);
-                    ilg.Emit(Call, true switch
-                    {
-                        _ when nonNullableType.IsBoolean() => _lua_pushboolean,
-                        _ when nonNullableType.IsPointer() => _lua_pushlightuserdata,
-                        _ when nonNullableType.IsInteger() => _lua_pushinteger,
-                        _ when nonNullableType.IsNumber()  => _lua_pushnumber,
-                        _ when nonNullableType.IsString()  => _lua_pushstring,
-                        _                                  => throw new InvalidOperationException()
-                    });
-
-                    if (nonNullableType.IsString())
-                    {
-                        ilg.Emit(Pop);
-                    }
-                }
-            }
-
-            void EmitLoad(ILGenerator ilg, LocalBuilder value)
-            {
-                if (isNullableType)
-                {
-                    ilg.Emit(Ldloca, value);
-                    ilg.Emit(Call, type.GetProperty(nameof(Nullable<int>.Value))!.GetMethod!);
-                }
-                else
-                {
-                    ilg.Emit(Ldloc, value);
-                }
-
-                // Convert the value into a suitable format. For example, `lua_pushinteger` and `lua_pushnumber` take
-                // `int64` and `float64`, respectively, so smaller ints and floats need to be widened.
-
-                if (nonNullableType.IsSignedInteger() && nonNullableType != typeof(long))
-                {
-                    ilg.Emit(Conv_I8);
-                }
-                else if (nonNullableType.IsUnsignedInteger() && nonNullableType != typeof(ulong))
-                {
-                    ilg.Emit(Conv_U8);
-                }
-                else if (nonNullableType == typeof(float))
-                {
-                    ilg.Emit(Conv_R8);
-                }
-                else if (nonNullableType == typeof(char))
-                {
-                    ilg.Emit(Call, _charToString);
-                }
-                else if (nonNullableType.IsClrStruct())
-                {
-                    ilg.Emit(Box, nonNullableType);
-                }
-            }
-        }
-
-        // Emits code to declare a `target` local variable, which is the target of the metamethod.
+        // Emits code to declare a `target` local variable, the target of the metamethod.
         protected static LocalBuilder EmitDeclareTarget(ILGenerator ilg, Type objType)
         {
             var isStruct = objType.IsClrStruct();
 
-            // For CLR structs, we need to declare a byref local variable. This allows the struct to be mutated.
+            // For CLR structs, we need to declare a byref target. This allows the struct to be mutated, as otherwise
+            // only a copy of the struct would be mutated.
 
             var target = ilg.DeclareLocal(isStruct ? objType.MakeByRefType() : objType);
             ilg.Emit(Ldarg_1);  // Lua environment
@@ -221,8 +65,8 @@ namespace Triton.Interop.Emit
             return target;
         }
 
-        // Emits code to declare a `keyType` local variable, which is the type of the key in the `__index` and
-        // `__newindex` metamethods.
+        // Emits code to declare a `keyType` local variable, the type of the key in the `__index` and `__newindex`
+        // metamethods.
         protected static LocalBuilder EmitDeclareKeyType(ILGenerator ilg)
         {
             var keyType = ilg.DeclareLocal(typeof(LuaType));
@@ -255,17 +99,17 @@ namespace Triton.Interop.Emit
                 ilg.Emit(Stloc, keyPtr);
 
                 var ptrs = InternMemberNames();
-                var cases = ilg.DefineLabels(members.Count);
-                var defaultCase = ilg.DefineLabel();
-                EmitSwitch(keyPtr, ptrs.Zip(cases, (ptr, @case) => (ptr, @case)), defaultCase);
+                var labels = ilg.DefineLabels(members.Count);
+                var defaultLabel = ilg.DefineLabel();
+                EmitSwitch(keyPtr, ptrs.Zip(labels, (ptr, label) => (ptr, label)), defaultLabel);
 
                 for (var i = 0; i < members.Count; ++i)
                 {
-                    ilg.MarkLabel(cases[i]);
+                    ilg.MarkLabel(labels[i]);
                     emitMemberAccess(ilg, members[i]);
                 }
 
-                ilg.MarkLabel(defaultCase);
+                ilg.MarkLabel(defaultLabel);
                 emitInvalidAccess(ilg);
             }
 
@@ -280,61 +124,60 @@ namespace Triton.Interop.Emit
                 var result = new nint[members.Count];
                 for (var i = 0; i < members.Count; ++i)
                 {
-                    var ptr = lua_pushstring(state, members[i].Name);
+                    result[i] = (nint)lua_pushstring(state, members[i].Name);
                     lua_rawseti(state, -2, i + 1);
-
-                    result[i] = (nint)ptr;
                 }
 
-                _ = luaL_ref(state, LUA_REGISTRYINDEX);  // Prevent garbage collection
+                _ = luaL_ref(state, LUA_REGISTRYINDEX);  // Prevents garbage collection
 
                 return result;
             }
 
-            // Emits the optimal branching logic for switching on the `keyPtr` local variable.
+            // Emits the optimal branching logic for switching on the `ptr` local variable.
             void EmitSwitch(
-                LocalBuilder keyPtr, IEnumerable<(nint ptr, Label @case)> ptrsAndCases, Label defaultCase)
+                LocalBuilder keyPtr, IEnumerable<(nint ptr, Label label)> ptrsAndLabels, Label defaultLabel)
             {
-                Helper(ptrsAndCases.OrderBy(t => t.ptr).ToArray().AsSpan());
+                Helper(ptrsAndLabels.OrderBy(t => t.ptr).ToArray().AsSpan());
                 return;
 
-                void Helper(Span<(nint ptr, Label @case)> ptrsAndCases)
+                void Helper(Span<(nint ptr, Label label)> ptrsAndLabels)
                 {
-                    // If there are three or fewer elements, it is best to perform a linear search. Assuming a uniform
-                    // distribution of cases, the expected number of comparisons in a linear search is 2 as opposed to
-                    // 2.333 in a binary search.
+                    // If there are three or fewer elements, it is best to perform a linear search: assuming a uniform
+                    // distribution of pointers, the expected number of comparisons in a linear search is 2 and the
+                    // expected number of comparisons in a binary search is 2.33.
 
-                    if (ptrsAndCases.Length < 4)
+                    if (ptrsAndLabels.Length < 4)
                     {
-                        foreach (var (ptr, @case) in ptrsAndCases)
+                        foreach (var (ptr, label) in ptrsAndLabels)
                         {
                             ilg.Emit(Ldloc, keyPtr);
                             ilg.Emit(Ldc_I8, ptr);
                             ilg.Emit(Conv_I);
-                            ilg.Emit(Beq, @case);  // Not short form
+                            ilg.Emit(Beq, label);  // Not short form
                         }
 
-                        ilg.Emit(Br, defaultCase);  // Not short form
+                        ilg.Emit(Br, defaultLabel);  // Not short form
                         return;
                     }
 
-                    // Otherwise, perform a binary search so that the expected number of comparisons is O(log n).
+                    // Otherwise, perform a binary search: assuming a uniform distribution of pointers, the expected
+                    // number of comparisons is O(log n).
 
-                    var midpoint = ptrsAndCases.Length / 2;
+                    var midpoint = ptrsAndLabels.Length / 2;
 
                     var isGreaterOrEqual = ilg.DefineLabel();
 
                     ilg.Emit(Ldloc, keyPtr);
-                    ilg.Emit(Ldc_I8, ptrsAndCases[midpoint].ptr);
+                    ilg.Emit(Ldc_I8, ptrsAndLabels[midpoint].ptr);
                     ilg.Emit(Conv_I);
-                    ilg.Emit(Bge, isGreaterOrEqual);  // Not short form
+                    ilg.Emit(Bge_Un, isGreaterOrEqual);  // Not short form
                     {
-                        Helper(ptrsAndCases[0..midpoint]);
+                        Helper(ptrsAndLabels[0..midpoint]);
                     }
 
                     ilg.MarkLabel(isGreaterOrEqual);
                     {
-                        Helper(ptrsAndCases[midpoint..]);
+                        Helper(ptrsAndLabels[midpoint..]);
                     }
                 }
             }

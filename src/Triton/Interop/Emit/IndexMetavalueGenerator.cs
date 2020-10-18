@@ -24,6 +24,7 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using Triton.Interop.Emit.Extensions;
+using Triton.Interop.Emit.Helpers;
 using static System.Reflection.Emit.OpCodes;
 using static Triton.Lua;
 
@@ -34,8 +35,10 @@ namespace Triton.Interop.Emit
     /// </summary>
     internal sealed unsafe class IndexMetavalueGenerator : DynamicMetavalueGenerator
     {
+        /// <inheritdoc/>
         public override string Name => "__index";
 
+        /// <inheritdoc/>
         public override void Push(lua_State* state, object entity, bool isTypes)
         {
             var type = isTypes ?
@@ -72,9 +75,11 @@ namespace Triton.Interop.Emit
             }
         }
 
+        /// <inheritdoc/>
         protected override void GenerateImpl(lua_State* state, ILGenerator ilg, object obj) =>
             GenerateImpl(state, ilg, new[] { obj.GetType() }, isStatic: false);
 
+        /// <inheritdoc/>
         protected override void GenerateImpl(lua_State* state, ILGenerator ilg, IReadOnlyList<Type> types) =>
             GenerateImpl(state, ilg, types, isStatic: true);
 
@@ -126,8 +131,8 @@ namespace Triton.Interop.Emit
 
                         var isByRefType = type.IsByRef;
                         var nonByRefType = isByRefType ? type.GetElementType()! : type;
-                        using var value = ilg.DeclareReusableLocal(nonByRefType);
 
+                        ilg.Emit(Ldarg_0);  // Lua state
                         if (!isStatic)
                         {
                             ilg.Emit(Ldloc, target!);
@@ -150,8 +155,7 @@ namespace Triton.Interop.Emit
                         {
                             ilg.EmitLdind(nonByRefType);
                         }
-                        ilg.Emit(Stloc, value);
-                        EmitLuaPush(ilg, value);
+                        ilg.Emit(Call, LuaPushHelpers.Get(nonByRefType));
 
                         ilg.Emit(Ldc_I4_1);
                         ilg.Emit(Ret);

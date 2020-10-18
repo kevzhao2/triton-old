@@ -34,7 +34,8 @@ namespace Triton.Interop
         {
             new GcMetamethodGenerator(),
             new TostringMetamethodGenerator(),
-            new IndexMetavalueGenerator()
+            new IndexMetavalueGenerator(),
+            new NewIndexMetamethodGenerator()
         };
 
         private readonly Dictionary<object, int> _cachedMetatableRefs = new();

@@ -253,9 +253,9 @@ namespace Triton
 
             environment.ImportTypes(typeof(Action).Assembly);
 
-            environment.Eval("x = System.Type.Delimiter");
+            environment.Eval("System.Type.Delimiter = 'f'");
 
-            var x = environment["x"];
+            var x = Type.Delimiter;
         }
     }
 }
