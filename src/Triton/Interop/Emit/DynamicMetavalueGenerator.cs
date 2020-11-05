@@ -37,6 +37,11 @@ namespace Triton.Interop.Emit
     /// </summary>
     internal abstract unsafe partial class DynamicMetavalueGenerator : IMetavalueGenerator
     {
+        private protected static readonly MethodInfo _stringFormat =
+            typeof(string).GetMethod(nameof(string.Format), new[] { typeof(string), typeof(object) })!;
+
+        private protected static readonly MethodInfo _luaL_error = typeof(Lua).GetMethod(nameof(luaL_error))!;
+
         private static readonly CustomAttributeBuilder _unmanagedCallersOnlyAttribute =
             new(typeof(UnmanagedCallersOnlyAttribute).GetConstructor(Type.EmptyTypes)!,
                 Array.Empty<object?>(),
@@ -44,11 +49,6 @@ namespace Triton.Interop.Emit
                 new object?[] { new[] { typeof(CallConvCdecl) } });
 
         private static readonly MethodInfo _lua_getenvironment = typeof(Lua).GetMethod(nameof(lua_getenvironment))!;
-
-        private static readonly MethodInfo _luaL_error = typeof(Lua).GetMethod(nameof(luaL_error))!;
-
-        private static readonly MethodInfo _stringFormat =
-            typeof(string).GetMethod(nameof(string.Format), new[] { typeof(string), typeof(object) })!;
 
         /// <inheritdoc/>
         public abstract string Name { get; }

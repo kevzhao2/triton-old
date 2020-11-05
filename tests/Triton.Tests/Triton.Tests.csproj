@@ -31,8 +31,4 @@
     <ProjectReference Include="..\..\src\Triton\Triton.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Interop\" />
-  </ItemGroup>
-
 </Project>

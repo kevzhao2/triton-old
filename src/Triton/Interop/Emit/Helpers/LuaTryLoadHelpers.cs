@@ -23,7 +23,6 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Triton.Interop.Emit.Extensions;
-using static System.Reflection.BindingFlags;
 using static Triton.Lua;
 using static Triton.Lua.LuaType;
 
@@ -34,23 +33,21 @@ namespace Triton.Interop.Emit.Helpers
     /// </summary>
     internal static unsafe class LuaTryLoadHelpers
     {
-        // For efficiency, we provide specializations for the `string`, `LuaObject`, `LuaTable`, `LuaFunction`, and
-        // `LuaThread` types. We can rely on JIT generic specialization for all other types.
+        // For value types and reference types that should be treated as CLR entities, generic specialization of
+        // `TryLoad<T>` and `TryLoadNullable<T>` will result in optimal code. For the other types, we provide
+        // specializations.
 
         private static readonly ConcurrentDictionary<Type, MethodInfo> _methodCache = new()
         {
-            [typeof(string)]      = typeof(LuaTryLoadHelpers).GetMethod(nameof(TryLoadString), NonPublic | Static)!,
-            [typeof(LuaObject)]   = typeof(LuaTryLoadHelpers).GetMethod(nameof(TryLoadLuaObject), NonPublic | Static)!,
-            [typeof(LuaTable)]    = typeof(LuaTryLoadHelpers).GetMethod(nameof(TryLoadLuaTable), NonPublic | Static)!,
-            [typeof(LuaFunction)] = typeof(LuaTryLoadHelpers).GetMethod(nameof(TryLoadLuaFunction), NonPublic | Static)!,
-            [typeof(LuaThread)]   = typeof(LuaTryLoadHelpers).GetMethod(nameof(TryLoadLuaThread), NonPublic | Static)!,
+            [typeof(string)]      = GetMethod(nameof(TryLoadString)),
+            [typeof(LuaObject)]   = GetMethod(nameof(TryLoadLuaObject)),
+            [typeof(LuaTable)]    = GetMethod(nameof(TryLoadLuaTable)),
+            [typeof(LuaFunction)] = GetMethod(nameof(TryLoadLuaFunction)),
+            [typeof(LuaThread)]   = GetMethod(nameof(TryLoadLuaThread))!
         };
 
-        private static readonly MethodInfo _tryLoad =
-            typeof(LuaTryLoadHelpers).GetMethod(nameof(TryLoad), NonPublic | Static)!;
-
-        private static readonly MethodInfo _tryLoadNullable =
-            typeof(LuaTryLoadHelpers).GetMethod(nameof(TryLoadNullable), NonPublic | Static)!;
+        private static readonly MethodInfo _tryLoad = GetMethod(nameof(TryLoad));
+        private static readonly MethodInfo _tryLoadNullable = GetMethod(nameof(TryLoadNullable));
 
         /// <summary>
         /// Gets the method for trying to load a value of a given type from the Lua stack.
@@ -68,12 +65,17 @@ namespace Triton.Interop.Emit.Helpers
         // TODO: determine whether aggressive inlining will be beneficial
         // TODO: determine whether passing `LuaType` will be beneficial
 
-        internal static bool TryLoadString(lua_State* state, int index, out string value)
+        internal static bool TryLoadString(lua_State* state, int index, ref string? value)
         {
             var type = lua_type(state, index);
+            if (type is LUA_TNIL)
+            {
+                value = null;
+                return true;
+            }
+
             if (type is not LUA_TSTRING)
             {
-                Unsafe.SkipInit(out value);
                 return false;
             }
 
@@ -81,12 +83,17 @@ namespace Triton.Interop.Emit.Helpers
             return true;
         }
 
-        internal static bool TryLoadLuaObject(lua_State* state, int index, out LuaObject value)
+        internal static bool TryLoadLuaObject(lua_State* state, int index, ref LuaObject? value)
         {
             var type = lua_type(state, index);
+            if (type is LUA_TNIL)
+            {
+                value = null;
+                return true;
+            }
+
             if (type is not (LUA_TTABLE or LUA_TFUNCTION or LUA_TTHREAD))
             {
-                Unsafe.SkipInit(out value);
                 return false;
             }
 
@@ -95,12 +102,17 @@ namespace Triton.Interop.Emit.Helpers
             return true;
         }
 
-        internal static bool TryLoadLuaTable(lua_State* state, int index, out LuaTable value)
+        internal static bool TryLoadLuaTable(lua_State* state, int index, ref LuaTable? value)
         {
             var type = lua_type(state, index);
+            if (type is LUA_TNIL)
+            {
+                value = null;
+                return true;
+            }
+
             if (type is not LUA_TTABLE)
             {
-                Unsafe.SkipInit(out value);
                 return false;
             }
 
@@ -109,12 +121,17 @@ namespace Triton.Interop.Emit.Helpers
             return true;
         }
 
-        internal static bool TryLoadLuaFunction(lua_State* state, int index, out LuaFunction value)
+        internal static bool TryLoadLuaFunction(lua_State* state, int index, ref LuaFunction? value)
         {
             var type = lua_type(state, index);
+            if (type is LUA_TNIL)
+            {
+                value = null;
+                return true;
+            }
+
             if (type is not LUA_TFUNCTION)
             {
-                Unsafe.SkipInit(out value);
                 return false;
             }
 
@@ -123,12 +140,17 @@ namespace Triton.Interop.Emit.Helpers
             return true;
         }
 
-        internal static bool TryLoadLuaThread(lua_State* state, int index, out LuaThread value)
+        internal static bool TryLoadLuaThread(lua_State* state, int index, ref LuaThread? value)
         {
             var type = lua_type(state, index);
+            if (type is LUA_TNIL)
+            {
+                value = null;
+                return true;
+            }
+
             if (type is not LUA_TTHREAD)
             {
-                Unsafe.SkipInit(out value);
                 return false;
             }
 
@@ -137,11 +159,10 @@ namespace Triton.Interop.Emit.Helpers
             return true;
         }
 
-        internal static bool TryLoad<T>(lua_State* state, int index, out T value)
+        internal static bool TryLoad<T>(lua_State* state, int index, ref T value)
         {
             var type = lua_type(state, index);
 
-            Unsafe.SkipInit(out value);
             if (typeof(T) == typeof(LuaValue))
             {
                 LuaValue.FromLua(state, index, type, out Unsafe.As<T, LuaValue>(ref value));
@@ -154,7 +175,7 @@ namespace Triton.Interop.Emit.Helpers
                     return false;
                 }
 
-                Unsafe.As<T, bool>(ref value) = lua_toboolean(state, index);
+                value = (T)(object)lua_toboolean(state, index);
                 return true;
             }
             else if (typeof(T) == typeof(IntPtr))
@@ -164,7 +185,7 @@ namespace Triton.Interop.Emit.Helpers
                     return false;
                 }
 
-                Unsafe.As<T, IntPtr>(ref value) = (IntPtr)lua_topointer(state, index);
+                value = (T)(object)(IntPtr)lua_topointer(state, index);
                 return true;
             }
             else if (typeof(T) == typeof(byte))
@@ -174,15 +195,14 @@ namespace Triton.Interop.Emit.Helpers
                     return false;
                 }
 
-                try
-                {
-                    Unsafe.As<T, byte>(ref value) = checked((byte)lua_tointeger(state, index));
-                    return true;
-                }
-                catch (OverflowException)
+                var integer = lua_tointeger(state, index);
+                if ((ulong)integer > byte.MaxValue)
                 {
                     return false;
                 }
+
+                value = (T)(object)(byte)integer;
+                return true;
             }
             else if (typeof(T) == typeof(short))
             {
@@ -191,15 +211,14 @@ namespace Triton.Interop.Emit.Helpers
                     return false;
                 }
 
-                try
-                {
-                    Unsafe.As<T, short>(ref value) = checked((short)lua_tointeger(state, index));
-                    return true;
-                }
-                catch (OverflowException)
+                var integer = lua_tointeger(state, index);
+                if ((ulong)(integer - short.MinValue) > ushort.MaxValue)
                 {
                     return false;
                 }
+
+                value = (T)(object)(short)integer;
+                return true;
             }
             else if (typeof(T) == typeof(int))
             {
@@ -208,15 +227,14 @@ namespace Triton.Interop.Emit.Helpers
                     return false;
                 }
 
-                try
-                {
-                    Unsafe.As<T, int>(ref value) = checked((int)lua_tointeger(state, index));
-                    return true;
-                }
-                catch (OverflowException)
+                var integer = lua_tointeger(state, index);
+                if ((ulong)(integer - int.MinValue) > uint.MaxValue)
                 {
                     return false;
                 }
+
+                value = (T)(object)(int)integer;
+                return true;
             }
             else if (typeof(T) == typeof(long))
             {
@@ -225,7 +243,7 @@ namespace Triton.Interop.Emit.Helpers
                     return false;
                 }
 
-                Unsafe.As<T, long>(ref value) = lua_tointeger(state, index);
+                value = (T)(object)lua_tointeger(state, index);
                 return true;
             }
             else if (typeof(T) == typeof(sbyte))
@@ -235,15 +253,14 @@ namespace Triton.Interop.Emit.Helpers
                     return false;
                 }
 
-                try
-                {
-                    Unsafe.As<T, sbyte>(ref value) = checked((sbyte)lua_tointeger(state, index));
-                    return true;
-                }
-                catch (OverflowException)
+                var integer = lua_tointeger(state, index);
+                if ((ulong)(integer - sbyte.MinValue) > byte.MaxValue)
                 {
                     return false;
                 }
+
+                value = (T)(object)(sbyte)integer;
+                return true;
             }
             else if (typeof(T) == typeof(ushort))
             {
@@ -252,15 +269,14 @@ namespace Triton.Interop.Emit.Helpers
                     return false;
                 }
 
-                try
-                {
-                    Unsafe.As<T, ushort>(ref value) = checked((ushort)lua_tointeger(state, index));
-                    return true;
-                }
-                catch (OverflowException)
+                var integer = lua_tointeger(state, index);
+                if ((ulong)integer > ushort.MaxValue)
                 {
                     return false;
                 }
+
+                value = (T)(object)(ushort)integer;
+                return true;
             }
             else if (typeof(T) == typeof(uint))
             {
@@ -269,15 +285,14 @@ namespace Triton.Interop.Emit.Helpers
                     return false;
                 }
 
-                try
-                {
-                    Unsafe.As<T, uint>(ref value) = checked((uint)lua_tointeger(state, index));
-                    return true;
-                }
-                catch (OverflowException)
+                var integer = lua_tointeger(state, index);
+                if ((ulong)integer > uint.MaxValue)
                 {
                     return false;
                 }
+
+                value = (T)(object)(uint)integer;
+                return true;
             }
             else if (typeof(T) == typeof(ulong))
             {
@@ -286,7 +301,7 @@ namespace Triton.Interop.Emit.Helpers
                     return false;
                 }
 
-                Unsafe.As<T, ulong>(ref value) = (ulong)lua_tointeger(state, index);
+                value = (T)(object)(ulong)lua_tointeger(state, index);
                 return true;
             }
             else if (typeof(T) == typeof(float))
@@ -296,7 +311,7 @@ namespace Triton.Interop.Emit.Helpers
                     return false;
                 }
 
-                Unsafe.As<T, float>(ref value) = (float)lua_tonumber(state, index);
+                value = (T)(object)(float)lua_tonumber(state, index);
                 return true;
             }
             else if (typeof(T) == typeof(double))
@@ -306,7 +321,7 @@ namespace Triton.Interop.Emit.Helpers
                     return false;
                 }
 
-                Unsafe.As<T, double>(ref value) = lua_tonumber(state, index);
+                value = (T)(object)lua_tonumber(state, index);
                 return true;
             }
             else if (typeof(T) == typeof(char))
@@ -316,7 +331,7 @@ namespace Triton.Interop.Emit.Helpers
                     return false;
                 }
 
-                Unsafe.As<T, char>(ref value) = str[0];
+                value = (T)(object)str[0];
                 return true;
             }
             else
@@ -326,7 +341,8 @@ namespace Triton.Interop.Emit.Helpers
                     value = default!;
                     return true;
                 }
-                else if (type is not LUA_TUSERDATA)
+                
+                if (type is not LUA_TUSERDATA)
                 {
                     return false;
                 }
@@ -342,7 +358,7 @@ namespace Triton.Interop.Emit.Helpers
             }
         }
 
-        internal static bool TryLoadNullable<T>(lua_State* state, int index, out T? value) where T : struct
+        internal static bool TryLoadNullable<T>(lua_State* state, int index, ref T? value) where T : struct
         {
             var type = lua_type(state, index);
             if (type is LUA_TNIL)
@@ -351,14 +367,18 @@ namespace Triton.Interop.Emit.Helpers
                 return true;
             }
 
-            if (!TryLoad(state, index, out T innerValue))
+            var innerValue = default(T);
+            if (!TryLoad(state, index, ref innerValue))
             {
-                Unsafe.SkipInit(out value);
                 return false;
             }
 
             value = innerValue;
             return true;
         }
+
+        // Helper method for simplifying static field initializations.
+        private static MethodInfo GetMethod(string name) =>
+            typeof(LuaTryLoadHelpers).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!;
     }
 }

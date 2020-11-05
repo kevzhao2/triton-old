@@ -21,9 +21,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using Triton.Interop.Emit.Extensions;
-using static System.Reflection.BindingFlags;
 using static Triton.Lua;
 
 namespace Triton.Interop.Emit.Helpers
@@ -33,23 +31,20 @@ namespace Triton.Interop.Emit.Helpers
     /// </summary>
     internal static unsafe class LuaPushHelpers
     {
-        // For efficiency, we provide specializations for the `string`, `LuaObject`, `LuaTable`, `LuaFunction`, and
-        // `LuaThread` types. We can rely on JIT generic specialization for all other types.
+        // For value types and reference types that should be treated as CLR entities, generic specialization of
+        // `Push<T>` and `PushNullable<T>` will result in optimal code. For the other types, we provide specializations.
 
         private static readonly ConcurrentDictionary<Type, MethodInfo> _methodCache = new()
         {
-            [typeof(string)]      = typeof(LuaPushHelpers).GetMethod(nameof(PushString), NonPublic | Static)!,
-            [typeof(LuaObject)]   = typeof(LuaPushHelpers).GetMethod(nameof(PushLuaObject), NonPublic | Static)!,
-            [typeof(LuaTable)]    = typeof(LuaPushHelpers).GetMethod(nameof(PushLuaObject), NonPublic | Static)!,
-            [typeof(LuaFunction)] = typeof(LuaPushHelpers).GetMethod(nameof(PushLuaObject), NonPublic | Static)!,
-            [typeof(LuaThread)]   = typeof(LuaPushHelpers).GetMethod(nameof(PushLuaObject), NonPublic | Static)!
+            [typeof(string)]      = GetMethod(nameof(PushString)),
+            [typeof(LuaObject)]   = GetMethod(nameof(PushLuaObject)),
+            [typeof(LuaTable)]    = GetMethod(nameof(PushLuaObject)),
+            [typeof(LuaFunction)] = GetMethod(nameof(PushLuaObject)),
+            [typeof(LuaThread)]   = GetMethod(nameof(PushLuaObject))
         };
 
-        private static readonly MethodInfo _push =
-            typeof(LuaPushHelpers).GetMethod(nameof(Push), NonPublic | Static)!;
-
-        private static readonly MethodInfo _pushNullable =
-            typeof(LuaPushHelpers).GetMethod(nameof(PushNullable), NonPublic | Static)!;
+        private static readonly MethodInfo _push = GetMethod(nameof(Push));
+        private static readonly MethodInfo _pushNullable = GetMethod(nameof(PushNullable));
 
         /// <summary>
         /// Gets the method for pushing a value of a given type onto a Lua stack.
@@ -71,11 +66,10 @@ namespace Triton.Interop.Emit.Helpers
             if (value is null)
             {
                 lua_pushnil(state);
+                return;
             }
-            else
-            {
-                _ = lua_pushstring(state, value);
-            }
+
+            _ = lua_pushstring(state, value);
         }
 
         internal static void PushLuaObject(lua_State* state, LuaObject? value)
@@ -83,82 +77,80 @@ namespace Triton.Interop.Emit.Helpers
             if (value is null)
             {
                 lua_pushnil(state);
+                return;
             }
-            else
-            {
-                value.Push(state);
-            }
+
+            value.Push(state);
         }
 
         internal static void Push<T>(lua_State* state, T value)
         {
             if (typeof(T) == typeof(LuaValue))
             {
-                Unsafe.As<T, LuaValue>(ref value).Push(state);
+                ((LuaValue)(object)value!).Push(state);
             }
             else if (typeof(T) == typeof(bool))
             {
-                lua_pushboolean(state, Unsafe.As<T, bool>(ref value));
+                lua_pushboolean(state, (bool)(object)value!);
             }
             else if (typeof(T) == typeof(IntPtr))
             {
-                lua_pushlightuserdata(state, Unsafe.As<T, IntPtr>(ref value));
+                lua_pushlightuserdata(state, (IntPtr)(object)value!);
             }
             else if (typeof(T) == typeof(byte))
             {
-                lua_pushinteger(state, Unsafe.As<T, byte>(ref value));
+                lua_pushinteger(state, (byte)(object)value!);
             }
             else if (typeof(T) == typeof(short))
             {
-                lua_pushinteger(state, Unsafe.As<T, short>(ref value));
+                lua_pushinteger(state, (short)(object)value!);
             }
             else if (typeof(T) == typeof(int))
             {
-                lua_pushinteger(state, Unsafe.As<T, int>(ref value));
+                lua_pushinteger(state, (int)(object)value!);
             }
             else if (typeof(T) == typeof(long))
             {
-                lua_pushinteger(state, Unsafe.As<T, long>(ref value));
+                lua_pushinteger(state, (long)(object)value!);
             }
             else if (typeof(T) == typeof(sbyte))
             {
-                lua_pushinteger(state, Unsafe.As<T, sbyte>(ref value));
+                lua_pushinteger(state, (sbyte)(object)value!);
             }
             else if (typeof(T) == typeof(ushort))
             {
-                lua_pushinteger(state, Unsafe.As<T, ushort>(ref value));
+                lua_pushinteger(state, (ushort)(object)value!);
             }
             else if (typeof(T) == typeof(uint))
             {
-                lua_pushinteger(state, Unsafe.As<T, uint>(ref value));
+                lua_pushinteger(state, (uint)(object)value!);
             }
             else if (typeof(T) == typeof(ulong))
             {
-                lua_pushinteger(state, (long)Unsafe.As<T, ulong>(ref value));
+                lua_pushinteger(state, (long)(ulong)(object)value!);
             }
             else if (typeof(T) == typeof(float))
             {
-                lua_pushnumber(state, Unsafe.As<T, float>(ref value));
+                lua_pushnumber(state, (float)(object)value!);
             }
             else if (typeof(T) == typeof(double))
             {
-                lua_pushnumber(state, Unsafe.As<T, double>(ref value));
+                lua_pushnumber(state, (double)(object)value!);
             }
             else if (typeof(T) == typeof(char))
             {
-                _ = lua_pushstring(state, Unsafe.As<T, char>(ref value).ToString());
+                _ = lua_pushstring(state, ((char)(object)value!).ToString());
             }
             else
             {
                 if (value is null)
                 {
                     lua_pushnil(state);
+                    return;
                 }
-                else
-                {
-                    var environment = lua_getenvironment(state);
-                    environment.PushClrEntity(state, value, isTypes: false);
-                }
+
+                var environment = lua_getenvironment(state);
+                environment.PushClrEntity(state, value, isTypes: false);
             }
         }
 
@@ -167,11 +159,14 @@ namespace Triton.Interop.Emit.Helpers
             if (value is null)
             {
                 lua_pushnil(state);
+                return;
             }
-            else
-            {
-                Push(state, value.Value);
-            }
+
+            Push(state, value.Value);
         }
+
+        // Helper method for simplifying static field initializations.
+        private static MethodInfo GetMethod(string name) =>
+            typeof(LuaPushHelpers).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!;
     }
 }

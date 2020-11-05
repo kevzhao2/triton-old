@@ -56,10 +56,10 @@ namespace Triton.Interop.Emit.Extensions
         }
 
         /// <summary>
-        /// Emits a load indirect for the given type.
+        /// Emits a load indirect instruction for the given type.
         /// </summary>
         /// <param name="ilg">The IL generator.</param>
-        /// <param name="type">The type to emit a load indirect for.</param>
+        /// <param name="type">The type to emit a load indirect instruction for.</param>
         public static void EmitLdind(this ILGenerator ilg, Type type)
         {
             type = type.Simplify();
@@ -87,6 +87,41 @@ namespace Triton.Interop.Emit.Extensions
                 _ when type == typeof(float)   => Ldind_R4,
                 _ when type == typeof(double)  => Ldind_R8,
                 _                              => Ldind_Ref
+            });
+        }
+
+        /// <summary>
+        /// Emits a store indirect instruction for the given type.
+        /// </summary>
+        /// <param name="ilg">The IL generator.</param>
+        /// <param name="type">The type to emit a store indirect instruction for.</param>
+        public static void EmitStind(this ILGenerator ilg, Type type)
+        {
+            type = type.Simplify();
+
+            if (type.IsValueType && !type.IsPrimitive)
+            {
+                ilg.Emit(Stobj, type);
+                return;
+            }
+
+            ilg.Emit(true switch
+            {
+                _ when type == typeof(bool)    => Stind_I1,
+                _ when type == typeof(byte)    => Stind_I1,
+                _ when type == typeof(sbyte)   => Stind_I1,
+                _ when type == typeof(short)   => Stind_I2,
+                _ when type == typeof(ushort)  => Stind_I2,
+                _ when type == typeof(int)     => Stind_I4,
+                _ when type == typeof(uint)    => Stind_I4,
+                _ when type == typeof(long)    => Stind_I8,
+                _ when type == typeof(ulong)   => Stind_I8,
+                _ when type == typeof(IntPtr)  => Stind_I,
+                _ when type == typeof(UIntPtr) => Stind_I,
+                _ when type == typeof(char)    => Stind_I2,
+                _ when type == typeof(float)   => Stind_R4,
+                _ when type == typeof(double)  => Stind_R8,
+                _                              => Stind_Ref
             });
         }
     }

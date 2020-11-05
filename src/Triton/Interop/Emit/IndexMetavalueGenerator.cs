@@ -88,7 +88,6 @@ namespace Triton.Interop.Emit
             var type = types.SingleOrDefault(t => !t.IsGenericTypeDefinition);
             var genericTypes = types.Where(t => t.IsGenericTypeDefinition).ToList();
 
-            var target = isStatic ? null : EmitDeclareTarget(ilg, type!);
             var keyType = EmitDeclareKeyType(ilg);
 
             if (type is not null)
@@ -101,17 +100,19 @@ namespace Triton.Interop.Emit
                 EmitGenericTypesAccess();
             }
 
-            ilg.Emit(Ldc_I4_0);
+            EmitLuaError(ilg, $"attempt to index CLR {(isStatic ? "types" : "object")} with invalid key");
             ilg.Emit(Ret);
             return;
 
             void EmitTypeAccess()
             {
+                var target = isStatic ? null : EmitDeclareTarget(ilg, type);
+
                 var members = Enumerable.Empty<MemberInfo>()
                     .Concat(type.GetPublicFields(isStatic).Where(f => !f.IsLiteral))
                     .Concat(type.GetPublicProperties(isStatic))
                     .ToList();
-                EmitMemberAccess(ilg, keyType, state, members,
+                EmitMembersAccess(ilg, keyType, state, members,
                     (ilg, member) =>
                     {
                         if (member is PropertyInfo { GetMethod: null or { IsPublic: false } })
@@ -166,9 +167,12 @@ namespace Triton.Interop.Emit
                         ilg.Emit(Ret);
                     });
 
-                if (isStatic)
+                if (!isStatic)
                 {
-                    return;
+                    if (type.IsSZArray)
+                    {
+
+                    }
                 }
             }
         

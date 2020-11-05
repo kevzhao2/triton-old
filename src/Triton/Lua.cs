@@ -145,6 +145,9 @@ namespace Triton
         public static extern LuaType lua_rawgeti(lua_State* L, int index, long n);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
+        public static extern nuint lua_rawlen(lua_State* L, int index);
+
+        [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
         public static extern void lua_rawseti(lua_State* L, int index, long n);
 
         [DllImport("lua54", CallingConvention = CallingConvention.Cdecl)]
