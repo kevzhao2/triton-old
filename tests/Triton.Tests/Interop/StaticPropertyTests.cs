@@ -28,6 +28,8 @@ namespace Triton.Interop
         {
             public static int IntValue { get; set; }
 
+            public static double DoubleValue { get; set; }
+
             public static string? StringValue { get; set; }
         }
 
@@ -45,6 +47,46 @@ namespace Triton.Interop
             public static int PrivateSetter { get; private set; }
         }
 
+        [Theory]
+        [InlineData(1234)]
+        [InlineData(int.MinValue)]
+        [InlineData(int.MaxValue)]
+        public void Get_Int(int value)
+        {
+            TestClass.IntValue = value;
+
+            using var environment = new LuaEnvironment();
+            environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClass) });
+
+            environment.Eval($"assert(TestClass.IntValue == {value})");
+        }
+
+        [Theory]
+        [InlineData(1.234)]
+        [InlineData(-1.234)]
+        public void Get_Double(double value)
+        {
+            TestClass.DoubleValue = value;
+
+            using var environment = new LuaEnvironment();
+            environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClass) });
+
+            environment.Eval($"assert(TestClass.DoubleValue == {value})");
+        }
+
+        [Theory]
+        [InlineData("test")]
+        [InlineData(null)]
+        public void Get_String(string? value)
+        {
+            TestClass.StringValue = value;
+
+            using var environment = new LuaEnvironment();
+            environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClass) });
+
+            environment.Eval($"assert(TestClass.StringValue == {(value is null ? "nil" : $"'{value}'")})");
+        }
+
         [Fact]
         public void Set_NonAssignable_NoSetter_RaisesLuaError()
         {
@@ -52,7 +94,7 @@ namespace Triton.Interop
             environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClassNonAssignable) });
 
             var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("TestClass.NoSetter = 1234"));
-            Assert.Contains("attempt to set non-assignable property `TestClassNonAssignable.NoSetter`", ex.Message);
+            Assert.Contains("attempt to set non-assignable property 'TestClassNonAssignable.NoSetter'", ex.Message);
         }
 
         [Fact]
@@ -62,7 +104,7 @@ namespace Triton.Interop
             environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClassNonAssignable) });
 
             var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("TestClass.PrivateSetter = 1234"));
-            Assert.Contains("attempt to set non-assignable property `TestClassNonAssignable.PrivateSetter`", ex.Message);
+            Assert.Contains("attempt to set non-assignable property 'TestClassNonAssignable.PrivateSetter'", ex.Message);
         }
 
         [Theory]
@@ -90,7 +132,31 @@ namespace Triton.Interop
             environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClass) });
 
             var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval($"TestClass.IntValue = {value}"));
-            Assert.Contains("attempt to set property `TestClass.IntValue` with invalid value", ex.Message);
+            Assert.Contains("attempt to set property 'TestClass.IntValue' with an invalid value", ex.Message);
+        }
+
+        [Theory]
+        [InlineData(1.234)]
+        [InlineData(-1.234)]
+        public void Set_Double(int value)
+        {
+            using var environment = new LuaEnvironment();
+            environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClass) });
+
+            environment.Eval($"TestClass.DoubleValue = {value}");
+
+            Assert.Equal(value, TestClass.DoubleValue);
+        }
+
+        [Theory]
+        [InlineData("'test'")]
+        public void Set_Double_InvalidValue_RaisesLuaError(string value)
+        {
+            using var environment = new LuaEnvironment();
+            environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClass) });
+
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval($"TestClass.DoubleValue = {value}"));
+            Assert.Contains("attempt to set property 'TestClass.DoubleValue' with an invalid value", ex.Message);
         }
 
         [Theory]
@@ -104,6 +170,18 @@ namespace Triton.Interop
             environment.Eval($"TestClass.StringValue = {(value is null ? "nil" : $"'{value}'")}");
 
             Assert.Equal(value, TestClass.StringValue);
+        }
+
+        [Theory]
+        [InlineData("1.234")]
+        [InlineData("1234")]
+        public void Set_String_InvalidValue_RaisesLuaError(string value)
+        {
+            using var environment = new LuaEnvironment();
+            environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClass) });
+
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval($"TestClass.StringValue = {value}"));
+            Assert.Contains("attempt to set property 'TestClass.StringValue' with an invalid value", ex.Message);
         }
 
         [Fact]

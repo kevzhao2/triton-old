@@ -20,6 +20,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -33,12 +34,157 @@ namespace Triton.Interop.Emit
     /// <summary>
     /// Generates the <c>__index</c> metavalue for CLR entities.
     /// </summary>
-    internal sealed unsafe class IndexMetavalueGenerator : DynamicMetavalueGenerator
+    internal sealed class IndexMetavalueGenerator : DynamicMetavalueGenerator
     {
         /// <inheritdoc/>
         public override string Name => "__index";
 
-        /// <inheritdoc/>
+        private static unsafe void EmitTypeAccess(lua_State* state, ILGenerator ilg, Type type, bool isStatic)
+        {
+            var target = isStatic ? null : EmitHelpers.DeclareTarget(ilg, type);
+
+            EmitMemberAccess(ilg);
+
+            if (!isStatic)
+            {
+                if (type.IsSZArray)
+                {
+                    EmitSzArrayAccess(ilg);
+                }
+                else if (type.IsVariableBoundArray)
+                {
+                    EmitNdArrayAccess(ilg);
+                }
+            }
+
+            return;
+
+            void EmitMemberAccess(ILGenerator ilg)
+            {
+                var members = Array.Empty<MemberInfo>()
+                    .Concat(type.GetPublicFields(isStatic))
+                    .Concat(type.GetPublicProperties(isStatic))
+                    .ToList();
+
+                EmitHelpers.MemberAccesses(state, ilg, type, members,
+                    (ilg, member) =>
+                    {
+                        if (member is FieldInfo field)
+                        {
+                            EmitFieldAccess(ilg, field);
+                        }
+                        else if (member is PropertyInfo property)
+                        {
+                            EmitPropertyAccess(ilg, property);
+                        }
+                        else
+                        {
+                            throw new NotImplementedException();
+                        }
+                    });
+
+                return;
+
+                void EmitFieldAccess(ILGenerator ilg, FieldInfo field)
+                {
+                    EmitHelpers.LuaPush(
+                        ilg, field.FieldType,
+                        ilg =>
+                        {
+                            EmitHelpers.MaybeLoadTarget(ilg, target);
+                            ilg.Emit(target is null ? Ldsfld : Ldfld, field);
+                        });
+
+                    ilg.Emit(Ldc_I4_1);
+                    ilg.Emit(Ret);
+                }
+
+                void EmitPropertyAccess(ILGenerator ilg, PropertyInfo property)
+                {
+                    var propertyType = property.PropertyType;
+
+                    if (propertyType.IsByRef)
+                    {
+                        // The by-ref property is guaranteed to have a public getter because we filtered for public
+                        // properties, and by-ref properties can only have getters.
+
+                        Debug.Assert(property.GetMethod is { IsPublic: true });
+
+                        var elementType = propertyType.GetElementType()!;
+
+                        EmitHelpers.LuaPush(
+                            ilg, elementType,
+                            ilg =>
+                            {
+                                EmitHelpers.MaybeLoadTarget(ilg, target);
+                                ilg.Emit(target is null ? Call : Callvirt, property.GetMethod);
+                                ilg.EmitLdind(elementType);
+                            });
+                    }
+                    else
+                    {
+                        if (property.GetMethod is not { IsPublic: true })
+                        {
+                            EmitHelpers.LuaError(
+                                ilg, $"attempt to get non-readable property '{type.Name}.{property.Name}'");
+                            ilg.Emit(Ret);
+                            return;
+                        }
+
+                        EmitHelpers.LuaPush(
+                            ilg, propertyType,
+                            ilg =>
+                            {
+                                EmitHelpers.MaybeLoadTarget(ilg, target);
+                                ilg.Emit(target is null ? Call : Callvirt, property.GetMethod);
+                            });
+                    }
+
+                    ilg.Emit(Ldc_I4_1);
+                    ilg.Emit(Ret);
+                }
+            }
+        
+            void EmitSzArrayAccess(ILGenerator ilg)
+            {
+                var elementType = type.GetElementType()!;
+
+                var index = EmitHelpers.DeclareSzArrayIndex(ilg);
+
+                EmitHelpers.LuaPush(
+                    ilg, elementType,
+                    ilg =>
+                    {
+                        ilg.Emit(Ldloc, target!);
+                        ilg.Emit(Ldloc, index);
+                        ilg.EmitLdelem(elementType);
+                    });
+
+                ilg.Emit(Ldc_I4_1);
+                ilg.Emit(Ret);
+            }
+
+            void EmitNdArrayAccess(ILGenerator ilg)
+            {
+                var rank = type.GetArrayRank();
+
+                var indices = EmitHelpers.DeclareNdArrayIndices(ilg, rank);
+
+                EmitHelpers.LuaPush(
+                    ilg, type.GetElementType()!,
+                    ilg =>
+                    {
+                        ilg.Emit(Ldloc, target!);
+                        EmitHelpers.LoadNdArrayIndices(ilg, rank, indices);
+                        ilg.Emit(Callvirt, type.GetMethod("Get")!);
+                    });
+
+                ilg.Emit(Ldc_I4_1);
+                ilg.Emit(Ret);
+            }
+        }
+
+        /*/// <inheritdoc/>
         public override void Push(lua_State* state, object entity, bool isTypes)
         {
             var type = isTypes ?
@@ -73,113 +219,29 @@ namespace Triton.Interop.Emit
                 lua_setfield(state, -2, Name);
                 lua_setmetatable(state, -2);
             }
+        }*/
+
+        /// <inheritdoc/>
+        protected override unsafe void EmitMetamethodImpl(lua_State* state, ILGenerator ilg, object obj)
+        {
+            EmitTypeAccess(state, ilg, obj.GetType(), isStatic: false);
+
+            EmitHelpers.LuaError(
+                ilg, "attempt to index a CLR object with an invalid key");
+            ilg.Emit(Ret);
         }
 
         /// <inheritdoc/>
-        protected override void GenerateImpl(lua_State* state, ILGenerator ilg, object obj) =>
-            GenerateImpl(state, ilg, new[] { obj.GetType() }, isStatic: false);
-
-        /// <inheritdoc/>
-        protected override void GenerateImpl(lua_State* state, ILGenerator ilg, IReadOnlyList<Type> types) =>
-            GenerateImpl(state, ilg, types, isStatic: true);
-
-        private static void GenerateImpl(lua_State* state, ILGenerator ilg, IReadOnlyList<Type> types, bool isStatic)
+        protected override unsafe void EmitMetamethodImpl(lua_State* state, ILGenerator ilg, IReadOnlyList<Type> types)
         {
-            var type = types.SingleOrDefault(t => !t.IsGenericTypeDefinition);
-            var genericTypes = types.Where(t => t.IsGenericTypeDefinition).ToList();
-
-            var keyType = EmitDeclareKeyType(ilg);
-
-            if (type is not null)
+            if (types.SingleOrDefault(t => !t.IsGenericTypeDefinition) is { } type)
             {
-                EmitTypeAccess();
+                EmitTypeAccess(state, ilg, type, isStatic: true);
             }
 
-            if (genericTypes.Count > 0)
-            {
-                EmitGenericTypesAccess();
-            }
-
-            EmitLuaError(ilg, $"attempt to index CLR {(isStatic ? "types" : "object")} with invalid key");
+            EmitHelpers.LuaError(
+                ilg, "attempt to index CLR types with an invalid key");
             ilg.Emit(Ret);
-            return;
-
-            void EmitTypeAccess()
-            {
-                var target = isStatic ? null : EmitDeclareTarget(ilg, type);
-
-                var members = Enumerable.Empty<MemberInfo>()
-                    .Concat(type.GetPublicFields(isStatic).Where(f => !f.IsLiteral))
-                    .Concat(type.GetPublicProperties(isStatic))
-                    .ToList();
-                EmitMembersAccess(ilg, keyType, state, members,
-                    (ilg, member) =>
-                    {
-                        if (member is PropertyInfo { GetMethod: null or { IsPublic: false } })
-                        {
-                            EmitLuaError(ilg, "attempt to get non-readable property");
-                            ilg.Emit(Ret);
-                            return;
-                        }
-
-                        var type = member.GetUnderlyingType();
-                        if (type.IsByRefLike)
-                        {
-                            EmitLuaError(ilg, "attempt to get byref-like member");
-                            ilg.Emit(Ret);
-                            return;
-                        }
-
-                        var isByRefType = type.IsByRef;
-                        var nonByRefType = isByRefType ? type.GetElementType()! : type;
-
-                        ilg.Emit(Ldarg_0);  // Lua state
-                        if (!isStatic)
-                        {
-                            ilg.Emit(Ldloc, target!);
-                        }
-                        
-                        if (member is FieldInfo field)
-                        {
-                            ilg.Emit(isStatic ? Ldsfld : Ldfld, field);
-                        }
-                        else if (member is PropertyInfo property)
-                        {
-                            ilg.Emit(isStatic ? Call : Callvirt, property.GetMethod!);
-                        }
-                        else
-                        {
-                            throw new InvalidOperationException();
-                        }
-
-                        if (isByRefType)
-                        {
-                            ilg.EmitLdind(nonByRefType);
-                        }
-                        ilg.Emit(Call, LuaPushHelpers.Get(nonByRefType));
-
-                        ilg.Emit(Ldc_I4_1);
-                        ilg.Emit(Ret);
-                    },
-                    ilg =>
-                    {
-                        ilg.Emit(Ldc_I4_0);
-                        ilg.Emit(Ret);
-                    });
-
-                if (!isStatic)
-                {
-                    if (type.IsSZArray)
-                    {
-
-                    }
-                }
-            }
-        
-            void EmitGenericTypesAccess()
-            {
-                // TODO: implement this
-            }
         }
     }
 }

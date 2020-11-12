@@ -31,6 +31,9 @@ namespace Triton.Interop
             public static int IntValue;
 
             [SuppressMessage("Usage", "CA2211:Non-constant fields should not be visible", Justification = "Testing")]
+            public static double DoubleValue;
+
+            [SuppressMessage("Usage", "CA2211:Non-constant fields should not be visible", Justification = "Testing")]
             public static string? StringValue;
         }
 
@@ -41,6 +44,46 @@ namespace Triton.Interop
             public static readonly int ReadOnly = 1234;
         }
 
+        [Theory]
+        [InlineData(1234)]
+        [InlineData(int.MinValue)]
+        [InlineData(int.MaxValue)]
+        public void Get_Int(int value)
+        {
+            TestClass.IntValue = value;
+
+            using var environment = new LuaEnvironment();
+            environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClass) });
+
+            environment.Eval($"assert(TestClass.IntValue == {value})");
+        }
+
+        [Theory]
+        [InlineData(1.234)]
+        [InlineData(-1.234)]
+        public void Get_Double(double value)
+        {
+            TestClass.DoubleValue = value;
+
+            using var environment = new LuaEnvironment();
+            environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClass) });
+
+            environment.Eval($"assert(TestClass.DoubleValue == {value})");
+        }
+
+        [Theory]
+        [InlineData("test")]
+        [InlineData(null)]
+        public void Get_String(string? value)
+        {
+            TestClass.StringValue = value;
+
+            using var environment = new LuaEnvironment();
+            environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClass) });
+
+            environment.Eval($"assert(TestClass.StringValue == {(value is null ? "nil" : $"'{value}'")})");
+        }
+
         [Fact]
         public void Set_NonAssignable_Const_RaisesLuaError()
         {
@@ -48,7 +91,7 @@ namespace Triton.Interop
             environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClassNonAssignable) });
 
             var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("TestClass.Const = 1234"));
-            Assert.Contains("attempt to set non-assignable field `TestClassNonAssignable.Const`", ex.Message);
+            Assert.Contains("attempt to set non-assignable field 'TestClassNonAssignable.Const'", ex.Message);
         }
 
         [Fact]
@@ -58,7 +101,7 @@ namespace Triton.Interop
             environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClassNonAssignable) });
 
             var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("TestClass.ReadOnly = 1234"));
-            Assert.Contains("attempt to set non-assignable field `TestClassNonAssignable.ReadOnly`", ex.Message);
+            Assert.Contains("attempt to set non-assignable field 'TestClassNonAssignable.ReadOnly'", ex.Message);
         }
 
         [Theory]
@@ -86,7 +129,31 @@ namespace Triton.Interop
             environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClass) });
 
             var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval($"TestClass.IntValue = {value}"));
-            Assert.Contains("attempt to set field `TestClass.IntValue` with invalid value", ex.Message);
+            Assert.Contains("attempt to set field 'TestClass.IntValue' with an invalid value", ex.Message);
+        }
+
+        [Theory]
+        [InlineData(1.234)]
+        [InlineData(-1.234)]
+        public void Set_Double(int value)
+        {
+            using var environment = new LuaEnvironment();
+            environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClass) });
+
+            environment.Eval($"TestClass.DoubleValue = {value}");
+
+            Assert.Equal(value, TestClass.DoubleValue);
+        }
+
+        [Theory]
+        [InlineData("'test'")]
+        public void Set_Double_InvalidValue_RaisesLuaError(string value)
+        {
+            using var environment = new LuaEnvironment();
+            environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClass) });
+
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval($"TestClass.DoubleValue = {value}"));
+            Assert.Contains("attempt to set field 'TestClass.DoubleValue' with an invalid value", ex.Message);
         }
 
         [Theory]
@@ -100,6 +167,18 @@ namespace Triton.Interop
             environment.Eval($"TestClass.StringValue = {(value is null ? "nil" : $"'{value}'")}");
 
             Assert.Equal(value, TestClass.StringValue);
+        }
+
+        [Theory]
+        [InlineData("1.234")]
+        [InlineData("1234")]
+        public void Set_String_InvalidValue_RaisesLuaError(string value)
+        {
+            using var environment = new LuaEnvironment();
+            environment["TestClass"] = LuaValue.FromClrTypes(new[] { typeof(TestClass) });
+
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval($"TestClass.StringValue = {value}"));
+            Assert.Contains("attempt to set field 'TestClass.StringValue' with an invalid value", ex.Message);
         }
     }
 }

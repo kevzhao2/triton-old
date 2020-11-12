@@ -28,12 +28,54 @@ namespace Triton.Interop
         {
             public int IntValue;
 
+            public double DoubleValue;
+
             public string? StringValue;
         }
 
         public class TestClassNonAssignable
         {
             public readonly int ReadOnly = 1234;
+        }
+
+        [Theory]
+        [InlineData(1234)]
+        [InlineData(int.MinValue)]
+        [InlineData(int.MaxValue)]
+        public void Get_Int(int value)
+        {
+            var testClass = new TestClass { IntValue = value };
+
+            using var environment = new LuaEnvironment();
+            environment["test_class"] = LuaValue.FromClrObject(testClass);
+
+            environment.Eval($"assert(test_class.IntValue == {value})");
+        }
+
+        [Theory]
+        [InlineData(1.234)]
+        [InlineData(-1.234)]
+        public void Get_Double(double value)
+        {
+            var testClass = new TestClass { DoubleValue = value };
+
+            using var environment = new LuaEnvironment();
+            environment["test_class"] = LuaValue.FromClrObject(testClass);
+
+            environment.Eval($"assert(test_class.DoubleValue == {value})");
+        }
+
+        [Theory]
+        [InlineData("test")]
+        [InlineData(null)]
+        public void Get_String(string? value)
+        {
+            var testClass = new TestClass { StringValue = value };
+
+            using var environment = new LuaEnvironment();
+            environment["test_class"] = LuaValue.FromClrObject(testClass);
+
+            environment.Eval($"assert(test_class.StringValue == {(value is null ? "nil" : $"'{value}'")})");
         }
 
         [Fact]
@@ -45,7 +87,7 @@ namespace Triton.Interop
             environment["test_class"] = LuaValue.FromClrObject(testClass);
 
             var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("test_class.ReadOnly = 1234"));
-            Assert.Contains("attempt to set non-assignable field `TestClassNonAssignable.ReadOnly`", ex.Message);
+            Assert.Contains("attempt to set non-assignable field 'TestClassNonAssignable.ReadOnly'", ex.Message);
         }
 
         [Theory]
@@ -77,7 +119,35 @@ namespace Triton.Interop
             environment["test_class"] = LuaValue.FromClrObject(testClass);
 
             var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval($"test_class.IntValue = {value}"));
-            Assert.Contains("attempt to set field `TestClass.IntValue` with invalid value", ex.Message);
+            Assert.Contains("attempt to set field 'TestClass.IntValue' with an invalid value", ex.Message);
+        }
+
+        [Theory]
+        [InlineData(1.234)]
+        [InlineData(-1.234)]
+        public void Set_Double(int value)
+        {
+            var testClass = new TestClass();
+
+            using var environment = new LuaEnvironment();
+            environment["test_class"] = LuaValue.FromClrObject(testClass);
+
+            environment.Eval($"test_class.DoubleValue = {value}");
+
+            Assert.Equal(value, testClass.DoubleValue);
+        }
+
+        [Theory]
+        [InlineData("'test'")]
+        public void Set_Double_InvalidValue_RaisesLuaError(string value)
+        {
+            var testClass = new TestClass();
+
+            using var environment = new LuaEnvironment();
+            environment["test_class"] = LuaValue.FromClrObject(testClass);
+
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval($"test_class.DoubleValue = {value}"));
+            Assert.Contains("attempt to set field 'TestClass.DoubleValue' with an invalid value", ex.Message);
         }
 
         [Theory]
@@ -93,6 +163,20 @@ namespace Triton.Interop
             environment.Eval($"test_class.StringValue = {(value is null ? "nil" : $"'{value}'")}");
 
             Assert.Equal(value, testClass.StringValue);
+        }
+
+        [Theory]
+        [InlineData("1.234")]
+        [InlineData("1234")]
+        public void Set_String_InvalidValue_RaisesLuaError(string value)
+        {
+            var testClass = new TestClass();
+
+            using var environment = new LuaEnvironment();
+            environment["test_class"] = LuaValue.FromClrObject(testClass);
+
+            var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval($"test_class.StringValue = {value}"));
+            Assert.Contains("attempt to set field 'TestClass.StringValue' with an invalid value", ex.Message);
         }
     }
 }

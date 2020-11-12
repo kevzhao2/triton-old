@@ -22,9 +22,8 @@ using System;
 using System.Collections.Generic;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
-using Triton.Interop.Emit.Extensions;
 
-namespace Triton.Interop.Emit
+namespace Triton.Interop.Emit.Extensions
 {
     /// <summary>
     /// Represents a reusable local variable within a method or constructor.

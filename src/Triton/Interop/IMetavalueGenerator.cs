@@ -25,7 +25,7 @@ namespace Triton.Interop
     /// <summary>
     /// Defines a metavalue generator for CLR entities.
     /// </summary>
-    internal unsafe interface IMetavalueGenerator
+    internal interface IMetavalueGenerator
     {
         /// <summary>
         /// Gets the metavalue's name.
@@ -48,11 +48,11 @@ namespace Triton.Interop
         /// <summary>
         /// Pushes the metavalue for the given CLR entity onto the stack. Requires that the generator is applicable.
         /// </summary>
-        /// <param name="state">The Lua state to push the metavalue onto.</param>
+        /// <param name="state">The Lua state.</param>
         /// <param name="entity">The entity whose metavalue to push.</param>
         /// <param name="isTypes">
         /// <see langword="true"/> if the entity is types; otherwise, <see langword="false"/>.
         /// </param>
-        public void Push(lua_State* state, object entity, bool isTypes);
+        public unsafe void Push(lua_State* state, object entity, bool isTypes);
     }
 }

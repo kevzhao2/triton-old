@@ -42,7 +42,7 @@ namespace Triton.Interop
             environment["test_class"] = LuaValue.FromClrObject(testClass);
 
             var ex = Assert.Throws<LuaRuntimeException>(() => environment.Eval("test_class.VoidMethod = nil"));
-            Assert.Contains("attempt to set method `TestClass.VoidMethod`", ex.Message);
+            Assert.Contains("attempt to set method 'TestClass.VoidMethod'", ex.Message);
         }
     }
 }

@@ -24,6 +24,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Triton.Interop.Emit.Helpers;
 using static System.Reflection.Emit.OpCodes;
 using static Triton.Lua;
 
@@ -35,20 +36,13 @@ namespace Triton.Interop.Emit
     /// <summary>
     /// Provides the base class for a dynamic metavalue generator and helper methods supporting code generation.
     /// </summary>
-    internal abstract unsafe partial class DynamicMetavalueGenerator : IMetavalueGenerator
+    internal abstract class DynamicMetavalueGenerator : IMetavalueGenerator
     {
-        private protected static readonly MethodInfo _stringFormat =
-            typeof(string).GetMethod(nameof(string.Format), new[] { typeof(string), typeof(object) })!;
-
-        private protected static readonly MethodInfo _luaL_error = typeof(Lua).GetMethod(nameof(luaL_error))!;
-
         private static readonly CustomAttributeBuilder _unmanagedCallersOnlyAttribute =
             new(typeof(UnmanagedCallersOnlyAttribute).GetConstructor(Type.EmptyTypes)!,
                 Array.Empty<object?>(),
                 new[] { typeof(UnmanagedCallersOnlyAttribute).GetField("CallConvs")! },
                 new object?[] { new[] { typeof(CallConvCdecl) } });
-
-        private static readonly MethodInfo _lua_getenvironment = typeof(Lua).GetMethod(nameof(lua_getenvironment))!;
 
         /// <inheritdoc/>
         public abstract string Name { get; }
@@ -57,12 +51,11 @@ namespace Triton.Interop.Emit
         public virtual bool IsApplicable(object entity, bool isTypes) => true;
 
         /// <inheritdoc/>
-        public virtual void Push(lua_State* state, object entity, bool isTypes)
+        public virtual unsafe void Push(lua_State* state, object entity, bool isTypes)
         {
-            var environment = lua_getenvironment(state);
-            var type = environment.ModuleBuilder.DefineType(Guid.NewGuid().ToString());
-            var metamethodImpl = BuildMetamethodImpl();
-            var metamethod = BuildMetamethod();
+            var type = lua_getenvironment(state).ModuleBuilder.DefineType(Guid.NewGuid().ToString());
+            var metamethodImpl = GenerateMetamethodImpl();
+            var metamethod = GenerateMetamethod();
 
             lua_pushcfunction(state,
                 (delegate* unmanaged[Cdecl]<lua_State*, int>)
@@ -71,28 +64,28 @@ namespace Triton.Interop.Emit
                         .MethodHandle.GetFunctionPointer());
             return;
 
-            MethodBuilder BuildMetamethodImpl()
+            MethodBuilder GenerateMetamethodImpl()
             {
                 var metamethodImpl = type.DefineMethod(
                     "MetamethodImpl", MethodAttributes.Static,
-                    typeof(int), new[] { typeof(lua_State*), typeof(LuaEnvironment) });
+                    typeof(int), new[] { typeof(lua_State*) });
                 metamethodImpl.DefineParameter(1, ParameterAttributes.None, nameof(state));
-                metamethodImpl.DefineParameter(2, ParameterAttributes.None, nameof(environment));
 
                 var ilg = metamethodImpl.GetILGenerator();
+
                 if (isTypes)
                 {
-                    GenerateImpl(state, ilg, (IReadOnlyList<Type>)entity);
+                    EmitMetamethodImpl(state, ilg, (IReadOnlyList<Type>)entity);
                 }
                 else
                 {
-                    GenerateImpl(state, ilg, entity);
+                    EmitMetamethodImpl(state, ilg, entity);
                 }
 
                 return metamethodImpl;
             }
 
-            MethodBuilder BuildMetamethod()
+            MethodBuilder GenerateMetamethod()
             {
                 var metamethod = type.DefineMethod(
                     "Metamethod", MethodAttributes.Public | MethodAttributes.Static,
@@ -104,14 +97,12 @@ namespace Triton.Interop.Emit
 
                 var result = ilg.DeclareLocal(typeof(int));
 
-                // Call the `MetamethodImpl` method, preventing any CLR exceptions from being thrown (since they should
-                // be avoided in unmanaged callbacks).
+                // Call the implementation, preventing any CLR exceptions from being thrown (since they should be
+                // avoided in unmanaged callbacks).
 
                 ilg.BeginExceptionBlock();
                 {
                     ilg.Emit(Ldarg_0);  // Lua state
-                    ilg.Emit(Dup);
-                    ilg.Emit(Call, _lua_getenvironment);
                     ilg.Emit(Call, metamethodImpl);
                     ilg.Emit(Stloc, result);
                 }
@@ -121,15 +112,14 @@ namespace Triton.Interop.Emit
                     var ex = ilg.DeclareLocal(typeof(Exception));
                     ilg.Emit(Stloc, ex);
 
-                    ilg.Emit(Ldarg_0);  // Lua state
-                    ilg.Emit(Ldstr, "uncaught CLR exception: {0}\n");
-                    ilg.Emit(Ldloc, ex);
-                    ilg.Emit(Call, _stringFormat);
-                    ilg.Emit(Call, _luaL_error);
+                    EmitHelpers.LuaError(
+                        ilg, "uncaught CLR exception: {0}\n",
+                        ilg => ilg.Emit(Ldloc, ex));
                     ilg.Emit(Stloc, result);
                 }
 
                 ilg.EndExceptionBlock();
+
                 ilg.Emit(Ldloc, result);
                 ilg.Emit(Ret);
 
@@ -138,19 +128,19 @@ namespace Triton.Interop.Emit
         }
 
         /// <summary>
-        /// Generates the metamethod implementation for the given CLR object.
+        /// Emits the metamethod implementation for the given CLR object.
         /// </summary>
-        /// <param name="state">The Lua state to generate the metamethod for.</param>
-        /// <param name="ilg">The IL generator of the metamethod implementation.</param>
-        /// <param name="obj">The object to generate the metamethod for.</param>
-        protected abstract void GenerateImpl(lua_State* state, ILGenerator ilg, object obj);
+        /// <param name="state">The Lua state.</param>
+        /// <param name="ilg">The IL generator.</param>
+        /// <param name="obj">The object whose metamethod to generate.</param>
+        protected abstract unsafe void EmitMetamethodImpl(lua_State* state, ILGenerator ilg, object obj);
 
         /// <summary>
-        /// Generates the metamethod implementation for the given CLR types.
+        /// Emits the metamethod implementation for the given CLR types.
         /// </summary>
-        /// <param name="state">The Lua state to generate the metamethod for.</param>
-        /// <param name="ilg">The IL generator of the metamethod implementation.</param>
-        /// <param name="types">The types to generate the metamethod for.</param>
-        protected abstract void GenerateImpl(lua_State* state, ILGenerator ilg, IReadOnlyList<Type> types);
+        /// <param name="state">The Lua state.</param>
+        /// <param name="ilg">The IL generator.</param>
+        /// <param name="types">The types whose metamethod to generate.</param>
+        protected abstract unsafe void EmitMetamethodImpl(lua_State* state, ILGenerator ilg, IReadOnlyList<Type> types);
     }
 }

@@ -245,17 +245,5 @@ namespace Triton
                 },
                 action.ToClrTypes());
         }
-
-        [Fact]
-        public void Test()
-        {
-            using var environment = new LuaEnvironment();
-
-            environment.ImportTypes(typeof(Action).Assembly);
-
-            environment.Eval("System.Type.Delimiter = 'f'");
-
-            var x = Type.Delimiter;
-        }
     }
 }

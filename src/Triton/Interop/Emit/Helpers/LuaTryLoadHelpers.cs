@@ -31,23 +31,22 @@ namespace Triton.Interop.Emit.Helpers
     /// <summary>
     /// Provides helper methods for trying to load values from the Lua stack.
     /// </summary>
-    internal static unsafe class LuaTryLoadHelpers
+    internal static class LuaTryLoadHelpers
     {
-        // For value types and reference types that should be treated as CLR entities, generic specialization of
-        // `TryLoad<T>` and `TryLoadNullable<T>` will result in optimal code. For the other types, we provide
-        // specializations.
-
+        // For value types and reference types that are CLR entities, generic specialization of `TryLoad<T>` and
+        // `TryLoadNullable<T>` will result in optimal code. For the other types, we provide specializations.
+        //
         private static readonly ConcurrentDictionary<Type, MethodInfo> _methodCache = new()
         {
-            [typeof(string)]      = GetMethod(nameof(TryLoadString)),
-            [typeof(LuaObject)]   = GetMethod(nameof(TryLoadLuaObject)),
-            [typeof(LuaTable)]    = GetMethod(nameof(TryLoadLuaTable)),
-            [typeof(LuaFunction)] = GetMethod(nameof(TryLoadLuaFunction)),
-            [typeof(LuaThread)]   = GetMethod(nameof(TryLoadLuaThread))!
+            [typeof(string)]      = GetMethodInfo(nameof(TryLoadString)),
+            [typeof(LuaObject)]   = GetMethodInfo(nameof(TryLoadLuaObject)),
+            [typeof(LuaTable)]    = GetMethodInfo(nameof(TryLoadLuaTable)),
+            [typeof(LuaFunction)] = GetMethodInfo(nameof(TryLoadLuaFunction)),
+            [typeof(LuaThread)]   = GetMethodInfo(nameof(TryLoadLuaThread))!
         };
 
-        private static readonly MethodInfo _tryLoad = GetMethod(nameof(TryLoad));
-        private static readonly MethodInfo _tryLoadNullable = GetMethod(nameof(TryLoadNullable));
+        private static readonly MethodInfo _tryLoad         = GetMethodInfo(nameof(TryLoad));
+        private static readonly MethodInfo _tryLoadNullable = GetMethodInfo(nameof(TryLoadNullable));
 
         /// <summary>
         /// Gets the method for trying to load a value of a given type from the Lua stack.
@@ -55,19 +54,21 @@ namespace Triton.Interop.Emit.Helpers
         /// <param name="type">The type of value.</param>
         /// <returns>The method for trying to load a value of the given type from the Lua stack.</returns>
         public static MethodInfo Get(Type type) =>
-            _methodCache.GetOrAdd(type.Simplify(), type =>
-                Nullable.GetUnderlyingType(type) switch
-                {
-                    null                => _tryLoad.MakeGenericMethod(type),
-                    Type underlyingType => _tryLoadNullable.MakeGenericMethod(underlyingType)
-                });
+            _methodCache.GetOrAdd(type.Simplify(),
+                type =>
+                    Nullable.GetUnderlyingType(type) switch
+                    {
+                        null                => _tryLoad.MakeGenericMethod(type),
+                        Type underlyingType => _tryLoadNullable.MakeGenericMethod(underlyingType)
+                    });
 
         // TODO: determine whether aggressive inlining will be beneficial
         // TODO: determine whether passing `LuaType` will be beneficial
 
-        internal static bool TryLoadString(lua_State* state, int index, ref string? value)
+        internal static unsafe bool TryLoadString(lua_State* state, int index, ref string? value)
         {
             var type = lua_type(state, index);
+
             if (type is LUA_TNIL)
             {
                 value = null;
@@ -83,9 +84,10 @@ namespace Triton.Interop.Emit.Helpers
             return true;
         }
 
-        internal static bool TryLoadLuaObject(lua_State* state, int index, ref LuaObject? value)
+        internal static unsafe bool TryLoadLuaObject(lua_State* state, int index, ref LuaObject? value)
         {
             var type = lua_type(state, index);
+
             if (type is LUA_TNIL)
             {
                 value = null;
@@ -102,9 +104,10 @@ namespace Triton.Interop.Emit.Helpers
             return true;
         }
 
-        internal static bool TryLoadLuaTable(lua_State* state, int index, ref LuaTable? value)
+        internal static unsafe bool TryLoadLuaTable(lua_State* state, int index, ref LuaTable? value)
         {
             var type = lua_type(state, index);
+
             if (type is LUA_TNIL)
             {
                 value = null;
@@ -121,9 +124,10 @@ namespace Triton.Interop.Emit.Helpers
             return true;
         }
 
-        internal static bool TryLoadLuaFunction(lua_State* state, int index, ref LuaFunction? value)
+        internal static unsafe bool TryLoadLuaFunction(lua_State* state, int index, ref LuaFunction? value)
         {
             var type = lua_type(state, index);
+
             if (type is LUA_TNIL)
             {
                 value = null;
@@ -140,9 +144,10 @@ namespace Triton.Interop.Emit.Helpers
             return true;
         }
 
-        internal static bool TryLoadLuaThread(lua_State* state, int index, ref LuaThread? value)
+        internal static unsafe bool TryLoadLuaThread(lua_State* state, int index, ref LuaThread? value)
         {
             var type = lua_type(state, index);
+
             if (type is LUA_TNIL)
             {
                 value = null;
@@ -159,7 +164,7 @@ namespace Triton.Interop.Emit.Helpers
             return true;
         }
 
-        internal static bool TryLoad<T>(lua_State* state, int index, ref T value)
+        internal static unsafe bool TryLoad<T>(lua_State* state, int index, ref T value)
         {
             var type = lua_type(state, index);
 
@@ -358,9 +363,10 @@ namespace Triton.Interop.Emit.Helpers
             }
         }
 
-        internal static bool TryLoadNullable<T>(lua_State* state, int index, ref T? value) where T : struct
+        internal static unsafe bool TryLoadNullable<T>(lua_State* state, int index, ref T? value) where T : struct
         {
             var type = lua_type(state, index);
+
             if (type is LUA_TNIL)
             {
                 value = null;
@@ -377,8 +383,9 @@ namespace Triton.Interop.Emit.Helpers
             return true;
         }
 
-        // Helper method for simplifying static field initializations.
-        private static MethodInfo GetMethod(string name) =>
+        // Helper method for simplifying static initialization.
+        //
+        private static MethodInfo GetMethodInfo(string name) =>
             typeof(LuaTryLoadHelpers).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!;
     }
 }

@@ -29,22 +29,22 @@ namespace Triton.Interop.Emit.Helpers
     /// <summary>
     /// Provides helper methods for pushing values onto a Lua stack.
     /// </summary>
-    internal static unsafe class LuaPushHelpers
+    internal static class LuaPushHelpers
     {
-        // For value types and reference types that should be treated as CLR entities, generic specialization of
-        // `Push<T>` and `PushNullable<T>` will result in optimal code. For the other types, we provide specializations.
-
+        // For value types and reference types that are CLR entities, generic specialization of `Push<T>` and
+        // `PushNullable<T>` will result in optimal code. For the other types, we provide specializations.
+        //
         private static readonly ConcurrentDictionary<Type, MethodInfo> _methodCache = new()
         {
-            [typeof(string)]      = GetMethod(nameof(PushString)),
-            [typeof(LuaObject)]   = GetMethod(nameof(PushLuaObject)),
-            [typeof(LuaTable)]    = GetMethod(nameof(PushLuaObject)),
-            [typeof(LuaFunction)] = GetMethod(nameof(PushLuaObject)),
-            [typeof(LuaThread)]   = GetMethod(nameof(PushLuaObject))
+            [typeof(string)]      = GetMethodInfo(nameof(PushString)),
+            [typeof(LuaObject)]   = GetMethodInfo(nameof(PushLuaObject)),
+            [typeof(LuaTable)]    = GetMethodInfo(nameof(PushLuaObject)),
+            [typeof(LuaFunction)] = GetMethodInfo(nameof(PushLuaObject)),
+            [typeof(LuaThread)]   = GetMethodInfo(nameof(PushLuaObject))
         };
 
-        private static readonly MethodInfo _push = GetMethod(nameof(Push));
-        private static readonly MethodInfo _pushNullable = GetMethod(nameof(PushNullable));
+        private static readonly MethodInfo _push         = GetMethodInfo(nameof(Push));
+        private static readonly MethodInfo _pushNullable = GetMethodInfo(nameof(PushNullable));
 
         /// <summary>
         /// Gets the method for pushing a value of a given type onto a Lua stack.
@@ -61,7 +61,7 @@ namespace Triton.Interop.Emit.Helpers
 
         // TODO: determine whether aggressive inlining will be beneficial
 
-        internal static void PushString(lua_State* state, string? value)
+        internal static unsafe void PushString(lua_State* state, string? value)
         {
             if (value is null)
             {
@@ -72,7 +72,7 @@ namespace Triton.Interop.Emit.Helpers
             _ = lua_pushstring(state, value);
         }
 
-        internal static void PushLuaObject(lua_State* state, LuaObject? value)
+        internal static unsafe void PushLuaObject(lua_State* state, LuaObject? value)
         {
             if (value is null)
             {
@@ -83,7 +83,7 @@ namespace Triton.Interop.Emit.Helpers
             value.Push(state);
         }
 
-        internal static void Push<T>(lua_State* state, T value)
+        internal static unsafe void Push<T>(lua_State* state, T value)
         {
             if (typeof(T) == typeof(LuaValue))
             {
@@ -154,7 +154,7 @@ namespace Triton.Interop.Emit.Helpers
             }
         }
 
-        internal static void PushNullable<T>(lua_State* state, T? value) where T : struct
+        internal static unsafe void PushNullable<T>(lua_State* state, T? value) where T : struct
         {
             if (value is null)
             {
@@ -165,8 +165,9 @@ namespace Triton.Interop.Emit.Helpers
             Push(state, value.Value);
         }
 
-        // Helper method for simplifying static field initializations.
-        private static MethodInfo GetMethod(string name) =>
+        // Helper method for simplifying static initialization.
+        //
+        private static MethodInfo GetMethodInfo(string name) =>
             typeof(LuaPushHelpers).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!;
     }
 }
