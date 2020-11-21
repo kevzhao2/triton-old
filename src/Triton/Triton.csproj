@@ -1,50 +1,47 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net40;net35</TargetFrameworks>
+    <TargetFramework>net5.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
-  
+
   <PropertyGroup>
+    <Version>2.0.0</Version>
     <Authors>Kevin Zhao</Authors>
-    <Copyright>Kevin Zhao</Copyright>
-    <Description>Provides an easy and efficient way to embed Lua into your .NET application.</Description>
-    <PackageTags>lua;script;scripting;interop</PackageTags>
-    <PackageLicenseUrl>https://github.com/kevzhao2/Triton/blob/master/LICENSE</PackageLicenseUrl>
-    <PackageProjectUrl>https://github.com/kevzhao2/Triton</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/kevzhao2/triton</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <RepositoryUrl>https://github.com/kevzhao2/Triton</RepositoryUrl>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <Description>Triton provides easy .NET &lt;-&gt; Lua interop.</Description>
+    <PackageTags>lua;triton</PackageTags>
+    <IncludeSource>true</IncludeSource>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <SignAssembly>true</SignAssembly>
-    <AssemblyOriginatorKeyFile>key.pfx</AssemblyOriginatorKeyFile>
-  </PropertyGroup>
-  
-  <ItemGroup>
-    <Content Include="runtimes\*\**">
+  <ItemGroup Condition=" '$(OS)' == 'Windows_NT'">
+    <None Include="runtimes\win-x64\native\lua54.dll" Visible="false">
+      <Link>lua54.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Pack>true</Pack>
-      <PackagePath>runtimes/</PackagePath>
-    </Content>
-    <None Update="runtimes\Triton.targets">
-      <Pack>true</Pack>
-      <PackagePath>build/net40/;build/net35/</PackagePath>
     </None>
   </ItemGroup>
 
-  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-    <DefineConstants>FEATURE_DYNAMIC;NETSTANDARD</DefineConstants>
-  </PropertyGroup>
+  <ItemGroup Condition=" '$(OS)' == 'Unix' and Exists('/usr/lib/libc.dylib')">
+    <None Include="runtimes\osx\native\liblua54.dylib" Visible="false">
+      <Link>liblua54.dylib</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net40'">
-    <DefineConstants>FEATURE_DYNAMIC;NETFULL</DefineConstants>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net35'">
-    <DefineConstants>NETFULL</DefineConstants>
-  </PropertyGroup>
+  <ItemGroup Condition=" '$(OS)' == 'Unix' and !Exists('/usr/lib/libc.dylib')">
+    <None Include="runtimes\linux-x64\native\liblua54.so" Visible="false">
+      <Link>liblua54.so</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 
 </Project>

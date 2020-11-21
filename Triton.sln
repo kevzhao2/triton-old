@@ -1,13 +1,20 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.27130.2010
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30104.148
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Triton", "src\Triton\Triton.csproj", "{BAA06077-152B-44AA-BB5E-7055BE055368}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Triton", "src\Triton\Triton.csproj", "{2A51CE00-5EB2-4DD4-81BA-79A36EA39DC9}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Triton.Tests", "test\Triton.Tests\Triton.Tests.csproj", "{265EB0AA-24CA-4C32-8337-D887338DFBE7}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Triton.Tests", "tests\Triton.Tests\Triton.Tests.csproj", "{0F2668D7-F24F-4EAD-BA1F-A964C033A97C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Triton.Benchmarks", "test\Triton.Benchmarks\Triton.Benchmarks.csproj", "{31CF6E19-F5F4-45B1-9088-B1F3BB63A625}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{F12A2565-267E-4FB3-99BC-8C32B877641F}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+		.gitignore = .gitignore
+		LICENSE = LICENSE
+		NOTICE = NOTICE
+	EndProjectSection
+EndProject
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,23 +22,23 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{BAA06077-152B-44AA-BB5E-7055BE055368}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{BAA06077-152B-44AA-BB5E-7055BE055368}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{BAA06077-152B-44AA-BB5E-7055BE055368}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{BAA06077-152B-44AA-BB5E-7055BE055368}.Release|Any CPU.Build.0 = Release|Any CPU
-		{265EB0AA-24CA-4C32-8337-D887338DFBE7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{265EB0AA-24CA-4C32-8337-D887338DFBE7}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{265EB0AA-24CA-4C32-8337-D887338DFBE7}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{265EB0AA-24CA-4C32-8337-D887338DFBE7}.Release|Any CPU.Build.0 = Release|Any CPU
-		{31CF6E19-F5F4-45B1-9088-B1F3BB63A625}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{31CF6E19-F5F4-45B1-9088-B1F3BB63A625}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{31CF6E19-F5F4-45B1-9088-B1F3BB63A625}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{31CF6E19-F5F4-45B1-9088-B1F3BB63A625}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2A51CE00-5EB2-4DD4-81BA-79A36EA39DC9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2A51CE00-5EB2-4DD4-81BA-79A36EA39DC9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2A51CE00-5EB2-4DD4-81BA-79A36EA39DC9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2A51CE00-5EB2-4DD4-81BA-79A36EA39DC9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0F2668D7-F24F-4EAD-BA1F-A964C033A97C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0F2668D7-F24F-4EAD-BA1F-A964C033A97C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0F2668D7-F24F-4EAD-BA1F-A964C033A97C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0F2668D7-F24F-4EAD-BA1F-A964C033A97C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{10188A1F-9388-4214-A4F7-A1C52B7EC1DA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{10188A1F-9388-4214-A4F7-A1C52B7EC1DA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{10188A1F-9388-4214-A4F7-A1C52B7EC1DA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{10188A1F-9388-4214-A4F7-A1C52B7EC1DA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {08998275-91B6-4845-8C1A-6D6034521CFE}
+		SolutionGuid = {E485C498-F0FB-4E3A-A9B0-ADF72DD68840}
 	EndGlobalSection
 EndGlobal
