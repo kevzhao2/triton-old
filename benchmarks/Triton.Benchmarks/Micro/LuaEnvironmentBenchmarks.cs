@@ -33,34 +33,34 @@ namespace Triton.Benchmarks.Micro
         {
             // Pad the global names so that the string sizes match.
             //
-            _environment["boolean"] = true;
-            _environment["integer"] = 1234;
-            _environment["number "] = 1.234;
-            _environment["string "] = "test";
+            _environment.SetGlobal("boolean", true);
+            _environment.SetGlobal("integer", 1234);
+            _environment.SetGlobal("number ", 1.234);
+            _environment.SetGlobal("string ", "test");
         }
 
         [Benchmark]
-        public LuaValue GetGlobal_Boolean() => _environment["boolean"];
+        public bool GetGlobal_Boolean()  => (bool)_environment.GetGlobal("boolean");
 
         [Benchmark]
-        public LuaValue GetGlobal_Integer() => _environment["integer"];
+        public long GetGlobal_Integer()  => (long)_environment.GetGlobal("integer");
 
         [Benchmark]
-        public LuaValue GetGlobal_Number() => _environment["number "];
+        public double GetGlobal_Number() => (double)_environment.GetGlobal("number ");
 
         [Benchmark]
-        public LuaValue GetGlobal_String() => _environment["string "];
+        public string GetGlobal_String() => (string)_environment.GetGlobal("string ");
 
         [Benchmark]
-        public void SetGlobal_Boolean() => _environment["boolean"] = true;
+        public void SetGlobal_Boolean() => _environment.SetGlobal("boolean", true);
 
         [Benchmark]
-        public void SetGlobal_Integer() => _environment["integer"] = 1234;
+        public void SetGlobal_Integer() => _environment.SetGlobal("integer", 1234);
 
         [Benchmark]
-        public void SetGlobal_Number() => _environment["number "] = 1.234;
+        public void SetGlobal_Number()  => _environment.SetGlobal("number ", 1.234);
 
         [Benchmark]
-        public void SetGlobal_String() => _environment["string "] = "test";
+        public void SetGlobal_String()  => _environment.SetGlobal("string ", "test");
     }
 }

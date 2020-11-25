@@ -114,7 +114,16 @@ namespace Triton
         #region Lua stack manipulation
 
         /// <summary>
-        /// Sets the top of the stack to the given index.
+        /// Gets the top index of the stack.
+        /// </summary>
+        /// <param name="L">The Lua state.</param>
+        /// <returns>The top index of the stack.</returns>
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern int lua_gettop(lua_State* L);
+
+        /// <summary>
+        /// Sets the top index of the stack.
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="idx">The index to set the top of the stack to.</param>
@@ -294,30 +303,22 @@ namespace Triton
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="idx">The index of the value to get.</param>
+        /// <param name="isnum">A pointer to a value which will indicate whether the value is an integer.</param>
         /// <returns>The integer value at the index on the stack.</returns>
-        public static long lua_tointeger(lua_State* L, int idx)
-        {
-            return lua_tointegerx(L, idx, null);
-
-            [SuppressGCTransition]
-            [DllImport("lua54", CallingConvention = Cdecl)]
-            static extern int lua_tointegerx(lua_State* L, int idx, int* isnum);
-        }
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern long lua_tointegerx(lua_State* L, int idx, bool* isnum);
 
         /// <summary>
         /// Gets the number value at the given index on the stack.
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="idx">The index of the value to get.</param>
+        /// <param name="isnum">A pointer to a value which will indicate whether the value is a number.</param>
         /// <returns>The number value at the index on the stack.</returns>
-        public static double lua_tonumber(lua_State* L, int idx)
-        {
-            return lua_tonumberx(L, idx, null);
-
-            [SuppressGCTransition]
-            [DllImport("lua54", CallingConvention = Cdecl)]
-            static extern double lua_tonumberx(lua_State* L, int idx, int* isnum);
-        }
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern double lua_tonumberx(lua_State* L, int idx, bool* isnum);
 
         /// <summary>
         /// Gets the string value at the given index on the stack.
@@ -343,6 +344,16 @@ namespace Triton
 
             return Encoding.UTF8.GetString(bytes, (int)len);
         }
+
+        /// <summary>
+        /// Gets the userdata value at the given index on the stack.
+        /// </summary>
+        /// <param name="L">The Lua state.</param>
+        /// <param name="idx">The index of the value to get.</param>
+        /// <returns>The userdata value at the index on the stack.</returns>
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern void* lua_touserdata(lua_State* L, int idx);
 
         #endregion
 
@@ -415,6 +426,20 @@ namespace Triton
             [SuppressGCTransition]
             [DllImport("lua54", CallingConvention = Cdecl)]
             static extern void lua_setglobal(lua_State* L, byte* name);
+        }
+
+        #endregion
+
+        #region Lua helpers
+
+        /// <summary>
+        /// Loads a string as a function, pushing it onto the Lua stack.
+        /// </summary>
+        /// <param name="L">The Lua state.</param>
+        /// <param name="s">The string to load as a function.</param>
+        public static void luaL_loadstring(lua_State* L, string s)
+        {
+
         }
 
         #endregion

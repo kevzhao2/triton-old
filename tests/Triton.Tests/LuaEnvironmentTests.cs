@@ -26,19 +26,39 @@ namespace Triton
     public class LuaEnvironmentTests
     {
         [Fact]
-        public void Item_Get_NullName_ThrowsArgumentNullException()
+        public void GetGlobal_NullName_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();
 
-            Assert.Throws<ArgumentNullException>(() => environment[null!]);
+            Assert.Throws<ArgumentNullException>(() => environment.GetGlobal(null!));
         }
 
         [Fact]
-        public void Item_Set_NullName_ThrowsArgumentNullException()
+        public void SetGlobal_NullName_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();
 
-            Assert.Throws<ArgumentNullException>(() => environment[null!] = 1234);
+            Assert.Throws<ArgumentNullException>(() => environment.SetGlobal(null!, 1234));
+        }
+
+        [Fact]
+        public void SetGlobal_GetGlobal_Boolean()
+        {
+            using var environment = new LuaEnvironment();
+
+            environment.SetGlobal("boolean", true);
+
+            Assert.True((bool)environment.GetGlobal("boolean"));
+        }
+
+        [Fact]
+        public void SetGlobal_GetGlobal_Integer()
+        {
+            using var environment = new LuaEnvironment();
+
+            environment.SetGlobal("boolean", 1234);
+
+            Assert.Equal(1234, (long)environment.GetGlobal("boolean"));
         }
     }
 }

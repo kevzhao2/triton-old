@@ -55,39 +55,44 @@ namespace Triton
         }
 
         /// <summary>
-        /// Gets or sets the value of the global with the given name.
+        /// Gets the value of the global with the given name.
         /// </summary>
-        /// <param name="name">The name of the global whose value to get or set.</param>
+        /// <param name="name">The name of the global to get.</param>
+        /// <returns>The value of the global with the name.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
-        public LuaValue this[string name]
+        public LuaResult GetGlobal(string name)
         {
-            get
+            if (name is null)
             {
-                if (name is null)
-                {
-                    ThrowHelper.ThrowArgumentNullException(nameof(name));
-                }
-
-                ThrowIfDisposed();
-
-                var type = lua_getglobal(_state, name);
-                var value = LuaValue.From(_state, -1, type);
-                lua_pop(_state, 1);  // pop value off of the stack
-                return value;
+                ThrowHelper.ThrowArgumentNullException(nameof(name));
             }
 
-            set
+            ThrowIfDisposed();
+
+            // Reset the top of the stack so that the global is at idx 1.
+            //
+            lua_settop(_state, 0);
+
+            _ = lua_getglobal(_state, name);
+            return new(_state, 1);
+        }
+
+        /// <summary>
+        /// Sets the value of the global with the given name.
+        /// </summary>
+        /// <param name="name">The name of the global to set.</param>
+        /// <param name="value">The value to set the global to.</param>
+        public void SetGlobal(string name, in LuaArgument value)
+        {
+            if (name is null)
             {
-                if (name is null)
-                {
-                    ThrowHelper.ThrowArgumentNullException(nameof(name));
-                }
-
-                ThrowIfDisposed();
-
-                value.Push(_state);
-                lua_setglobal(_state, name);
+                ThrowHelper.ThrowArgumentNullException(nameof(name));
             }
+
+            ThrowIfDisposed();
+
+            value.Push(_state);
+            lua_setglobal(_state, name);
         }
 
         /// <inheritdoc/>
@@ -99,10 +104,8 @@ namespace Triton
             }
 
             // Cleanup must be done in a very specific order:
-            // - The `GCHandle` allocated in the constructor must be retrieved prior to closing the state, as otherwise
-            //   the handle would be lost.
-            // - The state must then be closed, as doing so will call `__gc` metamethods which might depend on the
-            //   handle remaining valid.
+            // - We must retrieve the `GCHandle` in the extra space portion of the Lua state prior to closing the state.
+            // - We must close the state prior to freeing the handle (since the `__gc` metamethods depend on it).
             //
             var handle = GCHandle.FromIntPtr(*(IntPtr*)lua_getextraspace(_state));
             lua_close(_state);
