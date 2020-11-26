@@ -62,5 +62,8 @@ namespace Triton.Benchmarks.Micro
 
         [Benchmark]
         public void SetGlobal_String()  => _environment.SetGlobal("string ", "test");
+
+        [Benchmark]
+        public void Eval() => _environment.Eval("return");
     }
 }

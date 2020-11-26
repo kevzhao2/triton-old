@@ -19,6 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using static Triton.NativeMethods;
@@ -26,7 +27,7 @@ using static Triton.NativeMethods;
 namespace Triton
 {
     /// <summary>
-    /// Represents a managed Lua environment. This is the entrypoint for embedding Lua into a CLR application.
+    /// Represents a managed Lua environment. This class is the entrypoint for embedding Lua into a CLR application.
     /// 
     /// <para/>
     /// 
@@ -58,7 +59,7 @@ namespace Triton
         /// Gets the value of the global with the given name.
         /// </summary>
         /// <param name="name">The name of the global to get.</param>
-        /// <returns>The value of the global with the name.</returns>
+        /// <returns>The value of the global.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
         public LuaResult GetGlobal(string name)
         {
@@ -69,7 +70,7 @@ namespace Triton
 
             ThrowIfDisposed();
 
-            // Reset the top of the stack so that the global is at idx 1.
+            // Reset the top of the stack so that the value will be at idx 1.
             //
             lua_settop(_state, 0);
 
@@ -93,6 +94,31 @@ namespace Triton
 
             value.Push(_state);
             lua_setglobal(_state, name);
+        }
+
+        /// <summary>
+        /// Evaluates the Lua chunk.
+        /// </summary>
+        /// <param name="chunk">The Lua chunk to evaluate.</param>
+        /// <returns>The results.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="chunk"/> is <see langword="null"/>.</exception>
+        /// <exception cref="LuaLoadException">The evaluation results in a Lua load error.</exception>
+        /// <exception cref="LuaRuntimeException">The evaluation results in a Lua runtime error.</exception>
+        public LuaResults Eval(string chunk)
+        {
+            if (chunk is null)
+            {
+                ThrowHelper.ThrowArgumentNullException(nameof(chunk));
+            }
+
+            ThrowIfDisposed();
+
+            // Reset the top of the stack so that the results will begin at idx 1.
+            //
+            lua_settop(_state, 0);
+
+            luaL_loadstring(_state, chunk);
+            return lua_pcall(_state, 0, -1);
         }
 
         /// <inheritdoc/>
@@ -121,6 +147,7 @@ namespace Triton
                 ThrowObjectDisposedException();
             }
 
+            [DebuggerStepThrough]
             [DoesNotReturn]
             static void ThrowObjectDisposedException() => throw new ObjectDisposedException(nameof(LuaEnvironment));
         }

@@ -19,6 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Triton
@@ -32,6 +33,7 @@ namespace Triton
         /// Throws an <see cref="ArgumentNullException"/> with the given parameter name.
         /// </summary>
         /// <param name="paramName">The parameter name.</param>
+        [DebuggerStepThrough]
         [DoesNotReturn]
         public static void ThrowArgumentNullException(string paramName) =>
             throw new ArgumentNullException(paramName);
@@ -39,6 +41,7 @@ namespace Triton
         /// <summary>
         /// Throws an <see cref="InvalidCastException"/>.
         /// </summary>
+        [DebuggerStepThrough]
         [DoesNotReturn]
         public static void ThrowInvalidCastException() =>
             throw new InvalidCastException();

@@ -19,6 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -77,24 +78,24 @@ namespace Triton
         public static extern lua_State* luaL_newstate();
 
         /// <summary>
-        /// Opens the standard Lua libraries in the given Lua state.
+        /// Opens the standard Lua libraries in the Lua state.
         /// </summary>
         /// <param name="L">The Lua state.</param>
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern void luaL_openlibs(lua_State* L);
 
         /// <summary>
-        /// Gets a pointer to the extra space portion of the given Lua state.
+        /// Gets a pointer to the extra space portion of the Lua state.
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <returns>A pointer to the extra space portion of the Lua state.</returns>
         public static void* lua_getextraspace(lua_State* L) => (void*)((IntPtr)L - IntPtr.Size);
 
         /// <summary>
-        /// Gets the environment associated with the given Lua state.
+        /// Gets the environment associated with the Lua state.
         /// </summary>
         /// <param name="L">The Lua state.</param>
-        /// <returns>The environment associated with the Lua state</returns>
+        /// <returns>The environment associated with the Lua state.</returns>
         public static LuaEnvironment lua_getenvironment(lua_State* L)
         {
             var handle = GCHandle.FromIntPtr(*(IntPtr*)lua_getextraspace(L));
@@ -374,22 +375,28 @@ namespace Triton
                 var bytes = stackalloc byte[bufferSize];
                 fixed (char* chars = name)
                 {
-                    _ = Encoding.UTF8.GetBytes(chars, name.Length, bytes, bufferSize);
+                    var length = Encoding.UTF8.GetBytes(chars, name.Length, bytes, bufferSize);
+                    bytes[length] = 0;
                     return lua_getglobal(L, bytes);
                 }
             }
             else
             {
-                var arr = Encoding.UTF8.GetBytes(name);
-                fixed (byte* bytes = arr)
-                {
-                    return lua_getglobal(L, bytes);
-                }
+                return SlowPath(L, name);
             }
 
             [SuppressGCTransition]
             [DllImport("lua54", CallingConvention = Cdecl)]
             static extern int lua_getglobal(lua_State* L, byte* name);
+
+            static int SlowPath(lua_State* L, string name)
+            {
+                var arr = Encoding.UTF8.GetBytes(name + '\0');
+                fixed (byte* bytes = arr)
+                {
+                    return lua_getglobal(L, bytes);
+                }
+            }
         }
 
         #endregion
@@ -439,7 +446,72 @@ namespace Triton
         /// <param name="s">The string to load as a function.</param>
         public static void luaL_loadstring(lua_State* L, string s)
         {
+            const int bufferSize = 1024;
 
+            if (s.Length < bufferSize / 3)
+            {
+                var bytes = stackalloc byte[bufferSize];
+                fixed (char* chars = s)
+                {
+                    var length = Encoding.UTF8.GetBytes(chars, s.Length, bytes, bufferSize);
+                    bytes[length] = 0;
+
+                    if (luaL_loadstring(L, bytes) is not LUA_OK)
+                    {
+                        var message = lua_tostring(L, -1);
+                        ThrowLuaLoadException(message);
+                    }
+                }
+            }
+            else
+            {
+                SlowPath(L, s);
+            }
+
+            static void SlowPath(lua_State* L, string s)
+            {
+                var arr = Encoding.UTF8.GetBytes(s + '\0');
+                fixed (byte* bytes = arr)
+                {
+                    if (luaL_loadstring(L, bytes) is not LUA_OK)
+                    {
+                        var message = lua_tostring(L, -1);
+                        ThrowLuaLoadException(message);
+                    }
+                }
+            }
+
+            [DllImport("lua54", CallingConvention = Cdecl)]
+            static extern int luaL_loadstring(lua_State* L, byte* s);
+
+            [DebuggerStepThrough]
+            [DoesNotReturn]
+            static void ThrowLuaLoadException(string message) => throw new LuaLoadException(message);
+        }
+
+        /// <summary>
+        /// Calls a function on the stack with the number of arguments and results.
+        /// </summary>
+        /// <param name="L">The Lua state.</param>
+        /// <param name="nargs">The number of arguments.</param>
+        /// <param name="nresults">The number of results.</param>
+        /// <returns>The results of the call.</returns>
+        public static LuaResults lua_pcall(lua_State* L, int nargs, int nresults)
+        {
+            if (lua_pcallk(L, nargs, nresults, 0, null, null) is not LUA_OK)
+            {
+                var message = lua_tostring(L, -1);
+                ThrowLuaRuntimeException(message);
+            }
+
+            return new(L);
+
+            [DllImport("lua54", CallingConvention = Cdecl)]
+            static extern int lua_pcallk(lua_State* L, int nargs, int nresults, int msgh, void* ctx, void* k);
+
+            [DebuggerStepThrough]
+            [DoesNotReturn]
+            static void ThrowLuaRuntimeException(string message) => throw new LuaRuntimeException(message);
         }
 
         #endregion

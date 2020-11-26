@@ -56,9 +56,217 @@ namespace Triton
         {
             using var environment = new LuaEnvironment();
 
-            environment.SetGlobal("boolean", 1234);
+            environment.SetGlobal("integer", 1234);
 
-            Assert.Equal(1234, (long)environment.GetGlobal("boolean"));
+            Assert.Equal(1234, (long)environment.GetGlobal("integer"));
+        }
+
+        [Fact]
+        public void SetGlobal_GetGlobal_Number()
+        {
+            using var environment = new LuaEnvironment();
+
+            environment.SetGlobal("number", 1.234);
+
+            Assert.Equal(1.234, (double)environment.GetGlobal("number"));
+        }
+
+        [Fact]
+        public void SetGlobal_GetGlobal_String()
+        {
+            using var environment = new LuaEnvironment();
+
+            environment.SetGlobal("string", "test");
+
+            Assert.Equal("test", (string)environment.GetGlobal("string"));
+        }
+
+        [Fact]
+        public void Eval_NullChunk_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<ArgumentNullException>(() => environment.Eval(null!));
+        }
+
+        [Fact]
+        public void Eval_LuaLoadError_ThrowsLuaLoadException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<LuaLoadException>(() => environment.Eval("retur"));
+        }
+
+        [Fact]
+        public void Eval_LuaRuntimeError_ThrowsLuaRuntimeException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<LuaRuntimeException>(() => environment.Eval("error('test')"));
+        }
+
+        [Fact]
+        public void Eval_BooleanResult()
+        {
+            using var environment = new LuaEnvironment();
+
+            var result = environment.Eval("return true");
+
+            Assert.Equal(LuaResultType.Boolean, result.Type);
+            Assert.True((bool)result);
+        }
+
+        [Fact]
+        public void Eval_IntegerResult()
+        {
+            using var environment = new LuaEnvironment();
+
+            var result = environment.Eval("return 1234");
+
+            Assert.Equal(LuaResultType.Integer, result.Type);
+            Assert.Equal(1234, (long)result);
+        }
+
+        [Fact]
+        public void Eval_NumberResult()
+        {
+            using var environment = new LuaEnvironment();
+
+            var result = environment.Eval("return 1.234");
+
+            Assert.Equal(LuaResultType.Number, result.Type);
+            Assert.Equal(1.234, (double)result);
+        }
+
+        [Fact]
+        public void Eval_StringResult()
+        {
+            using var environment = new LuaEnvironment();
+
+            var result = environment.Eval("return 'test'");
+
+            Assert.Equal(LuaResultType.String, result.Type);
+            Assert.Equal("test", (string)result);
+        }
+
+        [Fact]
+        public void Eval_NoResult()
+        {
+            using var environment = new LuaEnvironment();
+
+            var result = environment.Eval("return");
+
+            Assert.Equal(LuaResultType.Nil, result.Type);
+        }
+
+        [Fact]
+        public void Eval_OneResult()
+        {
+            using var environment = new LuaEnvironment();
+
+            var result = environment.Eval("return 1");
+
+            Assert.Equal(1, (long)result);
+        }
+
+        [Fact]
+        public void Eval_TwoResults()
+        {
+            using var environment = new LuaEnvironment();
+
+            var (result, result2) = environment.Eval("return 1, 2");
+
+            Assert.Equal(1, (long)result);
+            Assert.Equal(2, (long)result2);
+        }
+
+        [Fact]
+        public void Eval_ThreeResults()
+        {
+            using var environment = new LuaEnvironment();
+
+            var (result, result2, result3) = environment.Eval("return 1, 2, 3");
+
+            Assert.Equal(1, (long)result);
+            Assert.Equal(2, (long)result2);
+            Assert.Equal(3, (long)result3);
+        }
+
+        [Fact]
+        public void Eval_FourResults()
+        {
+            using var environment = new LuaEnvironment();
+
+            var (result, result2, result3, result4) = environment.Eval("return 1, 2, 3, 4");
+
+            Assert.Equal(1, (long)result);
+            Assert.Equal(2, (long)result2);
+            Assert.Equal(3, (long)result3);
+            Assert.Equal(4, (long)result4);
+        }
+
+        [Fact]
+        public void Eval_FiveResults()
+        {
+            using var environment = new LuaEnvironment();
+
+            var (result, result2, result3, result4, result5) = environment.Eval("return 1, 2, 3, 4, 5");
+
+            Assert.Equal(1, (long)result);
+            Assert.Equal(2, (long)result2);
+            Assert.Equal(3, (long)result3);
+            Assert.Equal(4, (long)result4);
+            Assert.Equal(5, (long)result5);
+        }
+
+        [Fact]
+        public void Eval_SixResults()
+        {
+            using var environment = new LuaEnvironment();
+
+            var (result, result2, result3, result4, result5, result6) = environment.Eval("return 1, 2, 3, 4, 5, 6");
+
+            Assert.Equal(1, (long)result);
+            Assert.Equal(2, (long)result2);
+            Assert.Equal(3, (long)result3);
+            Assert.Equal(4, (long)result4);
+            Assert.Equal(5, (long)result5);
+            Assert.Equal(6, (long)result6);
+        }
+
+        [Fact]
+        public void Eval_SevenResults()
+        {
+            using var environment = new LuaEnvironment();
+
+            var (result, result2, result3, result4, result5, result6, result7) =
+                environment.Eval("return 1, 2, 3, 4, 5, 6, 7");
+
+            Assert.Equal(1, (long)result);
+            Assert.Equal(2, (long)result2);
+            Assert.Equal(3, (long)result3);
+            Assert.Equal(4, (long)result4);
+            Assert.Equal(5, (long)result5);
+            Assert.Equal(6, (long)result6);
+            Assert.Equal(7, (long)result7);
+        }
+
+        [Fact]
+        public void Eval_EightResults()
+        {
+            using var environment = new LuaEnvironment();
+
+            var (result, result2, result3, result4, result5, result6, result7, result8) =
+                environment.Eval("return 1, 2, 3, 4, 5, 6, 7, 8");
+
+            Assert.Equal(1, (long)result);
+            Assert.Equal(2, (long)result2);
+            Assert.Equal(3, (long)result3);
+            Assert.Equal(4, (long)result4);
+            Assert.Equal(5, (long)result5);
+            Assert.Equal(6, (long)result6);
+            Assert.Equal(7, (long)result7);
+            Assert.Equal(8, (long)result8);
         }
     }
 }

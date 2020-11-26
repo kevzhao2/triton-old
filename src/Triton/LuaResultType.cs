@@ -26,7 +26,7 @@ namespace Triton
     public enum LuaResultType
     {
         /// <summary>
-        /// Indicates the <see langword="nil"/> result.
+        /// Indicates a <see langword="nil"/> result.
         /// </summary>
         Nil,
 

@@ -27,11 +27,12 @@ using static Triton.NativeMethods;
 namespace Triton
 {
     /// <summary>
-    /// Represents the argument of a Lua access as a tagged union. This structure is ephemeral.
+    /// Represents the argument of a Lua access as a tagged union. This structure is intended to be ephemeral.
     /// </summary>
     [StructLayout(LayoutKind.Explicit)]
     public readonly ref struct LuaArgument
     {
+        // TODO: optimize by including tags for string, etc
         private enum Tag
         {
             Boolean,
@@ -43,13 +44,11 @@ namespace Triton
         private static readonly StrongBox<Tag> _integerTag = new(Tag.Integer);
         private static readonly StrongBox<Tag> _numberTag  = new(Tag.Number);
 
-        [FieldOffset(0)] private readonly bool  _boolean;
-        [FieldOffset(0)] private readonly long  _integer;
-        [FieldOffset(0)] private readonly double _number;
+        [FieldOffset(0)] private readonly bool    _boolean;
+        [FieldOffset(0)] private readonly long    _integer;
+        [FieldOffset(0)] private readonly double  _number;
 
-        [FieldOffset(8)] private readonly object?         _tagOrObject;
-        [FieldOffset(8)] private readonly StrongBox<Tag>? _tag;
-        [FieldOffset(8)] private readonly string?         _string;
+        [FieldOffset(8)] private readonly object? _tagOrObject;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private LuaArgument(bool boolean)
@@ -58,9 +57,7 @@ namespace Triton
             Unsafe.SkipInit(out _integer);
             Unsafe.SkipInit(out _number);
 
-            Unsafe.SkipInit(out _tagOrObject);
-            _tag = _booleanTag;
-            Unsafe.SkipInit(out _string);
+            _tagOrObject = _booleanTag;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -70,9 +67,7 @@ namespace Triton
             _integer = integer;
             Unsafe.SkipInit(out _number);
 
-            Unsafe.SkipInit(out _tagOrObject);
-            _tag = _integerTag;
-            Unsafe.SkipInit(out _string);
+            _tagOrObject = _integerTag;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -82,21 +77,17 @@ namespace Triton
             Unsafe.SkipInit(out _integer);
             _number = number;
 
-            Unsafe.SkipInit(out _tagOrObject);
-            _tag = _numberTag;
-            Unsafe.SkipInit(out _string);
+            _tagOrObject = _numberTag;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private LuaArgument(string? str)
+        private LuaArgument(object? obj)
         {
             Unsafe.SkipInit(out _boolean);
             Unsafe.SkipInit(out _integer);
             Unsafe.SkipInit(out _number);
 
-            Unsafe.SkipInit(out _tagOrObject);
-            Unsafe.SkipInit(out _tag);
-            _string = str;
+            _tagOrObject = obj;
         }
 
         /// <summary>
@@ -105,48 +96,84 @@ namespace Triton
         public static LuaArgument Nil => default;
 
         /// <summary>
-        /// Creates an argument from the given boolean.
+        /// Converts an object into an argument.
         /// </summary>
-        /// <param name="boolean">The boolean.</param>
+        /// <param name="obj">The object to convert.</param>
+        /// <returns>The resulting argument.</returns>
+        public static LuaArgument FromObject(object? obj) =>
+            obj switch
+            {
+                null                 => Nil,
+                bool        boolean  => FromBoolean(boolean),
+                sbyte       integer  => FromInteger(integer),
+                byte        integer  => FromInteger(integer),
+                short       integer  => FromInteger(integer),
+                ushort      integer  => FromInteger(integer),
+                long        integer  => FromInteger(integer),
+                ulong       integer  => FromInteger((long)integer),
+                float       number   => FromNumber(number),
+                double      number   => FromNumber(number),
+                char        chr      => FromString(chr.ToString()),
+                string      str      => FromString(str),
+                LuaTable    table    => FromTable(table),
+                LuaFunction function => FromFunction(function),
+                LuaThread   thread   => FromThread(thread),
+                _                    => FromClrObject(obj)
+            };
+
+        /// <inheritdoc cref="implicit operator LuaArgument(bool)"/>
         /// <returns>The resulting argument.</returns>
         public static LuaArgument FromBoolean(bool boolean) => new(boolean);
 
-        /// <summary>
-        /// Creates an argument from the given integer.
-        /// </summary>
-        /// <param name="integer">The integer.</param>
+        /// <inheritdoc cref="implicit operator LuaArgument(long)"/>
         /// <returns>The resulting argument.</returns>
         public static LuaArgument FromInteger(long integer) => new(integer);
 
-        /// <summary>
-        /// Creates an argument from the given number.
-        /// </summary>
-        /// <param name="number">The number.</param>
+        /// <inheritdoc cref="implicit operator LuaArgument(double)"/>
         /// <returns>The resulting argument.</returns>
         public static LuaArgument FromNumber(double number) => new(number);
 
-        /// <summary>
-        /// Creates an argument from the given string.
-        /// </summary>
-        /// <param name="str">The string.</param>
+        /// <inheritdoc cref="implicit operator LuaArgument(string)"/>
         /// <returns>The resulting argument.</returns>
         public static LuaArgument FromString(string? str) => new(str);
 
+        /// <inheritdoc cref="implicit operator LuaArgument(LuaTable)"/>
+        /// <returns>The resulting argument.</returns>
+        public static LuaArgument FromTable(LuaTable? table) => new(table);
+
+        /// <inheritdoc cref="implicit operator LuaArgument(LuaFunction)"/>
+        /// <returns>The resulting argument.</returns>
+        public static LuaArgument FromFunction(LuaFunction? function) => new(function);
+
+        /// <inheritdoc cref="implicit operator LuaArgument(LuaThread)"/>
+        /// <returns>The resulting argument.</returns>
+        public static LuaArgument FromThread(LuaThread? thread) => new(thread);
+
+        /// <summary>
+        /// Converts a CLR object into an argument.
+        /// </summary>
+        /// <param name="obj">The CLR object to convert.</param>
+        /// <returns>The resulting argument.</returns>
+        public static LuaArgument FromClrObject(object obj) => new(obj);
+
         internal unsafe void Push(lua_State* state)
         {
-            if (_tagOrObject is null)
+            var tagOrObject = _tagOrObject;
+
+            if (tagOrObject is null)
             {
                 lua_pushnil(state);
             }
-            else if (_tagOrObject.GetType() == typeof(StrongBox<Tag>))
+            else if (tagOrObject.GetType() == typeof(StrongBox<Tag>))
             {
-                Debug.Assert(_tag is { Value: >= Tag.Boolean and <= Tag.Number });
+                var tag = Unsafe.As<object, StrongBox<Tag>>(ref tagOrObject);  // optimal cast, should be safe
+                Debug.Assert(tag is { Value: >= Tag.Boolean and <= Tag.Number });
 
-                if (_tag.Value == Tag.Boolean)
+                if (tag.Value == Tag.Boolean)
                 {
                     lua_pushboolean(state, _boolean);
                 }
-                else if (_tag.Value == Tag.Integer)
+                else if (tag.Value == Tag.Integer)
                 {
                     lua_pushinteger(state, _integer);
                 }
@@ -155,21 +182,22 @@ namespace Triton
                     lua_pushnumber(state, _number);
                 }
             }
-            else if (_tagOrObject.GetType() == typeof(string))
+            else if (tagOrObject.GetType() == typeof(string))
             {
-                Debug.Assert(_string is { });
+                var str = Unsafe.As<object, string>(ref tagOrObject);  // optimal cast, should be safe
+                Debug.Assert(str is { });
 
-                lua_pushstring(state, _string);
+                lua_pushstring(state, str);
             }
-            else if (_tagOrObject.GetType() == typeof(LuaTable))
+            else if (tagOrObject.GetType() == typeof(LuaTable))
             {
                 throw new NotImplementedException();
             }
-            else if (_tagOrObject.GetType() == typeof(LuaFunction))
+            else if (tagOrObject.GetType() == typeof(LuaFunction))
             {
                 throw new NotImplementedException();
             }
-            else if (_tagOrObject.GetType() == typeof(LuaThread))
+            else if (tagOrObject.GetType() == typeof(LuaThread))
             {
                 throw new NotImplementedException();
             }
@@ -180,27 +208,45 @@ namespace Triton
         }
 
         /// <summary>
-        /// Converts the boolean into an argument.
+        /// Converts a boolean into an argument.
         /// </summary>
         /// <param name="boolean">The boolean to convert.</param>
         public static implicit operator LuaArgument(bool boolean) => FromBoolean(boolean);
 
         /// <summary>
-        /// Converts the integer into an argument.
+        /// Converts an integer into an argument.
         /// </summary>
         /// <param name="integer">The integer to convert.</param>
         public static implicit operator LuaArgument(long integer) => FromInteger(integer);
 
         /// <summary>
-        /// Converts the number into an argument.
+        /// Converts a number into an argument.
         /// </summary>
         /// <param name="number">The number to convert.</param>
         public static implicit operator LuaArgument(double number) => FromNumber(number);
 
         /// <summary>
-        /// Converts the string into an argument.
+        /// Converts a string into an argument.
         /// </summary>
         /// <param name="str">The string to convert.</param>
         public static implicit operator LuaArgument(string? str) => FromString(str);
+
+        /// <summary>
+        /// Converts a table into an argument.
+        /// </summary>
+        /// <param name="table">The table to convert.</param>
+        public static implicit operator LuaArgument(LuaTable? table) => FromTable(table);
+
+        /// <summary>
+        /// Converts a function into an argument.
+        /// </summary>
+        /// <param name="function">The function to convert.</param>
+        public static implicit operator LuaArgument(LuaFunction? function) => FromFunction(function);
+
+        /// <summary>
+        /// Converts a thread into an argument.
+        /// </summary>
+        /// <param name="thread">The thread to convert.</param>
+        public static implicit operator LuaArgument(LuaThread? thread) => FromThread(thread);
     }
 }
