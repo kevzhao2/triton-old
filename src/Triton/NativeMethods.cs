@@ -29,7 +29,7 @@ using static System.Runtime.InteropServices.CallingConvention;
 namespace Triton
 {
     /// <summary>
-    /// An opaque structure representing a Lua state.
+    /// Represents a Lua state as an opaque structure.
     /// </summary>
     [SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "Naming consistency")]
     internal struct lua_State
@@ -88,14 +88,14 @@ namespace Triton
         /// Gets a pointer to the extra space portion of the Lua state.
         /// </summary>
         /// <param name="L">The Lua state.</param>
-        /// <returns>A pointer to the extra space portion of the Lua state.</returns>
+        /// <returns>A pointer to the extra space portion.</returns>
         public static void* lua_getextraspace(lua_State* L) => (void*)((IntPtr)L - IntPtr.Size);
 
         /// <summary>
         /// Gets the environment associated with the Lua state.
         /// </summary>
         /// <param name="L">The Lua state.</param>
-        /// <returns>The environment associated with the Lua state.</returns>
+        /// <returns>The associated environment.</returns>
         public static LuaEnvironment lua_getenvironment(lua_State* L)
         {
             var handle = GCHandle.FromIntPtr(*(IntPtr*)lua_getextraspace(L));
@@ -104,7 +104,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Closes the given Lua state.
+        /// Closes the Lua state.
         /// </summary>
         /// <param name="L">The Lua state.</param>
         [DllImport("lua54", CallingConvention = Cdecl)]
@@ -140,7 +140,7 @@ namespace Triton
         public static void lua_pop(lua_State* L, int n) => lua_settop(L, -n - 1);
 
         /// <summary>
-        /// Rotates the values on the stack from the given index to the top by the given number of positions.
+        /// Rotates the values on the stack from the given index to the top by a number of positions.
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="idx">The index to the start the rotation at.</param>
@@ -173,7 +173,7 @@ namespace Triton
         public static extern void lua_pushnil(lua_State* L);
 
         /// <summary>
-        /// Pushes the given boolean onto the stack.
+        /// Pushes a boolean onto the stack.
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="b">The boolean to push onto the stack.</param>
@@ -188,7 +188,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Pushes the given integer onto the stack.
+        /// Pushes an integer onto the stack.
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="n">The integer to push onto the stack.</param>
@@ -197,7 +197,7 @@ namespace Triton
         public static extern void lua_pushinteger(lua_State* L, long n);
 
         /// <summary>
-        /// Pushes the given number onto the stack.
+        /// Pushes a number onto the stack.
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="n">The number to push onto the stack.</param>
@@ -206,7 +206,7 @@ namespace Triton
         public static extern void lua_pushnumber(lua_State* L, double n);
 
         /// <summary>
-        /// Pushes the given string onto the stack.
+        /// Pushes a string onto the stack.
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="s">The string to push onto the stack.</param>
@@ -225,6 +225,13 @@ namespace Triton
             }
             else
             {
+                SlowPath(L, s);
+            }
+
+            return;
+
+            static void SlowPath(lua_State* L, string s)
+            {
                 var arr = Encoding.UTF8.GetBytes(s);
                 fixed (byte* bytes = arr)
                 {
@@ -232,14 +239,12 @@ namespace Triton
                 }
             }
 
-            return;
-
             [DllImport("lua54", CallingConvention = Cdecl)]
             static extern void lua_pushlstring(lua_State* L, byte* s, nuint len);
         }
 
         /// <summary>
-        /// Pushes the given C closure onto the stack with the given number of upvalues.
+        /// Pushes a C closure onto the stack with the given number of upvalues.
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="fn">The C closure to push onto the stack.</param>
@@ -249,7 +254,7 @@ namespace Triton
         public static extern void lua_pushcclosure(lua_State* L, delegate* unmanaged[Cdecl]<lua_State*, int> fn, int n);
 
         /// <summary>
-        /// Pushes the given C function onto the stack.
+        /// Pushes a C function onto the stack.
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="fn">The C function to push onto the stack.</param>
@@ -264,7 +269,7 @@ namespace Triton
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="idx">The index of the value to check.</param>
-        /// <returns>The type of the value at the index on the stack.</returns>
+        /// <returns>The type of the value.</returns>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern int lua_type(lua_State* L, int idx);
@@ -274,7 +279,7 @@ namespace Triton
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="idx">The index of the value to check.</param>
-        /// <returns><see langword="true"/> if the value at the index on the stack is an integer; otherwise, <see langword="false"/>.</returns>
+        /// <returns><see langword="true"/> if the value is an integer; otherwise, <see langword="false"/>.</returns>
         public static bool lua_isinteger(lua_State* L, int idx)
         {
             return lua_isinteger(L, idx) != 0;
@@ -285,11 +290,19 @@ namespace Triton
         }
 
         /// <summary>
+        /// Determines whether the value at the given index on the stack is a CLR object.
+        /// </summary>
+        /// <param name="L">The Lua state.</param>
+        /// <param name="idx">The index of the value to check.</param>
+        /// <returns><see langword="true"/> if the value is a CLR object; otherwise, <see langword="false"/>.</returns>
+        public static bool lua_isclrobject(lua_State* L, int idx) => *(bool*)lua_touserdata(L, idx);
+
+        /// <summary>
         /// Gets the boolean value at the given index on the stack.
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="idx">The index of the value to get.</param>
-        /// <returns>The boolean value at the index on the stack.</returns>
+        /// <returns>The boolean value.</returns>
         public static bool lua_toboolean(lua_State* L, int idx)
         {
             return lua_toboolean(L, idx) != 0;
@@ -305,7 +318,7 @@ namespace Triton
         /// <param name="L">The Lua state.</param>
         /// <param name="idx">The index of the value to get.</param>
         /// <param name="isnum">A pointer to a value which will indicate whether the value is an integer.</param>
-        /// <returns>The integer value at the index on the stack.</returns>
+        /// <returns>The integer value.</returns>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern long lua_tointegerx(lua_State* L, int idx, bool* isnum);
@@ -316,7 +329,7 @@ namespace Triton
         /// <param name="L">The Lua state.</param>
         /// <param name="idx">The index of the value to get.</param>
         /// <param name="isnum">A pointer to a value which will indicate whether the value is a number.</param>
-        /// <returns>The number value at the index on the stack.</returns>
+        /// <returns>The number value.</returns>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern double lua_tonumberx(lua_State* L, int idx, bool* isnum);
@@ -327,7 +340,7 @@ namespace Triton
         /// <param name="L">The Lua state.</param>
         /// <param name="idx">The index of the value to get.</param>
         /// <param name="len">A pointer to a value which will contain the length of the string.</param>
-        /// <returns>The string value at the index on the stack.</returns>
+        /// <returns>The string value.</returns>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern byte* lua_tolstring(lua_State* L, int idx, nuint* len);
@@ -337,7 +350,7 @@ namespace Triton
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="idx">The index of the value to get.</param>
-        /// <returns>The string value at the index on the stack.</returns>
+        /// <returns>The string value.</returns>
         public static string lua_tostring(lua_State* L, int idx)
         {
             nuint len;
@@ -351,7 +364,7 @@ namespace Triton
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="idx">The index of the value to get.</param>
-        /// <returns>The userdata value at the index on the stack.</returns>
+        /// <returns>The userdata value.</returns>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern void* lua_touserdata(lua_State* L, int idx);
@@ -377,6 +390,7 @@ namespace Triton
                 {
                     var length = Encoding.UTF8.GetBytes(chars, name.Length, bytes, bufferSize);
                     bytes[length] = 0;
+
                     return lua_getglobal(L, bytes);
                 }
             }
@@ -385,18 +399,17 @@ namespace Triton
                 return SlowPath(L, name);
             }
 
-            [SuppressGCTransition]
-            [DllImport("lua54", CallingConvention = Cdecl)]
-            static extern int lua_getglobal(lua_State* L, byte* name);
-
             static int SlowPath(lua_State* L, string name)
             {
-                var arr = Encoding.UTF8.GetBytes(name + '\0');
-                fixed (byte* bytes = arr)
+                fixed (byte* bytes = Encoding.UTF8.GetBytes(name + '\0'))
                 {
                     return lua_getglobal(L, bytes);
                 }
             }
+
+            [SuppressGCTransition]
+            [DllImport("lua54", CallingConvention = Cdecl)]
+            static extern int lua_getglobal(lua_State* L, byte* name);
         }
 
         #endregion
@@ -418,13 +431,19 @@ namespace Triton
                 fixed (char* chars = name)
                 {
                     var length = Encoding.UTF8.GetBytes(chars, name.Length, bytes, bufferSize);
+                    bytes[length] = 0;
+
                     lua_setglobal(L, bytes);
                 }
             }
             else
             {
-                var arr = Encoding.UTF8.GetBytes(name);
-                fixed (byte* bytes = arr)
+                SlowPath(L, name);
+            }
+
+            static void SlowPath(lua_State* L, string name)
+            {
+                fixed (byte* bytes = Encoding.UTF8.GetBytes(name + '\0'))
                 {
                     lua_setglobal(L, bytes);
                 }
@@ -456,7 +475,7 @@ namespace Triton
                     var length = Encoding.UTF8.GetBytes(chars, s.Length, bytes, bufferSize);
                     bytes[length] = 0;
 
-                    if (luaL_loadstring(L, bytes) is not LUA_OK)
+                    if (luaL_loadstring(L, bytes) != LUA_OK)
                     {
                         var message = lua_tostring(L, -1);
                         ThrowLuaLoadException(message);
@@ -470,10 +489,9 @@ namespace Triton
 
             static void SlowPath(lua_State* L, string s)
             {
-                var arr = Encoding.UTF8.GetBytes(s + '\0');
-                fixed (byte* bytes = arr)
+                fixed (byte* bytes = Encoding.UTF8.GetBytes(s + '\0'))
                 {
-                    if (luaL_loadstring(L, bytes) is not LUA_OK)
+                    if (luaL_loadstring(L, bytes) != LUA_OK)
                     {
                         var message = lua_tostring(L, -1);
                         ThrowLuaLoadException(message);
@@ -490,15 +508,15 @@ namespace Triton
         }
 
         /// <summary>
-        /// Calls a function on the stack with the number of arguments and results.
+        /// Calls a function on the stack with the given number of arguments and results.
         /// </summary>
         /// <param name="L">The Lua state.</param>
         /// <param name="nargs">The number of arguments.</param>
-        /// <param name="nresults">The number of results.</param>
+        /// <param name="nresults">The number of results, or <c>-1</c> for any number of results.</param>
         /// <returns>The results of the call.</returns>
         public static LuaResults lua_pcall(lua_State* L, int nargs, int nresults)
         {
-            if (lua_pcallk(L, nargs, nresults, 0, null, null) is not LUA_OK)
+            if (lua_pcallk(L, nargs, nresults, 0, null, null) != LUA_OK)
             {
                 var message = lua_tostring(L, -1);
                 ThrowLuaRuntimeException(message);

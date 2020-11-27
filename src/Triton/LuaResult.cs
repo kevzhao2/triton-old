@@ -21,14 +21,14 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text;
-using static Triton.LuaResultType;
 using static Triton.NativeMethods;
 
 namespace Triton
 {
     /// <summary>
-    /// Represents the result of a Lua access. This structure is intended to be ephemeral.
+    /// Represents a Lua result. This structure is intended to be ephemeral.
     /// </summary>
     public readonly ref struct LuaResult
     {
@@ -42,16 +42,68 @@ namespace Triton
         }
 
         /// <summary>
-        /// Gets the result's type.
+        /// Gets a value indicating whether the result is <see langword="nil"/>.
         /// </summary>
-        public unsafe LuaResultType Type =>
-            lua_type(State, Idx) switch
+        public unsafe bool IsNil => lua_type(State, Idx) <= LUA_TNIL;  // can include LUA_TNONE
+
+        /// <summary>
+        /// Gets a value indicating whether the result is a boolean.
+        /// </summary>
+        public unsafe bool IsBoolean => lua_type(State, Idx) == LUA_TBOOLEAN;
+
+        /// <summary>
+        /// Gets a value indicating whether the result is an integer.
+        /// </summary>
+        public unsafe bool IsInteger => lua_isinteger(State, Idx);
+
+        /// <summary>
+        /// Gets a value indicating whether the result is a number.
+        /// </summary>
+        public unsafe bool IsNumber => lua_type(State, Idx) == LUA_TNUMBER && !IsInteger;
+
+        /// <summary>
+        /// Gets a value indicating whether the result is a string.
+        /// </summary>
+        public unsafe bool IsString => lua_type(State, Idx) == LUA_TSTRING;
+
+        /// <summary>
+        /// Gets a value indicating whether the result is a table.
+        /// </summary>
+        public unsafe bool IsTable => lua_type(State, Idx) == LUA_TTABLE;
+
+        /// <summary>
+        /// Gets a value indicating whether the result is a function.
+        /// </summary>
+        public unsafe bool IsFunction => lua_type(State, Idx) == LUA_TFUNCTION;
+
+        /// <summary>
+        /// Gets a value indicating whether the result is a thread.
+        /// </summary>
+        public unsafe bool IsThread => lua_type(State, Idx) == LUA_TTHREAD;
+
+        /// <summary>
+        /// Gets a value indicating whether the result is a CLR object.
+        /// </summary>
+        public unsafe bool IsClrObject
+        {
+            get
             {
-                LUA_TNONE          => LUA_TNIL,
-                LUA_TNUMBER        =>          lua_isinteger(State, Idx) ? Integer   : Number,
-                LUA_TLIGHTUSERDATA => *(bool*)lua_touserdata(State, Idx) ? ClrObject : ClrTypes,
-                int type           => (LuaResultType)type
-            };
+                var userdata = lua_touserdata(State, Idx);
+                return userdata is not null && *(bool*)userdata;
+            }
+        }
+
+        /// <summary>
+        /// Gets a value indicating whether the result is CLR types.
+        /// </summary>
+        public unsafe bool IsClrTypes
+        {
+            get
+            {
+                var userdata = lua_touserdata(State, Idx);
+                return userdata is not null && !*(bool*)userdata;
+            }
+        }
 
         private unsafe lua_State* State => (lua_State*)(_stateAndIdx & ~7);
 
@@ -62,6 +114,7 @@ namespace Triton
 
         /// <inheritdoc cref="explicit operator long"/>
         /// <returns>The resulting integer.</returns>
+        [SkipLocalsInit]
         public unsafe long ToInteger()
         {
             bool isInteger;
@@ -77,6 +130,7 @@ namespace Triton
 
         /// <inheritdoc cref="explicit operator double"/>
         /// <returns>The resulting number.</returns>
+        [SkipLocalsInit]
         public unsafe double ToNumber()
         {
             bool isNumber;
@@ -92,6 +146,7 @@ namespace Triton
 
         /// <inheritdoc cref="explicit operator string"/>
         /// <returns>The resulting string.</returns>
+        [SkipLocalsInit]
         public unsafe new string ToString()
         {
             nuint len;
@@ -107,22 +162,37 @@ namespace Triton
 
         /// <inheritdoc cref="explicit operator LuaTable"/>
         /// <returns>The resulting table.</returns>
-        public LuaTable ToTable()
+        public unsafe LuaTable ToTable()
         {
+            if (lua_type(State, Idx) != LUA_TTABLE)
+            {
+                ThrowHelper.ThrowInvalidCastException();
+            }
+
             throw new NotImplementedException();
         }
 
         /// <inheritdoc cref="explicit operator LuaFunction"/>
         /// <returns>The resulting function.</returns>
-        public LuaFunction ToFunction()
+        public unsafe LuaFunction ToFunction()
         {
+            if (lua_type(State, Idx) != LUA_TFUNCTION)
+            {
+                ThrowHelper.ThrowInvalidCastException();
+            }
+
             throw new NotImplementedException();
         }
 
         /// <inheritdoc cref="explicit operator LuaThread"/>
         /// <returns>The resulting thread.</returns>
-        public LuaThread ToThread()
+        public unsafe LuaThread ToThread()
         {
+            if (lua_type(State, Idx) != LUA_TTHREAD)
+            {
+                ThrowHelper.ThrowInvalidCastException();
+            }
+
             throw new NotImplementedException();
         }
 
@@ -131,8 +201,14 @@ namespace Triton
         /// </summary>
         /// <returns>The resulting CLR object.</returns>
         /// <exception cref="InvalidCastException">The result is not a CLR object.</exception>
-        public object ToClrObject()
+        public unsafe object ToClrObject()
         {
+            var userdata = lua_touserdata(State, Idx);
+            if (userdata is null || !*(bool*)userdata)
+            {
+                ThrowHelper.ThrowInvalidCastException();
+            }
+
             throw new NotImplementedException();
         }
 
@@ -141,8 +217,14 @@ namespace Triton
         /// </summary>
         /// <returns>The resulting CLR types.</returns>
         /// <exception cref="InvalidCastException">The result is not CLR types.</exception>
-        public IReadOnlyList<Type> ToClrTypes()
+        public unsafe IReadOnlyList<Type> ToClrTypes()
         {
+            var userdata = lua_touserdata(State, Idx);
+            if (userdata is null || *(bool*)userdata)
+            {
+                ThrowHelper.ThrowInvalidCastException();
+            }
+
             throw new NotImplementedException();
         }
 

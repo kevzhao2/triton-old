@@ -24,7 +24,7 @@ using System.Collections.Generic;
 namespace Triton
 {
     /// <summary>
-    /// Represents the results of a Lua call. This structure is intended to be ephemeral.
+    /// Represents a set of Lua results. This structure is intended to be ephemeral.
     /// </summary>
     public readonly ref struct LuaResults
     {
@@ -35,8 +35,35 @@ namespace Triton
             _state = state;
         }
 
-        /// <inheritdoc cref="LuaResult.Type"/>
-        public LuaResultType Type => ((LuaResult)this).Type;
+        /// <inheritdoc cref="LuaResult.IsNil"/>
+        public bool IsNil => ((LuaResult)this).IsNil;
+
+        /// <inheritdoc cref="LuaResult.IsBoolean"/>
+        public bool IsBoolean => ((LuaResult)this).IsBoolean;
+
+        /// <inheritdoc cref="LuaResult.IsInteger"/>
+        public bool IsInteger => ((LuaResult)this).IsInteger;
+
+        /// <inheritdoc cref="LuaResult.IsNumber"/>
+        public bool IsFloat => ((LuaResult)this).IsNumber;
+
+        /// <inheritdoc cref="LuaResult.IsString"/>
+        public bool IsString => ((LuaResult)this).IsString;
+
+        /// <inheritdoc cref="LuaResult.IsTable"/>
+        public bool IsTable => ((LuaResult)this).IsTable;
+
+        /// <inheritdoc cref="LuaResult.IsFunction"/>
+        public bool IsFunction => ((LuaResult)this).IsFunction;
+
+        /// <inheritdoc cref="LuaResult.IsThread"/>
+        public bool IsThread => ((LuaResult)this).IsThread;
+
+        /// <inheritdoc cref="LuaResult.IsClrObject"/>
+        public bool IsClrObject => ((LuaResult)this).IsClrObject;
+
+        /// <inheritdoc cref="LuaResult.IsClrTypes"/>
+        public bool IsClrTypes => ((LuaResult)this).IsClrTypes;
 
         /// <summary>
         /// Deconstructs two individual results.

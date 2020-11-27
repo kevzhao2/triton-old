@@ -106,13 +106,60 @@ namespace Triton
         }
 
         [Fact]
+        public void Eval_NoResult()
+        {
+            using var environment = new LuaEnvironment();
+
+            var result = environment.Eval("return");
+
+            Assert.True(result.IsNil);
+            Assert.False(result.IsBoolean);
+            Assert.False(result.IsInteger);
+            Assert.False(result.IsFloat);
+            Assert.False(result.IsString);
+            Assert.False(result.IsTable);
+            Assert.False(result.IsFunction);
+            Assert.False(result.IsThread);
+            Assert.False(result.IsClrObject);
+            Assert.False(result.IsClrTypes);
+        }
+
+        [Fact]
+        public void Eval_NilResult()
+        {
+            using var environment = new LuaEnvironment();
+
+            var result = environment.Eval("return nil");
+
+            Assert.True(result.IsNil);
+            Assert.False(result.IsBoolean);
+            Assert.False(result.IsInteger);
+            Assert.False(result.IsFloat);
+            Assert.False(result.IsString);
+            Assert.False(result.IsTable);
+            Assert.False(result.IsFunction);
+            Assert.False(result.IsThread);
+            Assert.False(result.IsClrObject);
+            Assert.False(result.IsClrTypes);
+        }
+
+        [Fact]
         public void Eval_BooleanResult()
         {
             using var environment = new LuaEnvironment();
 
             var result = environment.Eval("return true");
 
-            Assert.Equal(LuaResultType.Boolean, result.Type);
+            Assert.False(result.IsNil);
+            Assert.True(result.IsBoolean);
+            Assert.False(result.IsInteger);
+            Assert.False(result.IsFloat);
+            Assert.False(result.IsString);
+            Assert.False(result.IsTable);
+            Assert.False(result.IsFunction);
+            Assert.False(result.IsThread);
+            Assert.False(result.IsClrObject);
+            Assert.False(result.IsClrTypes);
             Assert.True((bool)result);
         }
 
@@ -123,7 +170,16 @@ namespace Triton
 
             var result = environment.Eval("return 1234");
 
-            Assert.Equal(LuaResultType.Integer, result.Type);
+            Assert.False(result.IsNil);
+            Assert.False(result.IsBoolean);
+            Assert.True(result.IsInteger);
+            Assert.False(result.IsFloat);
+            Assert.False(result.IsString);
+            Assert.False(result.IsTable);
+            Assert.False(result.IsFunction);
+            Assert.False(result.IsThread);
+            Assert.False(result.IsClrObject);
+            Assert.False(result.IsClrTypes);
             Assert.Equal(1234, (long)result);
         }
 
@@ -134,7 +190,16 @@ namespace Triton
 
             var result = environment.Eval("return 1.234");
 
-            Assert.Equal(LuaResultType.Number, result.Type);
+            Assert.False(result.IsNil);
+            Assert.False(result.IsBoolean);
+            Assert.False(result.IsInteger);
+            Assert.True(result.IsFloat);
+            Assert.False(result.IsString);
+            Assert.False(result.IsTable);
+            Assert.False(result.IsFunction);
+            Assert.False(result.IsThread);
+            Assert.False(result.IsClrObject);
+            Assert.False(result.IsClrTypes);
             Assert.Equal(1.234, (double)result);
         }
 
@@ -145,18 +210,17 @@ namespace Triton
 
             var result = environment.Eval("return 'test'");
 
-            Assert.Equal(LuaResultType.String, result.Type);
+            Assert.False(result.IsNil);
+            Assert.False(result.IsBoolean);
+            Assert.False(result.IsInteger);
+            Assert.False(result.IsFloat);
+            Assert.True(result.IsString);
+            Assert.False(result.IsTable);
+            Assert.False(result.IsFunction);
+            Assert.False(result.IsThread);
+            Assert.False(result.IsClrObject);
+            Assert.False(result.IsClrTypes);
             Assert.Equal("test", (string)result);
-        }
-
-        [Fact]
-        public void Eval_NoResult()
-        {
-            using var environment = new LuaEnvironment();
-
-            var result = environment.Eval("return");
-
-            Assert.Equal(LuaResultType.Nil, result.Type);
         }
 
         [Fact]

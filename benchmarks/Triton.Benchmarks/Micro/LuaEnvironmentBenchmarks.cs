@@ -40,30 +40,9 @@ namespace Triton.Benchmarks.Micro
         }
 
         [Benchmark]
-        public bool GetGlobal_Boolean()  => (bool)_environment.GetGlobal("boolean");
-
-        [Benchmark]
-        public long GetGlobal_Integer()  => (long)_environment.GetGlobal("integer");
-
-        [Benchmark]
-        public double GetGlobal_Number() => (double)_environment.GetGlobal("number ");
+        public long GetGlobal_Integer() => (long)_environment.GetGlobal("integer");
 
         [Benchmark]
         public string GetGlobal_String() => (string)_environment.GetGlobal("string ");
-
-        [Benchmark]
-        public void SetGlobal_Boolean() => _environment.SetGlobal("boolean", true);
-
-        [Benchmark]
-        public void SetGlobal_Integer() => _environment.SetGlobal("integer", 1234);
-
-        [Benchmark]
-        public void SetGlobal_Number()  => _environment.SetGlobal("number ", 1.234);
-
-        [Benchmark]
-        public void SetGlobal_String()  => _environment.SetGlobal("string ", "test");
-
-        [Benchmark]
-        public void Eval() => _environment.Eval("return");
     }
 }

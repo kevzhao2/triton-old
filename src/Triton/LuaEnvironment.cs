@@ -83,7 +83,7 @@ namespace Triton
         /// </summary>
         /// <param name="name">The name of the global to set.</param>
         /// <param name="value">The value to set the global to.</param>
-        public void SetGlobal(string name, in LuaArgument value)
+        public void SetGlobal(string name, LuaArgument value)
         {
             if (name is null)
             {
