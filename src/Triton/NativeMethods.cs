@@ -19,7 +19,6 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -44,6 +43,8 @@ namespace Triton
     internal static unsafe class NativeMethods
     {
         public const int LUAI_MAXSTACK = 1000000;
+
+        public const int LUA_MULTRET = -1;
 
         public const int LUA_REGISTRYINDEX = -LUAI_MAXSTACK - 1000;
 
@@ -70,32 +71,14 @@ namespace Triton
 
         #region Lua state manipulation
 
-        /// <summary>
-        /// Creates a new Lua state.
-        /// </summary>
-        /// <returns>The resulting Lua state.</returns>
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern lua_State* luaL_newstate();
 
-        /// <summary>
-        /// Opens the standard Lua libraries in the Lua state.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern void luaL_openlibs(lua_State* L);
 
-        /// <summary>
-        /// Gets a pointer to the extra space portion of the Lua state.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <returns>A pointer to the extra space portion.</returns>
         public static void* lua_getextraspace(lua_State* L) => (void*)((IntPtr)L - IntPtr.Size);
 
-        /// <summary>
-        /// Gets the environment associated with the Lua state.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <returns>The associated environment.</returns>
         public static LuaEnvironment lua_getenvironment(lua_State* L)
         {
             var handle = GCHandle.FromIntPtr(*(IntPtr*)lua_getextraspace(L));
@@ -103,10 +86,10 @@ namespace Triton
             return Unsafe.As<object, LuaEnvironment>(ref target);  // optimal cast, should be safe
         }
 
-        /// <summary>
-        /// Closes the Lua state.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern int lua_status(lua_State* L);
+
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern void lua_close(lua_State* L);
 
@@ -114,49 +97,23 @@ namespace Triton
 
         #region Lua stack manipulation
 
-        /// <summary>
-        /// Gets the top index of the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <returns>The top index of the stack.</returns>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern int lua_gettop(lua_State* L);
 
-        /// <summary>
-        /// Sets the top index of the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="idx">The index to set the top of the stack to.</param>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
-        public static extern void lua_settop(lua_State* L, int idx);
+        public static extern void lua_settop(lua_State* L, int index);
 
-        /// <summary>
-        /// Pops the given number of values off of the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="n">The number of values to pop off of the stack.</param>
         public static void lua_pop(lua_State* L, int n) => lua_settop(L, -n - 1);
 
-        /// <summary>
-        /// Rotates the values on the stack from the given index to the top by a number of positions.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="idx">The index to the start the rotation at.</param>
-        /// <param name="n">The number of positions to rotate by.</param>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
-        public static extern void lua_rotate(lua_State* L, int idx, int n);
+        public static extern void lua_rotate(lua_State* L, int index, int n);
 
-        /// <summary>
-        /// Removes the value on the stack at the given index.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="idx">The index of the value to remove.</param>
-        public static void lua_remove(lua_State* L, int idx)
+        public static void lua_remove(lua_State* L, int index)
         {
-            lua_rotate(L, idx, -1);
+            lua_rotate(L, index, -1);
             lua_pop(L, 1);
         }
 
@@ -164,19 +121,10 @@ namespace Triton
 
         #region Lua stack pushing
 
-        /// <summary>
-        /// Pushes <see langword="nil"/> onto the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern void lua_pushnil(lua_State* L);
 
-        /// <summary>
-        /// Pushes a boolean onto the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="b">The boolean to push onto the stack.</param>
         public static void lua_pushboolean(lua_State* L, bool b)
         {
             lua_pushboolean(L, Unsafe.As<bool, int>(ref b));
@@ -187,29 +135,14 @@ namespace Triton
             static extern void lua_pushboolean(lua_State* L, int b);
         }
 
-        /// <summary>
-        /// Pushes an integer onto the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="n">The integer to push onto the stack.</param>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern void lua_pushinteger(lua_State* L, long n);
 
-        /// <summary>
-        /// Pushes a number onto the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="n">The number to push onto the stack.</param>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern void lua_pushnumber(lua_State* L, double n);
 
-        /// <summary>
-        /// Pushes a string onto the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="s">The string to push onto the stack.</param>
         public static void lua_pushstring(lua_State* L, string s)
         {
             const int bufferSize = 1024;
@@ -243,142 +176,87 @@ namespace Triton
             static extern void lua_pushlstring(lua_State* L, byte* s, nuint len);
         }
 
-        /// <summary>
-        /// Pushes a C closure onto the stack with the given number of upvalues.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="fn">The C closure to push onto the stack.</param>
-        /// <param name="n">The number of upvalues in the closure.</param>
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern void lua_createtable(lua_State* L, int narr, int nrec);
+
+        public static void lua_newtable(lua_State* L) => lua_createtable(L, 0, 0);
+
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern lua_State* lua_newthread(lua_State* L);
+
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern void* lua_newuserdatauv(lua_State* L, nuint size, int nuvalue);
+
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern void lua_pushcclosure(lua_State* L, delegate* unmanaged[Cdecl]<lua_State*, int> fn, int n);
 
-        /// <summary>
-        /// Pushes a C function onto the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="fn">The C function to push onto the stack.</param>
         public static void lua_pushcfunction(lua_State* L, delegate* unmanaged[Cdecl]<lua_State*, int> fn) =>
             lua_pushcclosure(L, fn, 0);
+
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern void lua_pushvalue(lua_State* L, int index);
         #endregion
 
         #region Lua stack accessing
 
-        /// <summary>
-        /// Gets the type of the value at the given index on the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="idx">The index of the value to check.</param>
-        /// <returns>The type of the value.</returns>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
-        public static extern int lua_type(lua_State* L, int idx);
+        public static extern int lua_type(lua_State* L, int index);
 
-        /// <summary>
-        /// Determines whether the value at the given index on the stack is an integer.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="idx">The index of the value to check.</param>
-        /// <returns><see langword="true"/> if the value is an integer; otherwise, <see langword="false"/>.</returns>
-        public static bool lua_isinteger(lua_State* L, int idx)
+        public static bool lua_isinteger(lua_State* L, int index)
         {
-            return lua_isinteger(L, idx) != 0;
+            return lua_isinteger(L, index) != 0;
 
             [SuppressGCTransition]
             [DllImport("lua54", CallingConvention = Cdecl)]
-            static extern int lua_isinteger(lua_State* L, int idx);
+            static extern int lua_isinteger(lua_State* L, int index);
         }
 
-        /// <summary>
-        /// Determines whether the value at the given index on the stack is a CLR object.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="idx">The index of the value to check.</param>
-        /// <returns><see langword="true"/> if the value is a CLR object; otherwise, <see langword="false"/>.</returns>
-        public static bool lua_isclrobject(lua_State* L, int idx) => *(bool*)lua_touserdata(L, idx);
+        public static bool lua_isclrobject(lua_State* L, int index) => *(bool*)lua_touserdata(L, index);
 
-        /// <summary>
-        /// Gets the boolean value at the given index on the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="idx">The index of the value to get.</param>
-        /// <returns>The boolean value.</returns>
-        public static bool lua_toboolean(lua_State* L, int idx)
+        public static bool lua_toboolean(lua_State* L, int index)
         {
-            return lua_toboolean(L, idx) != 0;
+            return lua_toboolean(L, index) != 0;
 
             [SuppressGCTransition]
             [DllImport("lua54", CallingConvention = Cdecl)]
-            static extern int lua_toboolean(lua_State* L, int idx);
+            static extern int lua_toboolean(lua_State* L, int index);
         }
 
-        /// <summary>
-        /// Gets the integer value at the given index on the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="idx">The index of the value to get.</param>
-        /// <param name="isnum">A pointer to a value which will indicate whether the value is an integer.</param>
-        /// <returns>The integer value.</returns>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
-        public static extern long lua_tointegerx(lua_State* L, int idx, bool* isnum);
+        public static extern long lua_tointegerx(lua_State* L, int index, bool* isnum);
 
-        /// <summary>
-        /// Gets the number value at the given index on the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="idx">The index of the value to get.</param>
-        /// <param name="isnum">A pointer to a value which will indicate whether the value is a number.</param>
-        /// <returns>The number value.</returns>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
-        public static extern double lua_tonumberx(lua_State* L, int idx, bool* isnum);
+        public static extern double lua_tonumberx(lua_State* L, int index, bool* isnum);
 
-        /// <summary>
-        /// Gets the string value at the given index on the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="idx">The index of the value to get.</param>
-        /// <param name="len">A pointer to a value which will contain the length of the string.</param>
-        /// <returns>The string value.</returns>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
-        public static extern byte* lua_tolstring(lua_State* L, int idx, nuint* len);
+        public static extern byte* lua_tolstring(lua_State* L, int index, nuint* len);
 
-        /// <summary>
-        /// Gets the string value at the given index on the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="idx">The index of the value to get.</param>
-        /// <returns>The string value.</returns>
-        public static string lua_tostring(lua_State* L, int idx)
+        public static string lua_tostring(lua_State* L, int index)
         {
             nuint len;
-            var bytes = lua_tolstring(L, idx, &len);
+            var bytes = lua_tolstring(L, index, &len);
 
             return Encoding.UTF8.GetString(bytes, (int)len);
         }
 
-        /// <summary>
-        /// Gets the userdata value at the given index on the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="idx">The index of the value to get.</param>
-        /// <returns>The userdata value.</returns>
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
-        public static extern void* lua_touserdata(lua_State* L, int idx);
+        public static extern void* lua_touserdata(lua_State* L, int index);
+
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern void* lua_topointer(lua_State* L, int index);
 
         #endregion
 
         #region Lua getters
 
-        /// <summary>
-        /// Pushes the value of the global with the given name onto the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="name">The name of the global whose value to push.</param>
-        /// <returns>The type of the global.</returns>
         public static int lua_getglobal(lua_State* L, string name)
         {
             const int bufferSize = 1024;
@@ -412,15 +290,14 @@ namespace Triton
             static extern int lua_getglobal(lua_State* L, byte* name);
         }
 
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern int lua_rawgeti(lua_State* L, int index, long n);
+
         #endregion
 
         #region Lua setters
 
-        /// <summary>
-        /// Sets the value of the global to the top of the stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="name">The name of the global whose value to set.</param>
         public static void lua_setglobal(lua_State* L, string name)
         {
             const int bufferSize = 1024;
@@ -454,15 +331,14 @@ namespace Triton
             static extern void lua_setglobal(lua_State* L, byte* name);
         }
 
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern void lua_rawseti(lua_State* L, int index, long n);
+
         #endregion
 
         #region Lua helpers
 
-        /// <summary>
-        /// Loads a string as a function, pushing it onto the Lua stack.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="s">The string to load as a function.</param>
         public static void luaL_loadstring(lua_State* L, string s)
         {
             const int bufferSize = 1024;
@@ -478,7 +354,7 @@ namespace Triton
                     if (luaL_loadstring(L, bytes) != LUA_OK)
                     {
                         var message = lua_tostring(L, -1);
-                        ThrowLuaLoadException(message);
+                        ThrowHelper.ThrowLuaLoadException(message);
                     }
                 }
             }
@@ -494,43 +370,51 @@ namespace Triton
                     if (luaL_loadstring(L, bytes) != LUA_OK)
                     {
                         var message = lua_tostring(L, -1);
-                        ThrowLuaLoadException(message);
+                        ThrowHelper.ThrowLuaLoadException(message);
                     }
                 }
             }
 
             [DllImport("lua54", CallingConvention = Cdecl)]
             static extern int luaL_loadstring(lua_State* L, byte* s);
-
-            [DebuggerStepThrough]
-            [DoesNotReturn]
-            static void ThrowLuaLoadException(string message) => throw new LuaLoadException(message);
         }
 
-        /// <summary>
-        /// Calls a function on the stack with the given number of arguments and results.
-        /// </summary>
-        /// <param name="L">The Lua state.</param>
-        /// <param name="nargs">The number of arguments.</param>
-        /// <param name="nresults">The number of results, or <c>-1</c> for any number of results.</param>
-        /// <returns>The results of the call.</returns>
         public static LuaResults lua_pcall(lua_State* L, int nargs, int nresults)
         {
             if (lua_pcallk(L, nargs, nresults, 0, null, null) != LUA_OK)
             {
                 var message = lua_tostring(L, -1);
-                ThrowLuaRuntimeException(message);
+                ThrowHelper.ThrowLuaRuntimeException(message);
             }
 
             return new(L);
 
             [DllImport("lua54", CallingConvention = Cdecl)]
             static extern int lua_pcallk(lua_State* L, int nargs, int nresults, int msgh, void* ctx, void* k);
-
-            [DebuggerStepThrough]
-            [DoesNotReturn]
-            static void ThrowLuaRuntimeException(string message) => throw new LuaRuntimeException(message);
         }
+
+        [SkipLocalsInit]
+        public static LuaResults lua_resume(lua_State* L, lua_State* from, int nargs)
+        {
+            int nresults;
+            if (lua_resume(L, from, nargs, &nresults) is not (LUA_OK or LUA_YIELD))
+            {
+                var message = lua_tostring(L, -1);
+                ThrowHelper.ThrowLuaRuntimeException(message);
+            }
+            return new(L);
+
+            [DllImport("lua54", CallingConvention = Cdecl)]
+            static extern int lua_resume(lua_State* L, lua_State* from, int nargs, int* nresults);
+        }
+
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern int luaL_ref(lua_State* L, int t);
+
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern void luaL_unref(lua_State* L, int t, int @ref);
 
         #endregion
     }

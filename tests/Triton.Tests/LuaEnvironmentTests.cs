@@ -82,7 +82,7 @@ namespace Triton
         }
 
         [Fact]
-        public void Eval_NullChunk_ThrowsArgumentNullException()
+        public void Eval_NullString_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();
 
@@ -161,6 +161,7 @@ namespace Triton
             Assert.False(result.IsClrObject);
             Assert.False(result.IsClrTypes);
             Assert.True((bool)result);
+            Assert.True(result.ToBoolean());
         }
 
         [Fact]
@@ -181,6 +182,7 @@ namespace Triton
             Assert.False(result.IsClrObject);
             Assert.False(result.IsClrTypes);
             Assert.Equal(1234, (long)result);
+            Assert.Equal(1234, result.ToInteger());
         }
 
         [Fact]
@@ -201,6 +203,7 @@ namespace Triton
             Assert.False(result.IsClrObject);
             Assert.False(result.IsClrTypes);
             Assert.Equal(1.234, (double)result);
+            Assert.Equal(1.234, result.ToNumber());
         }
 
         [Fact]
@@ -221,6 +224,7 @@ namespace Triton
             Assert.False(result.IsClrObject);
             Assert.False(result.IsClrTypes);
             Assert.Equal("test", (string)result);
+            Assert.Equal("test", result.ToString());
         }
 
         [Fact]
@@ -331,6 +335,41 @@ namespace Triton
             Assert.Equal(6, (long)result6);
             Assert.Equal(7, (long)result7);
             Assert.Equal(8, (long)result8);
+        }
+
+        [Fact]
+        public void CreateFunction_NullString_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<ArgumentNullException>(() => environment.CreateFunction(null!));
+        }
+
+        [Fact]
+        public void CreateFunction_LuaLoadError_ThrowsLuaLoadException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<LuaLoadException>(() => environment.CreateFunction("retur"));
+        }
+
+        [Fact]
+        public void CreateFunction()
+        {
+            using var environment = new LuaEnvironment();
+            using var function = environment.CreateFunction(@"
+                result = 0
+                for _, val in ipairs({...}) do
+                    result = result + val
+                end
+                return result");
+        }
+
+        [Fact]
+        public void CreateThread()
+        {
+            using var environment = new LuaEnvironment();
+            using var thread = environment.CreateThread();
         }
     }
 }

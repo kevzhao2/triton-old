@@ -19,8 +19,8 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using static Triton.NativeMethods;
 
@@ -55,6 +55,23 @@ namespace Triton
             *(IntPtr*)lua_getextraspace(_state) = GCHandle.ToIntPtr(handle);
         }
 
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            if (!_isDisposed)
+            {
+                // Cleanup must be done in a very specific order:
+                // - We must retrieve the `GCHandle` in the extra space portion of the Lua state prior to closing the state.
+                // - We must close the state prior to freeing the handle (since the `__gc` metamethods depend on it).
+                //
+                var handle = GCHandle.FromIntPtr(*(IntPtr*)lua_getextraspace(_state));
+                lua_close(_state);
+                handle.Free();
+
+                _isDisposed = true;
+            }
+        }
+
         /// <summary>
         /// Gets the value of the global with the given name.
         /// </summary>
@@ -70,7 +87,7 @@ namespace Triton
 
             ThrowIfDisposed();
 
-            // Reset the top of the stack so that the value will be at idx 1.
+            // Reset the top of the stack so that the value will be at index 1.
             //
             lua_settop(_state, 0);
 
@@ -97,59 +114,74 @@ namespace Triton
         }
 
         /// <summary>
-        /// Evaluates the Lua chunk.
+        /// Evaluates the given string.
         /// </summary>
-        /// <param name="chunk">The Lua chunk to evaluate.</param>
+        /// <param name="str">The string to evaluate.</param>
         /// <returns>The results.</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="chunk"/> is <see langword="null"/>.</exception>
-        /// <exception cref="LuaLoadException">The evaluation results in a Lua load error.</exception>
-        /// <exception cref="LuaRuntimeException">The evaluation results in a Lua runtime error.</exception>
-        public LuaResults Eval(string chunk)
+        /// <exception cref="ArgumentNullException"><paramref name="str"/> is <see langword="null"/>.</exception>
+        /// <exception cref="LuaLoadException">The string results in a Lua load error.</exception>
+        /// <exception cref="LuaRuntimeException">The string results in a Lua runtime error.</exception>
+        public LuaResults Eval(string str)
         {
-            if (chunk is null)
-            {
-                ThrowHelper.ThrowArgumentNullException(nameof(chunk));
-            }
+            if (str is null)
+                ThrowHelper.ThrowArgumentNullException(nameof(str));
 
             ThrowIfDisposed();
 
-            // Reset the top of the stack so that the results will begin at idx 1.
+            // Reset the top of the stack so that the results will begin at index 1.
             //
             lua_settop(_state, 0);
 
-            luaL_loadstring(_state, chunk);
-            return lua_pcall(_state, 0, -1);
+            luaL_loadstring(_state, str);
+            return lua_pcall(_state, 0, LUA_MULTRET);
         }
 
-        /// <inheritdoc/>
-        public void Dispose()
+        /// <summary>
+        /// Creates a new function from the given string.
+        /// </summary>
+        /// <param name="str">The string to create a function from.</param>
+        /// <returns>The resulting function.</returns>
+        /// <exception cref="LuaLoadException">The string results in a Lua load error.</exception>
+        public LuaFunction CreateFunction(string str)
         {
-            if (_isDisposed)
-            {
-                return;
-            }
+            if (str is null)
+                ThrowHelper.ThrowArgumentNullException(nameof(str));
 
-            // Cleanup must be done in a very specific order:
-            // - We must retrieve the `GCHandle` in the extra space portion of the Lua state prior to closing the state.
-            // - We must close the state prior to freeing the handle (since the `__gc` metamethods depend on it).
-            //
-            var handle = GCHandle.FromIntPtr(*(IntPtr*)lua_getextraspace(_state));
-            lua_close(_state);
-            handle.Free();
+            ThrowIfDisposed();
 
-            _isDisposed = true;
+            luaL_loadstring(_state, str);
+            var @ref = luaL_ref(_state, LUA_REGISTRYINDEX);
+            return new(_state, @ref);
         }
 
-        internal void ThrowIfDisposed()
+        /// <summary>
+        /// Creates a new thread.
+        /// </summary>
+        /// <returns>The resulting thread.</returns>
+        public LuaThread CreateThread()
+        {
+            ThrowIfDisposed();
+
+            var state = lua_newthread(_state);
+            var @ref = luaL_ref(_state, LUA_REGISTRYINDEX);
+            return new(state, @ref);
+        }
+
+        internal object ToClrObject(lua_State* state, int index)
+        {
+            throw new NotImplementedException();
+        }
+
+        internal IReadOnlyList<Type> ToClrTypes(lua_State* state, int index)
+        {
+            throw new NotImplementedException();
+        }
+
+        [DebuggerStepThrough]
+        private void ThrowIfDisposed()
         {
             if (_isDisposed)
-            {
-                ThrowObjectDisposedException();
-            }
-
-            [DebuggerStepThrough]
-            [DoesNotReturn]
-            static void ThrowObjectDisposedException() => throw new ObjectDisposedException(nameof(LuaEnvironment));
+                ThrowHelper.ThrowObjectDisposedException(nameof(LuaEnvironment));
         }
     }
 }

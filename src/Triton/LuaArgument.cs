@@ -191,15 +191,24 @@ namespace Triton
             }
             else if (tagOrObject.GetType() == typeof(LuaTable))
             {
-                throw new NotImplementedException();
+                var table = Unsafe.As<object, LuaTable>(ref tagOrObject);  // optimal cast, should be safe
+                Debug.Assert(table is { });
+
+                table.Push(state);
             }
             else if (tagOrObject.GetType() == typeof(LuaFunction))
             {
-                throw new NotImplementedException();
+                var function = Unsafe.As<object, LuaFunction>(ref tagOrObject);  // optimal cast, should be safe
+                Debug.Assert(function is { });
+
+                function.Push(state);
             }
             else if (tagOrObject.GetType() == typeof(LuaThread))
             {
-                throw new NotImplementedException();
+                var thread = Unsafe.As<object, LuaThread>(ref tagOrObject);  // optimal cast, should be safe
+                Debug.Assert(thread is { });
+
+                thread.Push(state);
             }
             else
             {

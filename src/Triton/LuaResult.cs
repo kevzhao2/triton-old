@@ -30,65 +30,65 @@ namespace Triton
     /// <summary>
     /// Represents a Lua result. This structure is intended to be ephemeral.
     /// </summary>
-    public readonly ref struct LuaResult
+    public unsafe readonly ref struct LuaResult
     {
-        private readonly nint _stateAndIdx;
+        private readonly nint _stateAndIndex;
 
-        internal unsafe LuaResult(lua_State* state, int idx)
+        internal LuaResult(lua_State* state, int index)
         {
-            Debug.Assert(idx is >= 1 and <= 8);
+            Debug.Assert(index is >= 1 and <= 8);
 
-            _stateAndIdx = (nint)state | (idx - 1);
+            _stateAndIndex = (nint)state | (index - 1);
         }
 
         /// <summary>
         /// Gets a value indicating whether the result is <see langword="nil"/>.
         /// </summary>
-        public unsafe bool IsNil => lua_type(State, Idx) <= LUA_TNIL;  // can include LUA_TNONE
+        public bool IsNil => lua_type(State, Index) <= LUA_TNIL;  // can include LUA_TNONE
 
         /// <summary>
         /// Gets a value indicating whether the result is a boolean.
         /// </summary>
-        public unsafe bool IsBoolean => lua_type(State, Idx) == LUA_TBOOLEAN;
+        public bool IsBoolean => lua_type(State, Index) == LUA_TBOOLEAN;
 
         /// <summary>
         /// Gets a value indicating whether the result is an integer.
         /// </summary>
-        public unsafe bool IsInteger => lua_isinteger(State, Idx);
+        public bool IsInteger => lua_isinteger(State, Index);
 
         /// <summary>
         /// Gets a value indicating whether the result is a number.
         /// </summary>
-        public unsafe bool IsNumber => lua_type(State, Idx) == LUA_TNUMBER && !IsInteger;
+        public bool IsNumber => lua_type(State, Index) == LUA_TNUMBER && !IsInteger;
 
         /// <summary>
         /// Gets a value indicating whether the result is a string.
         /// </summary>
-        public unsafe bool IsString => lua_type(State, Idx) == LUA_TSTRING;
+        public bool IsString => lua_type(State, Index) == LUA_TSTRING;
 
         /// <summary>
         /// Gets a value indicating whether the result is a table.
         /// </summary>
-        public unsafe bool IsTable => lua_type(State, Idx) == LUA_TTABLE;
+        public bool IsTable => lua_type(State, Index) == LUA_TTABLE;
 
         /// <summary>
         /// Gets a value indicating whether the result is a function.
         /// </summary>
-        public unsafe bool IsFunction => lua_type(State, Idx) == LUA_TFUNCTION;
+        public bool IsFunction => lua_type(State, Index) == LUA_TFUNCTION;
 
         /// <summary>
         /// Gets a value indicating whether the result is a thread.
         /// </summary>
-        public unsafe bool IsThread => lua_type(State, Idx) == LUA_TTHREAD;
+        public bool IsThread => lua_type(State, Index) == LUA_TTHREAD;
 
         /// <summary>
         /// Gets a value indicating whether the result is a CLR object.
         /// </summary>
-        public unsafe bool IsClrObject
+        public bool IsClrObject
         {
             get
             {
-                var userdata = lua_touserdata(State, Idx);
+                var userdata = lua_touserdata(State, Index);
                 return userdata is not null && *(bool*)userdata;
             }
         }
@@ -96,34 +96,32 @@ namespace Triton
         /// <summary>
         /// Gets a value indicating whether the result is CLR types.
         /// </summary>
-        public unsafe bool IsClrTypes
+        public bool IsClrTypes
         {
             get
             {
-                var userdata = lua_touserdata(State, Idx);
+                var userdata = lua_touserdata(State, Index);
                 return userdata is not null && !*(bool*)userdata;
             }
         }
 
-        private unsafe lua_State* State => (lua_State*)(_stateAndIdx & ~7);
+        private lua_State* State => (lua_State*)(_stateAndIndex & ~7);
 
-        private int Idx => (int)(_stateAndIdx & 7) + 1;
+        private int Index => (int)(_stateAndIndex & 7) + 1;
 
         /// <inheritdoc cref="explicit operator bool"/>
-        public unsafe bool ToBoolean() => lua_toboolean(State, Idx);
+        public bool ToBoolean() => lua_toboolean(State, Index);
 
         /// <inheritdoc cref="explicit operator long"/>
         /// <returns>The resulting integer.</returns>
         [SkipLocalsInit]
-        public unsafe long ToInteger()
+        public long ToInteger()
         {
             bool isInteger;
 
-            var result = lua_tointegerx(State, Idx, &isInteger);
+            var result = lua_tointegerx(State, Index, &isInteger);
             if (!isInteger)
-            {
                 ThrowHelper.ThrowInvalidCastException();
-            }
 
             return result;
         }
@@ -131,15 +129,13 @@ namespace Triton
         /// <inheritdoc cref="explicit operator double"/>
         /// <returns>The resulting number.</returns>
         [SkipLocalsInit]
-        public unsafe double ToNumber()
+        public double ToNumber()
         {
             bool isNumber;
 
-            var result = lua_tonumberx(State, Idx, &isNumber);
+            var result = lua_tonumberx(State, Index, &isNumber);
             if (!isNumber)
-            {
                 ThrowHelper.ThrowInvalidCastException();
-            }
 
             return result;
         }
@@ -147,130 +143,126 @@ namespace Triton
         /// <inheritdoc cref="explicit operator string"/>
         /// <returns>The resulting string.</returns>
         [SkipLocalsInit]
-        public unsafe new string ToString()
+        public new string ToString()
         {
             nuint len;
 
-            var bytes = lua_tolstring(State, Idx, &len);
+            var bytes = lua_tolstring(State, Index, &len);
             if (bytes is null)
-            {
                 ThrowHelper.ThrowInvalidCastException();
-            }
 
             return Encoding.UTF8.GetString(bytes, (int)len);
         }
 
         /// <inheritdoc cref="explicit operator LuaTable"/>
         /// <returns>The resulting table.</returns>
-        public unsafe LuaTable ToTable()
+        public LuaTable ToTable()
         {
-            if (lua_type(State, Idx) != LUA_TTABLE)
-            {
+            if (lua_type(State, Index) != LUA_TTABLE)
                 ThrowHelper.ThrowInvalidCastException();
-            }
 
-            throw new NotImplementedException();
+            lua_pushvalue(State, Index);
+            var @ref = luaL_ref(State, LUA_REGISTRYINDEX);
+            return new(State, @ref);
         }
 
         /// <inheritdoc cref="explicit operator LuaFunction"/>
         /// <returns>The resulting function.</returns>
-        public unsafe LuaFunction ToFunction()
+        public LuaFunction ToFunction()
         {
-            if (lua_type(State, Idx) != LUA_TFUNCTION)
-            {
+            if (lua_type(State, Index) != LUA_TFUNCTION)
                 ThrowHelper.ThrowInvalidCastException();
-            }
 
-            throw new NotImplementedException();
+            lua_pushvalue(State, Index);
+            var @ref = luaL_ref(State, LUA_REGISTRYINDEX);
+            return new(State, @ref);
         }
 
         /// <inheritdoc cref="explicit operator LuaThread"/>
         /// <returns>The resulting thread.</returns>
-        public unsafe LuaThread ToThread()
+        public LuaThread ToThread()
         {
-            if (lua_type(State, Idx) != LUA_TTHREAD)
-            {
+            if (lua_type(State, Index) != LUA_TTHREAD)
                 ThrowHelper.ThrowInvalidCastException();
-            }
 
-            throw new NotImplementedException();
+            lua_pushvalue(State, Index);
+            var @ref = luaL_ref(State, LUA_REGISTRYINDEX);
+            return new((lua_State*)lua_topointer(State, Index), @ref);
         }
 
         /// <summary>
-        /// Converts a result into a CLR object.
+        /// Converts the result into a CLR object.
         /// </summary>
         /// <returns>The resulting CLR object.</returns>
         /// <exception cref="InvalidCastException">The result is not a CLR object.</exception>
-        public unsafe object ToClrObject()
+        public object ToClrObject()
         {
-            var userdata = lua_touserdata(State, Idx);
+            var userdata = lua_touserdata(State, Index);
             if (userdata is null || !*(bool*)userdata)
-            {
                 ThrowHelper.ThrowInvalidCastException();
-            }
 
-            throw new NotImplementedException();
+            var environment = lua_getenvironment(State);
+            return environment.ToClrObject(State, Index);
         }
 
         /// <summary>
-        /// Converts a result into CLR types.
+        /// Converts the result into CLR types.
         /// </summary>
         /// <returns>The resulting CLR types.</returns>
         /// <exception cref="InvalidCastException">The result is not CLR types.</exception>
-        public unsafe IReadOnlyList<Type> ToClrTypes()
+        public IReadOnlyList<Type> ToClrTypes()
         {
-            var userdata = lua_touserdata(State, Idx);
+            var userdata = lua_touserdata(State, Index);
             if (userdata is null || *(bool*)userdata)
-            {
                 ThrowHelper.ThrowInvalidCastException();
-            }
 
-            throw new NotImplementedException();
+            var environment = lua_getenvironment(State);
+            return environment.ToClrTypes(State, Index);
         }
 
         /// <summary>
-        /// Converts a result into a boolean, performing coercion if necessary.
+        /// Converts the result into a boolean, performing coercion if necessary.
         /// </summary>
         /// <param name="result">The Lua result to convert.</param>
         public static explicit operator bool(LuaResult result) => result.ToBoolean();
 
         /// <summary>
-        /// Converts a result into an integer, performing coercion if necessary.
+        /// Converts the result into an integer, performing coercion if necessary.
         /// </summary>
         /// <param name="result">The Lua result to convert.</param>
         /// <exception cref="InvalidCastException">The result cannot be coerced into an integer.</exception>
         public static explicit operator long(LuaResult result) => result.ToInteger();
 
         /// <summary>
-        /// Converts a result into a number, performing coercion if necessary.
+        /// Converts the result into a number, performing coercion if necessary.
         /// </summary>
         /// <param name="result">The Lua result to convert.</param>
         /// <exception cref="InvalidCastException">The result cannot be coerced into a number.</exception>
         public static explicit operator double(LuaResult result) => result.ToNumber();
 
         /// <summary>
-        /// Converts a result into a string, performing coercion if necessary.
+        /// Converts the result into a string, performing coercion if necessary.
         /// </summary>
         /// <param name="result">The Lua result to convert.</param>
         /// <exception cref="InvalidCastException">The result cannot be coerced into a string.</exception>
         public static explicit operator string(LuaResult result) => result.ToString();
 
         /// <summary>
-        /// Converts a result into a table.
+        /// Converts the result into a table.
         /// </summary>
         /// <param name="result">The Lua result to convert.</param>
         /// <exception cref="InvalidCastException">The result is not a table.</exception>
         public static explicit operator LuaTable(LuaResult result) => result.ToTable();
 
         /// <summary>
-        /// Converts a result into a function.
+        /// Converts the result into a function.
         /// </summary>
         /// <param name="result">The Lua result to convert.</param>
         /// <exception cref="InvalidCastException">The result is not a function.</exception>
         public static explicit operator LuaFunction(LuaResult result) => result.ToFunction();
 
         /// <summary>
-        /// Converts a result into a thread.
+        /// Converts the result into a thread.
         /// </summary>
         /// <param name="result">The Lua result to convert.</param>
         /// <exception cref="InvalidCastException">The result is not a thread.</exception>

@@ -24,13 +24,13 @@ using System.Collections.Generic;
 namespace Triton
 {
     /// <summary>
-    /// Represents a set of Lua results. This structure is intended to be ephemeral.
+    /// Represents multiple Lua results. This structure is intended to be ephemeral.
     /// </summary>
-    public readonly ref struct LuaResults
+    public unsafe readonly ref struct LuaResults
     {
-        private unsafe readonly lua_State* _state;
+        private readonly lua_State* _state;
 
-        internal unsafe LuaResults(lua_State* state)
+        internal LuaResults(lua_State* state)
         {
             _state = state;
         }
@@ -66,11 +66,11 @@ namespace Triton
         public bool IsClrTypes => ((LuaResult)this).IsClrTypes;
 
         /// <summary>
-        /// Deconstructs two individual results.
+        /// Deconstructs two results.
         /// </summary>
         /// <param name="result">The first result.</param>
         /// <param name="result2">The second result.</param>
-        public unsafe void Deconstruct(
+        public void Deconstruct(
             out LuaResult result,
             out LuaResult result2)
         {
@@ -79,12 +79,12 @@ namespace Triton
         }
 
         /// <summary>
-        /// Deconstructs three individual results.
+        /// Deconstructs three results.
         /// </summary>
         /// <param name="result">The first result.</param>
         /// <param name="result2">The second result.</param>
         /// <param name="result3">The third result.</param>
-        public unsafe void Deconstruct(
+        public void Deconstruct(
             out LuaResult result,
             out LuaResult result2,
             out LuaResult result3)
@@ -95,13 +95,13 @@ namespace Triton
         }
 
         /// <summary>
-        /// Deconstructs four individual results.
+        /// Deconstructs four results.
         /// </summary>
         /// <param name="result">The first result.</param>
         /// <param name="result2">The second result.</param>
         /// <param name="result3">The third result.</param>
         /// <param name="result4">The fourth result.</param>
-        public unsafe void Deconstruct(
+        public void Deconstruct(
             out LuaResult result,
             out LuaResult result2,
             out LuaResult result3,
@@ -114,14 +114,14 @@ namespace Triton
         }
 
         /// <summary>
-        /// Deconstructs five individual results.
+        /// Deconstructs five results.
         /// </summary>
         /// <param name="result">The first result.</param>
         /// <param name="result2">The second result.</param>
         /// <param name="result3">The third result.</param>
         /// <param name="result4">The fourth result.</param>
         /// <param name="result5">The fifth result.</param>
-        public unsafe void Deconstruct(
+        public void Deconstruct(
             out LuaResult result,
             out LuaResult result2,
             out LuaResult result3,
@@ -136,7 +136,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Deconstructs six individual results.
+        /// Deconstructs six results.
         /// </summary>
         /// <param name="result">The first result.</param>
         /// <param name="result2">The second result.</param>
@@ -144,7 +144,7 @@ namespace Triton
         /// <param name="result4">The fourth result.</param>
         /// <param name="result5">The fifth result.</param>
         /// <param name="result6">The sixth result.</param>
-        public unsafe void Deconstruct(
+        public void Deconstruct(
             out LuaResult result,
             out LuaResult result2,
             out LuaResult result3,
@@ -161,7 +161,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Deconstructs seven individual results.
+        /// Deconstructs seven results.
         /// </summary>
         /// <param name="result">The first result.</param>
         /// <param name="result2">The second result.</param>
@@ -170,7 +170,7 @@ namespace Triton
         /// <param name="result5">The fifth result.</param>
         /// <param name="result6">The sixth result.</param>
         /// <param name="result7">The seventh result.</param>
-        public unsafe void Deconstruct(
+        public void Deconstruct(
             out LuaResult result,
             out LuaResult result2,
             out LuaResult result3,
@@ -189,7 +189,7 @@ namespace Triton
         }
 
         /// <summary>
-        /// Deconstructs eight individual results.
+        /// Deconstructs eight results.
         /// </summary>
         /// <param name="result">The first result.</param>
         /// <param name="result2">The second result.</param>
@@ -199,7 +199,7 @@ namespace Triton
         /// <param name="result6">The sixth result.</param>
         /// <param name="result7">The seventh result.</param>
         /// <param name="result8">The eighth result.</param>
-        public unsafe void Deconstruct(
+        public void Deconstruct(
             out LuaResult result,
             out LuaResult result2,
             out LuaResult result3,
@@ -247,10 +247,10 @@ namespace Triton
         public IReadOnlyList<Type> ToClrTypes() => ((LuaResult)this).ToClrTypes();
 
         /// <summary>
-        /// Decays results into an individual result.
+        /// Decays the results into an result.
         /// </summary>
         /// <param name="results">The Lua results to convert.</param>
-        public static unsafe implicit operator LuaResult(LuaResults results) => *(LuaResult*)&results;
+        public static implicit operator LuaResult(LuaResults results) => *(LuaResult*)&results;
 
         /// <inheritdoc cref="LuaResult.explicit operator bool"/>
         public static explicit operator bool(LuaResults results) => (bool)(LuaResult)results;

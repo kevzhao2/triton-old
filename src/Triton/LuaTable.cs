@@ -18,12 +18,54 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
+using System;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using static Triton.NativeMethods;
+
 namespace Triton
 {
     /// <summary>
     /// Represents a Lua table, which consists of key-value elements and is used to represent structured data.
     /// </summary>
-    public sealed class LuaTable
+    public sealed unsafe class LuaTable : IDisposable
     {
+        private readonly lua_State* _state;
+        private readonly int _ref;
+
+        private bool _isDisposed;
+
+        internal unsafe LuaTable(lua_State* state, int @ref)
+        {
+            _state = state;
+            _ref = @ref;
+        }
+
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            if (!_isDisposed)
+            {
+                luaL_unref(_state, LUA_REGISTRYINDEX, _ref);
+
+                _isDisposed = true;
+            }
+        }
+
+        internal void Push(lua_State* state)
+        {
+            if (*(GCHandle*)lua_getextraspace(state) != *(GCHandle*)lua_getextraspace(_state))
+                ThrowHelper.ThrowInvalidOperationException("Table is not associated with the given environment");
+
+            var type = lua_rawgeti(state, LUA_REGISTRYINDEX, _ref);
+            Debug.Assert(type == LUA_TTABLE);
+        }
+
+        [DebuggerStepThrough]
+        private void ThrowIfDisposed()
+        {
+            if (_isDisposed)
+                ThrowHelper.ThrowObjectDisposedException(nameof(LuaTable));
+        }
     }
 }
