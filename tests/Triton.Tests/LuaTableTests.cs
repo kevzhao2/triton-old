@@ -19,7 +19,6 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Collections.Generic;
 using Xunit;
 
 namespace Triton
@@ -119,9 +118,7 @@ namespace Triton
 
             table.SetValue("test", 1234);
 
-            var result = table.GetValue("test");
-
-            Assert.Equal(1234, (long)result);
+            Assert.Equal(1234, (long)table.GetValue("test"));
         }
 
         [Fact]
@@ -132,9 +129,7 @@ namespace Triton
 
             table.SetValue(1234, 1234);
 
-            var result = table.GetValue(1234);
-
-            Assert.Equal(1234, (long)result);
+            Assert.Equal(1234, (long)table.GetValue(1234));
         }
 
         [Fact]
@@ -145,9 +140,70 @@ namespace Triton
 
             table.SetValue(true, 1234);
 
-            var result = table.GetValue(true);
+            Assert.Equal(1234, (long)table.GetValue(true));
+        }
 
-            Assert.Equal(1234, (long)result);
+        [Fact]
+        public void Add_String_DuplicateKey_ThrowsArgumentException()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+            table.SetValue("test", 1234);
+
+            Assert.Throws<ArgumentException>(() => table.Add("test", 1234));
+        }
+
+        [Fact]
+        public void Add_String()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+
+            table.Add("test", 1234);
+
+            Assert.Equal(1234, (long)table.GetValue("test"));
+        }
+
+        [Fact]
+        public void Add_Long_DuplicateKey_ThrowsArgumentException()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+            table.SetValue(1234, 1234);
+
+            Assert.Throws<ArgumentException>(() => table.Add(1234, 1234));
+        }
+
+        [Fact]
+        public void Add_Long()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+
+            table.Add(1234, 1234);
+
+            Assert.Equal(1234, (long)table.GetValue(1234));
+        }
+
+        [Fact]
+        public void Add_LuaArgument_DuplicateKey_ThrowsArgumentException()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+            table.SetValue(true, 1234);
+
+            Assert.Throws<ArgumentException>(() => table.Add(true, 1234));
+        }
+
+        [Fact]
+        public void Add_LuaArgument()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+
+            table.Add(true, 1234);
+
+            Assert.Equal(1234, (long)table.GetValue(true));
         }
 
         [Fact]

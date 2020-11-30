@@ -329,6 +329,7 @@ namespace Triton
 
             value.Push(state);
             lua_setfield(state, -2, key);
+
             lua_pop(state, 1);  // pop the table off of the stack
         }
 
@@ -344,6 +345,7 @@ namespace Triton
 
             value.Push(state);
             lua_seti(state, -2, key);
+
             lua_pop(state, 1);  // pop the table off of the stack
         }
 
@@ -364,6 +366,7 @@ namespace Triton
             key.Push(state);
             value.Push(state);
             lua_settable(state, -3);
+
             lua_pop(state, 1);  // pop the table off of the stack
         }
 
@@ -375,13 +378,50 @@ namespace Triton
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is <see langword="null"/>.</exception>
         public void Add(string key, in LuaArgument value)
         {
-            throw new NotImplementedException();
+            if (key is null)
+                ThrowHelper.ThrowArgumentNullException(nameof(key));
+
+            ThrowIfDisposed();
+
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            var type = lua_getfield(state, -1, key);
+            if (type != LUA_TNIL)
+            {
+                lua_pop(state, 2);  // pop the table and value off of the stack
+
+                ThrowHelper.ThrowArgumentException(nameof(key), "An element with the same key has already been added");
+            }
+
+            value.Push(state);
+            lua_setfield(state, -3, key);
+
+            lua_pop(state, 2);  // pop the table and value off of the stack
         }
 
         /// <inheritdoc cref="Add(in LuaArgument, in LuaArgument)"/>
         public void Add(long key, in LuaArgument value)
         {
-            throw new NotImplementedException();
+            ThrowIfDisposed();
+
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            var type = lua_geti(state, -1, key);
+            if (type != LUA_TNIL)
+            {
+                lua_pop(state, 2);  // pop the table and value off of the stack
+
+                ThrowHelper.ThrowArgumentException(nameof(key), "An element with the same key has already been added");
+            }
+
+            value.Push(state);
+            lua_seti(state, -3, key);
+
+            lua_pop(state, 2);  // pop the table and value off of the stack
         }
 
         /// <summary>
@@ -389,9 +429,29 @@ namespace Triton
         /// </summary>
         /// <param name="key">The key of the element to add.</param>
         /// <param name="value">The value of the element to add.</param>
+        /// <exception cref="ArgumentException">An element with the same key has already been added to the table.</exception>
         public void Add(in LuaArgument key, in LuaArgument value)
         {
-            throw new NotImplementedException();
+            ThrowIfDisposed();
+
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            key.Push(state);
+            var type = lua_gettable(state, -2);
+            if (type != LUA_TNIL)
+            {
+                lua_pop(state, 2);  // pop the table and value off of the stack
+
+                ThrowHelper.ThrowArgumentException(nameof(key), "An element with the same key has already been added");
+            }
+
+            key.Push(state);
+            value.Push(state);
+            lua_settable(state, -4);
+
+            lua_pop(state, 2);  // pop the table and value off of the stack
         }
 
         #endregion
@@ -434,7 +494,8 @@ namespace Triton
 
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
             var type = lua_getfield(state, -1, key);
-            lua_pop(state, 1);  // pop the table off of the stack
+
+            lua_pop(state, 2);  // pop the table and value off of the stack
             return type != LUA_TNIL;
         }
 
@@ -448,7 +509,8 @@ namespace Triton
 
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
             var type = lua_geti(state, -1, key);
-            lua_pop(state, 1);  // pop the table off of the stack
+
+            lua_pop(state, 2);  // pop the table and value off of the stack
             return type != LUA_TNIL;
         }
 
@@ -467,7 +529,8 @@ namespace Triton
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
             key.Push(state);
             var type = lua_gettable(state, -2);
-            lua_pop(state, 1);  // pop the table off of the stack
+
+            lua_pop(state, 2);  // pop the table and value off of the stack
             return type != LUA_TNIL;
         }
 
