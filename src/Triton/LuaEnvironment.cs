@@ -57,8 +57,14 @@ namespace Triton
 
             _state = state;
 
+            MainThread = new(_state, LUA_RIDX_MAINTHREAD);
             Globals = new(_state, LUA_RIDX_GLOBALS);
         }
+
+        /// <summary>
+        /// Gets the main thread.
+        /// </summary>
+        public LuaThread MainThread { get; }
 
         /// <summary>
         /// Gets the globals table.
@@ -110,6 +116,7 @@ namespace Triton
         /// </summary>
         /// <param name="name">The name of the global to set.</param>
         /// <param name="value">The value to set the global to.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
         public void SetGlobal(string name, LuaArgument value)
         {
             if (name is null)
@@ -173,6 +180,7 @@ namespace Triton
         /// </summary>
         /// <param name="str">The string to create a function from.</param>
         /// <returns>The resulting function.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="str"/> is <see langword="null"/>.</exception>
         /// <exception cref="LuaLoadException">The string results in a Lua load error.</exception>
         public LuaFunction CreateFunction(string str)
         {

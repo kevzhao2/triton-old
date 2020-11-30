@@ -27,6 +27,14 @@ namespace Triton
     public class LuaEnvironmentTests
     {
         [Fact]
+        public void MainThread_Get()
+        {
+            using var environment = new LuaEnvironment();
+
+            var thread = environment.MainThread;
+        }
+
+        [Fact]
         public void Globals_Get()
         {
             using var environment = new LuaEnvironment();
