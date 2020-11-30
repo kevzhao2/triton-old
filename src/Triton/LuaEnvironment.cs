@@ -161,8 +161,7 @@ namespace Triton
             var state = _state;  // local optimization
 
             lua_createtable(state, arrayCapacity, hashCapacity);
-            var @ref = luaL_ref(state, LUA_REGISTRYINDEX);
-            return new(state, @ref);
+            return new(state, luaL_ref(state, LUA_REGISTRYINDEX));
         }
 
         /// <summary>
@@ -181,8 +180,7 @@ namespace Triton
             var state = _state;  // local optimization
 
             luaL_loadstring(state, str);
-            var @ref = luaL_ref(state, LUA_REGISTRYINDEX);
-            return new(state, @ref);
+            return new(state, luaL_ref(state, LUA_REGISTRYINDEX));
         }
 
         /// <summary>
@@ -196,8 +194,7 @@ namespace Triton
             var state = _state;  // local optimization
 
             var threadState = lua_newthread(state);
-            var @ref = luaL_ref(state, LUA_REGISTRYINDEX);
-            return new(threadState, @ref);
+            return new(threadState, luaL_ref(state, LUA_REGISTRYINDEX));
         }
 
         internal object ToClrObject(lua_State* state, int index)
