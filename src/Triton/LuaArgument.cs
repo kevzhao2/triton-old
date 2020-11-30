@@ -204,14 +204,44 @@ namespace Triton
         /// </summary>
         /// <param name="obj">The CLR object to convert.</param>
         /// <returns>The resulting argument.</returns>
-        public static LuaArgument FromClrObject(object? obj) => new(ObjectTag.ClrObject, obj);
+        /// <exception cref="ArgumentNullException"><paramref name="obj"/> is <see langword="null"/>.</exception>
+        public static LuaArgument FromClrObject(object obj)
+        {
+            if (obj is null)
+                ThrowHelper.ThrowArgumentNullException(nameof(obj));
+
+            return new(ObjectTag.ClrObject, obj);
+        }
 
         /// <summary>
-        /// Converts CLR types into an argument.
+        /// Converts CLR type(s) into an argument.
         /// </summary>
-        /// <param name="types">The CLR types to convert.</param>
+        /// <param name="types">The CLR type(s) to convert.</param>
         /// <returns>The resulting argument.</returns>
-        public static LuaArgument FromClrTypes(IReadOnlyList<Type>? types) => new(ObjectTag.ClrTypes, types);
+        /// <exception cref="ArgumentException"><paramref name="types"/> is empty, contains <see langword="null"/> or contains multiple types with the same generic arity.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="types"/> is <see langword="null"/>.</exception>
+        public static LuaArgument FromClrTypes(params Type[] types)
+        {
+            if (types is null)
+                ThrowHelper.ThrowArgumentNullException(nameof(types));
+            if (types.Length == 0)
+                ThrowHelper.ThrowArgumentException(nameof(types), "Types is empty");
+
+            var genericArities = new HashSet<int>();
+            foreach (var type in types)
+            {
+                if (type is null)
+                    ThrowHelper.ThrowArgumentException(nameof(types), "Types contains null");
+
+                var genericArity = type.GetGenericArguments().Length;
+                if (genericArities.Contains(genericArity))
+                    ThrowHelper.ThrowArgumentException(nameof(types), "Types contains two types with the same generic arity");
+
+                genericArities.Add(genericArity);
+            }
+
+            return new(ObjectTag.ClrTypes, types);
+        }
 
         #endregion
 
@@ -259,39 +289,73 @@ namespace Triton
                         break;
 
                     case ObjectTag.ClrObject:
-                        ThrowHelper.ThrowInvalidCastException();
+                    {
+                        var environment = lua_getenvironment(state);
+                        environment.PushClrObject(state, objectOrPrimitiveTag);
                         break;
+                    }
 
                     default:
-                        ThrowHelper.ThrowInvalidCastException();
+                    {
+                        var environment = lua_getenvironment(state);
+                        environment.PushClrTypes(state, Unsafe.As<object, Type[]>(ref objectOrPrimitiveTag));
                         break;
+                    }
                 }
             }
         }
 
         [ExcludeFromCodeCoverage]
-        internal string ToDebugString() =>
-            _objectOrPrimitiveTag switch
+        internal string ToDebugString()
+        {
+            var objectOrPrimitiveTag = _objectOrPrimitiveTag;  // local optimization
+
+            if (objectOrPrimitiveTag is null)
             {
-                null => "nil",
-                StrongBox<PrimitiveTag> { Value: var primitiveTag } =>
-                    primitiveTag switch
-                    {
-                        PrimitiveTag.Boolean => _boolean.ToString(),
-                        PrimitiveTag.Integer => _integer.ToString(),
-                        _                    => _number.ToString(),
-                    },
-                object obj =>
-                    _objectTag switch
-                    {
-                        ObjectTag.String    => $"\"{(string)obj}\"",
-                        ObjectTag.Table     => ((LuaTable)obj).ToDebugString(),
-                        ObjectTag.Function  => ((LuaFunction)obj).ToDebugString(),
-                        ObjectTag.Thread    => ((LuaThread)obj).ToDebugString(),
-                        ObjectTag.ClrObject => $"CLR object: {obj}",
-                        _                   => $"CLR types: ({string.Join(", ", (IReadOnlyList<Type>)obj)})"
-                    }
-            };
+                return "nil";
+            }
+            else if (objectOrPrimitiveTag.GetType() == typeof(StrongBox<PrimitiveTag>))
+            {
+                var tag = Unsafe.As<object, StrongBox<PrimitiveTag>>(ref objectOrPrimitiveTag).Value;
+                Debug.Assert(tag is >= PrimitiveTag.Boolean and <= PrimitiveTag.Number);
+
+                return tag switch
+                {
+                    PrimitiveTag.Boolean => _boolean.ToString(),
+                    PrimitiveTag.Integer => _integer.ToString(),
+                    _                    => _number.ToString()
+                };
+            }
+            else
+            {
+                var tag = _objectTag;
+                Debug.Assert(tag is >= ObjectTag.String and <= ObjectTag.ClrTypes);
+
+                switch (tag)
+                {
+                    case ObjectTag.String:
+                        return $"\"{Unsafe.As<object, string>(ref objectOrPrimitiveTag)}\"";
+
+                    case ObjectTag.Table:
+                        return Unsafe.As<object, LuaTable>(ref objectOrPrimitiveTag).ToDebugString();
+
+                    case ObjectTag.Function:
+                        return Unsafe.As<object, LuaFunction>(ref objectOrPrimitiveTag).ToDebugString();
+
+                    case ObjectTag.Thread:
+                        return Unsafe.As<object, LuaThread>(ref objectOrPrimitiveTag).ToDebugString();
+
+                    case ObjectTag.ClrObject:
+                        return $"CLR object: {objectOrPrimitiveTag}";
+
+                    default:
+                        var types = Unsafe.As<object, Type[]>(ref objectOrPrimitiveTag);
+                        return types.Length == 1 ?
+                            $"CLR type: {types[0]}" :
+                            $"CLR types: ({string.Join<Type>(", ", types)})";
+                }
+            }
+        }
 
         #region implicit operators
 

@@ -19,7 +19,6 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -31,8 +30,8 @@ namespace Triton
     /// Represents multiple Lua results.
     /// </summary>
     /// <remarks>
-    /// This structure is ephemeral and is invalidated immediately after calling another API. It allows for lazy
-    /// computation; if the result is not inspected, no extra work is done.
+    /// This structure is ephemeral and is invalidated immediately after calling another Lua API. It allows for lazy
+    /// computation; if the results are not inspected, no extra work is done.
     /// </remarks>
     [DebuggerDisplay("{ToDebugString(),nq}")]
     [DebuggerStepThrough]
@@ -278,7 +277,7 @@ namespace Triton
         public object ToClrObject() => ((LuaResult)this).ToClrObject();
 
         /// <inheritdoc cref="LuaResult.ToClrTypes"/>
-        public IReadOnlyList<Type> ToClrTypes() => ((LuaResult)this).ToClrTypes();
+        public Type[] ToClrTypes() => ((LuaResult)this).ToClrTypes();
 
         #endregion
 
@@ -290,15 +289,14 @@ namespace Triton
             if (state is null)
                 return "<uninitialized>";
 
-            var top = Math.Min(lua_gettop(state), 9);  // show at most eight values
-            return top switch
-            {
-                0 => "()",
-                1 => ToDebugString(1),
-                _ => $"({string.Join(", ", Enumerable.Range(1, top).Select(i => i < 9 ? ToDebugString(i) : "..."))})"
-            };
+            var top = Math.Min(lua_gettop(state), 9);  // show at most eight values (maybe including an ellipsis)
+            return top == 1 ?
+                ToDebugString(1) :
+                $"({string.Join(", ", Enumerable.Range(1, top).Select(ToDebugString))})";
 
-            string ToDebugString(int index) => new LuaResult(state, index).ToDebugString();
+            [ExcludeFromCodeCoverage]
+            string ToDebugString(int index) =>
+                index < 9 ? new LuaResult(state, index).ToDebugString() : "...";
         }
 
         /// <summary>

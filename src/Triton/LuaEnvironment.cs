@@ -19,7 +19,6 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
@@ -31,7 +30,7 @@ namespace Triton
     /// Represents a managed Lua environment, the entrypoint for embedding Lua into a CLR application.
     /// </summary>
     /// <remarks>
-    /// This class is <i>not</i> thread-safe.
+    /// This class is <i>not</i> thread-safe, and <i>must</i> be disposed of to prevent a memory leak.
     /// </remarks>
     public sealed unsafe class LuaEnvironment : IDisposable
     {
@@ -51,7 +50,7 @@ namespace Triton
             // retrieve the environment associated with a Lua state, allowing the usage of static callbacks (and hence
             // unmanaged function pointers).
             //
-            *(GCHandle*)lua_getextraspace(state) = GCHandle.Alloc(this);
+            *(IntPtr*)lua_getextraspace(state) = GCHandle.ToIntPtr(GCHandle.Alloc(this));
 
             _state = state;
         }
@@ -67,7 +66,7 @@ namespace Triton
                 // - We must retrieve the `GCHandle` in the extra space portion of the Lua state prior to closing it.
                 // - We must close the state prior to freeing the handle (since the `__gc` metamethods depend on it).
                 //
-                var handle = *(GCHandle*)lua_getextraspace(state);
+                var handle = GCHandle.FromIntPtr(*(IntPtr*)lua_getextraspace(state));
                 lua_close(state);
                 handle.Free();
 
@@ -192,12 +191,12 @@ namespace Triton
             return new(threadState, luaL_ref(state, LUA_REGISTRYINDEX));
         }
 
-        internal object ToClrObject(lua_State* state, int index)
+        internal void PushClrObject(lua_State* state, object obj)
         {
             throw new NotImplementedException();
         }
 
-        internal IReadOnlyList<Type> ToClrTypes(lua_State* state, int index)
+        internal void PushClrTypes(lua_State* state, Type[] types)
         {
             throw new NotImplementedException();
         }

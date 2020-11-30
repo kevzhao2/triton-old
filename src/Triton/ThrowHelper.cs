@@ -19,6 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Triton
@@ -26,6 +27,7 @@ namespace Triton
     /// <summary>
     /// Provides helper methods for throwing exceptions.
     /// </summary>
+    [DebuggerStepThrough]
     [ExcludeFromCodeCoverage]
     internal static class ThrowHelper
     {

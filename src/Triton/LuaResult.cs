@@ -19,10 +19,10 @@
 // IN THE SOFTWARE.
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using static Triton.NativeMethods;
 
@@ -32,7 +32,7 @@ namespace Triton
     /// Represents a Lua result.
     /// </summary>
     /// <remarks>
-    /// This structure is ephemeral and is invalidated immediately after calling another API. It allows for lazy
+    /// This structure is ephemeral and is invalidated immediately after calling another Lua API. It allows for lazy
     /// computation; if the result is not inspected, no extra work is done.
     /// </remarks>
     [DebuggerDisplay("{ToDebugString(),nq}")]
@@ -165,17 +165,15 @@ namespace Triton
                 var (state, index) = this;
 
                 if (state is null)
-                {
                     return false;
-                }
 
-                var ptr = lua_touserdata(state, index);
-                return ptr is not null && *(bool*)ptr;
+                var userdata = lua_touserdata(state, index);
+                return userdata is not null && (*(nint*)userdata & 1) == 0;
             }
         }
 
         /// <summary>
-        /// Gets a value indicating whether the result is CLR types.
+        /// Gets a value indicating whether the result is CLR type(s).
         /// </summary>
         public bool IsClrTypes
         {
@@ -184,12 +182,10 @@ namespace Triton
                 var (state, index) = this;
 
                 if (state is null)
-                {
                     return false;
-                }
 
-                var ptr = lua_touserdata(state, index);
-                return ptr is not null && !*(bool*)ptr;
+                var userdata = lua_touserdata(state, index);
+                return userdata is not null && (*(nint*)userdata & 1) != 0;
             }
         }
 
@@ -367,32 +363,41 @@ namespace Triton
             if (state is null)
                 ThrowHelper.ThrowInvalidCastException();
 
-            var ptr = lua_touserdata(state, index);
-            if (ptr is null || !*(bool*)ptr)
+            var userdata = lua_touserdata(state, index);
+            if (userdata is null || (*(nint*)userdata & 1) != 0)
                 ThrowHelper.ThrowInvalidCastException();
 
-            var environment = lua_getenvironment(state);
-            return environment.ToClrObject(state, index);
+            var ptr = *(nint*)userdata;
+            if ((ptr & 1) != 0)
+                ThrowHelper.ThrowInvalidCastException();
+
+            var handle = GCHandle.FromIntPtr(ptr);
+            return handle.Target!;
         }
 
         /// <summary>
-        /// Converts the result into CLR types.
+        /// Converts the result into CLR type(s).
         /// </summary>
-        /// <returns>The resulting CLR types.</returns>
-        /// <exception cref="InvalidCastException">The result is not CLR types.</exception>
-        public IReadOnlyList<Type> ToClrTypes()
+        /// <returns>The resulting CLR type(s).</returns>
+        /// <exception cref="InvalidCastException">The result is not CLR type(s).</exception>
+        public Type[] ToClrTypes()
         {
             var (state, index) = this;
 
             if (state is null)
                 ThrowHelper.ThrowInvalidCastException();
 
-            var ptr = lua_touserdata(state, index);
-            if (ptr is null || *(bool*)ptr)
+            var userdata = lua_touserdata(state, index);
+            if (userdata is null || ((nint)userdata & 1) == 0)
                 ThrowHelper.ThrowInvalidCastException();
 
-            var environment = lua_getenvironment(state);
-            return environment.ToClrTypes(state, index);
+            var ptr = *(nint*)userdata;
+            if ((ptr & 1) == 0)
+                ThrowHelper.ThrowInvalidCastException();
+
+            var handle = GCHandle.FromIntPtr(ptr & ~1);
+            var target = handle.Target!;
+            return Unsafe.As<object, Type[]>(ref target);
         }
 
         #endregion
@@ -402,21 +407,50 @@ namespace Triton
         {
             var (state, index) = this;
 
-            return state is null ?
-                "<uninitialized>" :
-                lua_type(state, index) switch
-                {
-                    LUA_TBOOLEAN  => lua_toboolean(state, index).ToString(),
-                    LUA_TNUMBER   => lua_isinteger(state, index) ?
-                                         lua_tointegerx(state, index, null).ToString() :
-                                         lua_tonumberx(state, index, null).ToString(),
-                    LUA_TSTRING   => $"\"{lua_tostring(state, index)}\"",
-                    LUA_TTABLE    => $"table: 0x{Convert.ToString((long)lua_topointer(state, index), 16)}",
-                    LUA_TFUNCTION => $"function: 0x{Convert.ToString((long)lua_topointer(state, index), 16)}",
-                    LUA_TTHREAD   => $"thread: 0x{Convert.ToString((long)lua_topointer(state, index), 16)}",
-                    LUA_TUSERDATA => throw new NotImplementedException(),
-                    _             => "nil",
-                };
+            if (state is null)
+                return "<uninitialized>";
+
+            switch (lua_type(state, index))
+            {
+                default:
+                    return "nil";
+
+                case LUA_TBOOLEAN:
+                    return lua_toboolean(state, index) ? "true" : "false";
+
+                case LUA_TNUMBER:
+                    return lua_isinteger(state, index) ?
+                        lua_tointegerx(state, index, null).ToString() :
+                        lua_tonumberx(state, index, null).ToString();
+
+                case LUA_TSTRING:
+                    return $"\"{lua_tostring(state, index)}\"";
+
+                case LUA_TTABLE:
+                    return $"table: 0x{(long)lua_topointer(state, index):x)}";
+
+                case LUA_TFUNCTION:
+                    return $"function: 0x{(long)lua_topointer(state, index):x)}";
+
+                case LUA_TTHREAD:
+                    return $"thread: 0x{(long)lua_topointer(state, index):x)}";
+
+                case LUA_TUSERDATA:
+                    var ptr = *(nint*)lua_touserdata(state, index);
+                    if ((ptr & 1) == 0)
+                    {
+                        var target = GCHandle.FromIntPtr(ptr).Target!;
+                        return $"CLR object: {target}";
+                    }
+                    else
+                    {
+                        var target = GCHandle.FromIntPtr(ptr & ~1).Target!;
+                        var types = Unsafe.As<object, Type[]>(ref target);
+                        return types.Length == 1 ?
+                            $"CLR type: {types[0]}" :
+                            $"CLR types: ({string.Join<Type>(", ", types)})";
+                    }
+            }
         }
 
         #region explicit operators

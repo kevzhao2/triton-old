@@ -21,7 +21,6 @@
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.InteropServices;
 using static Triton.NativeMethods;
 
 namespace Triton
@@ -334,7 +333,7 @@ namespace Triton
         [ExcludeFromCodeCoverage]
         internal void Push(lua_State* state)
         {
-            if (*(GCHandle*)lua_getextraspace(state) != *(GCHandle*)lua_getextraspace(_state))
+            if (*(IntPtr*)lua_getextraspace(state) != *(IntPtr*)lua_getextraspace(_state))
                 ThrowHelper.ThrowInvalidOperationException("Function is not associated with this environment");
 
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, _ref);
@@ -350,7 +349,7 @@ namespace Triton
             var ptr = lua_topointer(state, -1);
             lua_pop(state, 1);  // pop the function off of the stack
 
-            return $"function: 0x{Convert.ToString((long)ptr, 16)}";
+            return $"function: 0x{(long)ptr:x}";
         }
 
         [DebuggerStepThrough]

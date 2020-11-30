@@ -21,7 +21,6 @@
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.InteropServices;
 using static Triton.NativeMethods;
 
 namespace Triton
@@ -454,14 +453,14 @@ namespace Triton
         [ExcludeFromCodeCoverage]
         internal void Push(lua_State* state)
         {
-            if (*(GCHandle*)lua_getextraspace(state) != *(GCHandle*)lua_getextraspace(_state))
+            if (*(IntPtr*)lua_getextraspace(state) != *(IntPtr*)lua_getextraspace(_state))
                 ThrowHelper.ThrowInvalidOperationException("Thread is not associated with this environment");
             
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, _ref);
         }
 
         [ExcludeFromCodeCoverage]
-        internal string ToDebugString() => $"thread: 0x{Convert.ToString((long)_state, 16)}";
+        internal string ToDebugString() => $"thread: 0x{(long)_state:x)}";
 
         [DebuggerStepThrough]
         [ExcludeFromCodeCoverage]
