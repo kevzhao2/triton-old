@@ -572,7 +572,29 @@ namespace Triton
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is <see langword="null"/>.</exception>
         public bool Remove(string key, out LuaResult value)
         {
-            throw new NotImplementedException();
+            if (key is null)
+                ThrowHelper.ThrowArgumentNullException(nameof(key));
+
+            ThrowIfDisposed();
+
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            lua_settop(state, 0);  // ensure that the table and value will be at indices 1 and 2, respectively
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            var type = lua_getfield(state, -1, key);
+            if (type == LUA_TNIL)
+            {
+                value = default;
+                return false;
+            }
+
+            lua_pushnil(state);
+            lua_setfield(state, -3, key);
+
+            value = new(state, 2);
+            return true;
         }
 
         /// <inheritdoc cref="Remove(in LuaArgument)"/>
@@ -598,7 +620,26 @@ namespace Triton
         /// <inheritdoc cref="Remove(in LuaArgument, out LuaResult)"/>
         public bool Remove(long key, out LuaResult value)
         {
-            throw new NotImplementedException();
+            ThrowIfDisposed();
+
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            lua_settop(state, 0);  // ensure that the table and value will be at indices 1 and 2, respectively
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            var type = lua_geti(state, -1, key);
+            if (type == LUA_TNIL)
+            {
+                value = default;
+                return false;
+            }
+
+            lua_pushnil(state);
+            lua_seti(state, -3, key);
+
+            value = new(state, 2);
+            return true;
         }
 
         /// <summary>
@@ -635,7 +676,28 @@ namespace Triton
         /// <returns><see langword="true"/> if the key is successfully removed; otherwise, <see langword="false"/>.</returns>
         public bool Remove(in LuaArgument key, out LuaResult value)
         {
-            throw new NotImplementedException();
+            ThrowIfDisposed();
+
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            lua_settop(state, 0);  // ensure that the table and value will be at indices 1 and 2, respectively
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            key.Push(state);
+            var type = lua_gettable(state, -2);
+            if (type == LUA_TNIL)
+            {
+                value = default;
+                return false;
+            }
+
+            key.Push(state);
+            lua_pushnil(state);
+            lua_settable(state, -4);
+
+            value = new(state, 2);
+            return true;
         }
 
         #endregion

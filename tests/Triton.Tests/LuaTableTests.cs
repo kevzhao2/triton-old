@@ -317,6 +317,37 @@ namespace Triton
         }
 
         [Fact]
+        public void Remove_String2_NullKey_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+
+            Assert.Throws<ArgumentNullException>(() => table.Remove(null!, out _));
+        }
+
+        [Fact]
+        public void Remove_String2_ReturnsTrue()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+            table.SetValue("test", 1234);
+
+            Assert.True(table.Remove("test", out var value));
+            Assert.Equal(1234, (long)value);
+
+            Assert.False(table.ContainsKey("test"));
+        }
+
+        [Fact]
+        public void Remove_String2_ReturnsFalse()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+
+            Assert.False(table.Remove("test", out _));
+        }
+
+        [Fact]
         public void Remove_Long_ReturnsTrue()
         {
             using var environment = new LuaEnvironment();
@@ -338,6 +369,28 @@ namespace Triton
         }
 
         [Fact]
+        public void Remove_Long2_ReturnsTrue()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+            table.SetValue(1, 1234);
+
+            Assert.True(table.Remove(1, out var value));
+            Assert.Equal(1234, (long)value);
+
+            Assert.False(table.ContainsKey(1));
+        }
+
+        [Fact]
+        public void Remove_Long2_ReturnsFalse()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+
+            Assert.False(table.Remove(1, out _));
+        }
+
+        [Fact]
         public void Remove_LuaArgument_ReturnsTrue()
         {
             using var environment = new LuaEnvironment();
@@ -356,6 +409,28 @@ namespace Triton
             using var table = environment.CreateTable();
 
             Assert.False(table.Remove(true));
+        }
+
+        [Fact]
+        public void Remove_LuaArgument2_ReturnsTrue()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+            table.SetValue(true, 1234);
+
+            Assert.True(table.Remove(true, out var value));
+            Assert.Equal(1234, (long)value);
+
+            Assert.False(table.ContainsKey(true));
+        }
+
+        [Fact]
+        public void Remove_LuaArgument2_ReturnsFalse()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+
+            Assert.False(table.Remove(true, out _));
         }
 
         [Fact]
