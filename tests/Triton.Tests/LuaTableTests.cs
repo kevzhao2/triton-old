@@ -18,6 +18,7 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
+using System;
 using System.Collections.Generic;
 using Xunit;
 
@@ -93,6 +94,24 @@ namespace Triton
         }
 
         [Fact]
+        public void GetValue_String_NullKey_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+
+            Assert.Throws<ArgumentNullException>(() => table.GetValue(null!));
+        }
+
+        [Fact]
+        public void SetValue_String_NullKey_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+
+            Assert.Throws<ArgumentNullException>(() => table.SetValue(null!, 1234));
+        }
+
+        [Fact]
         public void SetValue_GetValue_String()
         {
             using var environment = new LuaEnvironment();
@@ -143,6 +162,15 @@ namespace Triton
             table.Clear();
 
             Assert.Equal(0, table.Count);
+        }
+
+        [Fact]
+        public void ContainsKey_String_NullKey_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+
+            Assert.Throws<ArgumentNullException>(() => table.ContainsKey(null!));
         }
 
         [Fact]
