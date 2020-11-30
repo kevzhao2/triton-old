@@ -62,7 +62,7 @@ namespace Triton
         {
             if (!_isDisposed)
             {
-                var state = _state;
+                var state = _state;  // local optimization
 
                 // Cleanup must be done in a very specific order:
                 // - We must retrieve the `GCHandle` in the extra space portion of the Lua state prior to closing the state.
@@ -91,11 +91,9 @@ namespace Triton
 
             ThrowIfDisposed();
 
-            var state = _state;
+            var state = _state;  // local optimization
 
-            // Reset the top of the stack so that the value will be at index 1.
-            //
-            lua_settop(state, 0);
+            lua_settop(state, 0);  // ensure that the value will be at index 1
 
             _ = lua_getglobal(state, name);
             return new(state, 1);
@@ -115,7 +113,7 @@ namespace Triton
 
             ThrowIfDisposed();
 
-            var state = _state;
+            var state = _state;  // local optimization
 
             value.Push(state);
             lua_setglobal(state, name);
@@ -136,11 +134,9 @@ namespace Triton
 
             ThrowIfDisposed();
 
-            var state = _state;
+            var state = _state;  // local optimization
 
-            // Reset the top of the stack so that the results will begin at index 1.
-            //
-            lua_settop(state, 0);
+            lua_settop(state, 0);  // ensure that the results will begin at index 1
 
             luaL_loadstring(state, str);
             return lua_pcall(state, 0, LUA_MULTRET);
@@ -162,7 +158,7 @@ namespace Triton
 
             ThrowIfDisposed();
 
-            var state = _state;
+            var state = _state;  // local optimization
 
             lua_createtable(state, arrayCapacity, hashCapacity);
             var @ref = luaL_ref(state, LUA_REGISTRYINDEX);
@@ -182,7 +178,7 @@ namespace Triton
 
             ThrowIfDisposed();
 
-            var state = _state;
+            var state = _state;  // local optimization
 
             luaL_loadstring(state, str);
             var @ref = luaL_ref(state, LUA_REGISTRYINDEX);
@@ -197,7 +193,7 @@ namespace Triton
         {
             ThrowIfDisposed();
 
-            var state = _state;
+            var state = _state;  // local optimization
 
             var threadState = lua_newthread(state);
             var @ref = luaL_ref(state, LUA_REGISTRYINDEX);

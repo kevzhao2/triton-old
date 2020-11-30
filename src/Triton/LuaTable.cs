@@ -104,7 +104,7 @@ namespace Triton
                 var tableRef = _tableRef;  // local optimization
                 var keyRef = _keyRef;      // local optimization
 
-                lua_settop(state, 0);  // ensure that table, key, and value will be at indices 1, 2, and 3, respectively
+                lua_settop(state, 0);  // ensure that the table, key, and value will be at indices 1, 2, and 3, respectively
 
                 _ = lua_rawgeti(state, LUA_REGISTRYINDEX, tableRef);
                 _ = lua_rawgeti(state, LUA_REGISTRYINDEX, keyRef);
@@ -267,7 +267,7 @@ namespace Triton
             var state = _state;  // local optimization
             var @ref = _ref;     // local optimization
 
-            lua_settop(state, 0);  // ensure that the table and result will be at indices 1 and 2, respectively
+            lua_settop(state, 0);  // ensure that the table and value will be at indices 1 and 2, respectively
 
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
             _ = lua_getfield(state, 1, key);
@@ -282,7 +282,7 @@ namespace Triton
             var state = _state;  // local optimization
             var @ref = _ref;     // local optimization
 
-            lua_settop(state, 0);  // ensure that the table and result will be at indices 1 and 2, respectively
+            lua_settop(state, 0);  // ensure that the table and value will be at indices 1 and 2, respectively
 
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
             _ = lua_geti(state, 1, key);
@@ -301,7 +301,7 @@ namespace Triton
             var state = _state;  // local optimization
             var @ref = _ref;     // local optimization
 
-            lua_settop(state, 0);  // ensure that the table and result will be at indices 1 and 2, respectively
+            lua_settop(state, 0);  // ensure that the table and value will be at indices 1 and 2, respectively
 
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
             key.Push(state);
@@ -470,12 +470,14 @@ namespace Triton
             lua_pushnil(state);
             while (lua_next(state, -2))
             {
-                lua_pop(state, 1);
+                lua_pop(state, 1);  // pop the value off of the stack
 
                 lua_pushvalue(state, -1);
                 lua_pushnil(state);
                 lua_settable(state, -4);
             }
+
+            lua_pop(state, 1);  // pop the table off of the stack
         }
 
         #region ContainsKey overloads

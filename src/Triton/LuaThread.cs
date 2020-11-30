@@ -90,7 +90,7 @@ namespace Triton
             if (lua_status(state) == LUA_YIELD)
                 ThrowHelper.ThrowInvalidOperationException("Thread is not ready to execute a function");
 
-            lua_settop(state, 0);  // ensure that the results begin at index 1
+            lua_settop(state, 0);  // ensure that the results will begin at index 1
 
             function.Push(state);
             _hasFunction = true;
@@ -112,7 +112,7 @@ namespace Triton
 
             if (lua_status(state) == LUA_YIELD)
             {
-                lua_settop(state, 0);  // ensure that the results begin at index 1
+                lua_settop(state, 0);  // ensure that the results will begin at index 1
             }
             else
             {
@@ -141,7 +141,7 @@ namespace Triton
 
             if (lua_status(state) == LUA_YIELD)
             {
-                lua_settop(state, 0);  // ensure that the results begin at index 1
+                lua_settop(state, 0);  // ensure that the results will begin at index 1
             }
             else
             {
@@ -173,7 +173,7 @@ namespace Triton
 
             if (lua_status(state) == LUA_YIELD)
             {
-                lua_settop(state, 0);  // ensure that the results begin at index 1
+                lua_settop(state, 0);  // ensure that the results will begin at index 1
             }
             else
             {
@@ -208,7 +208,7 @@ namespace Triton
 
             if (lua_status(state) == LUA_YIELD)
             {
-                lua_settop(state, 0);  // ensure that the results begin at index 1
+                lua_settop(state, 0);  // ensure that the results will begin at index 1
             }
             else
             {
@@ -246,7 +246,7 @@ namespace Triton
 
             if (lua_status(state) == LUA_YIELD)
             {
-                lua_settop(state, 0);  // ensure that the results begin at index 1
+                lua_settop(state, 0);  // ensure that the results will begin at index 1
             }
             else
             {
@@ -287,7 +287,7 @@ namespace Triton
 
             if (lua_status(state) == LUA_YIELD)
             {
-                lua_settop(state, 0);  // ensure that the results begin at index 1
+                lua_settop(state, 0);  // ensure that the results will begin at index 1
             }
             else
             {
@@ -331,7 +331,7 @@ namespace Triton
 
             if (lua_status(state) == LUA_YIELD)
             {
-                lua_settop(state, 0);  // ensure that the results begin at index 1
+                lua_settop(state, 0);  // ensure that the results will begin at index 1
             }
             else
             {
@@ -378,7 +378,7 @@ namespace Triton
 
             if (lua_status(state) == LUA_YIELD)
             {
-                lua_settop(state, 0);  // ensure that the results begin at index 1
+                lua_settop(state, 0);  // ensure that the results will begin at index 1
             }
             else
             {
@@ -428,7 +428,7 @@ namespace Triton
 
             if (lua_status(state) == LUA_YIELD)
             {
-                lua_settop(state, 0);  // ensure that the results begin at index 1
+                lua_settop(state, 0);  // ensure that the results will begin at index 1
             }
             else
             {

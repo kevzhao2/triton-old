@@ -71,7 +71,7 @@ namespace Triton
             var state = _state;  // local optimization
             var @ref = _ref;     // local optimization
 
-            lua_settop(state, 0);  // ensure that the results begin at index 1
+            lua_settop(state, 0);  // ensure that the results will begin at index 1
 
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
             return lua_pcall(state, 0, LUA_MULTRET);
@@ -91,7 +91,7 @@ namespace Triton
             var state = _state;  // local optimization
             var @ref = _ref;     // local optimization
 
-            lua_settop(state, 0);  // ensure that the results begin at index 1
+            lua_settop(state, 0);  // ensure that the results will begin at index 1
 
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
             argument.Push(state);
@@ -114,7 +114,7 @@ namespace Triton
             var state = _state;  // local optimization
             var @ref = _ref;     // local optimization
 
-            lua_settop(state, 0);  // ensure that the results begin at index 1
+            lua_settop(state, 0);  // ensure that the results will begin at index 1
 
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
             argument.Push(state);
@@ -140,7 +140,7 @@ namespace Triton
             var state = _state;  // local optimization
             var @ref = _ref;     // local optimization
 
-            lua_settop(state, 0);  // ensure that the results begin at index 1
+            lua_settop(state, 0);  // ensure that the results will begin at index 1
 
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
             argument.Push(state);
@@ -169,7 +169,7 @@ namespace Triton
             var state = _state;  // local optimization
             var @ref = _ref;     // local optimization
 
-            lua_settop(state, 0);  // ensure that the results begin at index 1
+            lua_settop(state, 0);  // ensure that the results will begin at index 1
 
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
             argument.Push(state);
@@ -201,7 +201,7 @@ namespace Triton
             var state = _state;  // local optimization
             var @ref = _ref;     // local optimization
 
-            lua_settop(state, 0);  // ensure that the results begin at index 1
+            lua_settop(state, 0);  // ensure that the results will begin at index 1
 
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
             argument.Push(state);
@@ -236,7 +236,7 @@ namespace Triton
             var state = _state;  // local optimization
             var @ref = _ref;     // local optimization
 
-            lua_settop(state, 0);  // ensure that the results begin at index 1
+            lua_settop(state, 0);  // ensure that the results will begin at index 1
 
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
             argument.Push(state);
@@ -274,7 +274,7 @@ namespace Triton
             var state = _state;  // local optimization
             var @ref = _ref;     // local optimization
 
-            lua_settop(state, 0);  // ensure that the results begin at index 1
+            lua_settop(state, 0);  // ensure that the results will begin at index 1
 
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
             argument.Push(state);
@@ -315,7 +315,7 @@ namespace Triton
             var state = _state;  // local optimization
             var @ref = _ref;     // local optimization
 
-            lua_settop(state, 0);  // ensure that the results begin at index 1
+            lua_settop(state, 0);  // ensure that the results will begin at index 1
 
             _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
             argument.Push(state);
