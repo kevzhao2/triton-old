@@ -39,8 +39,8 @@ namespace Triton
     /// <summary>
     /// Provides access to native methods.
     /// </summary>
-    [SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "Naming consistency")]
     [DebuggerStepThrough]
+    [SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "Naming consistency")]
     internal static unsafe class NativeMethods
     {
         public const int LUAI_MAXSTACK = 1000000;
@@ -82,8 +82,7 @@ namespace Triton
 
         public static LuaEnvironment lua_getenvironment(lua_State* L)
         {
-            var handle = GCHandle.FromIntPtr(*(IntPtr*)lua_getextraspace(L));
-            var target = handle.Target!;
+            var target = GCHandle.FromIntPtr(*(IntPtr*)lua_getextraspace(L)).Target!;
             return Unsafe.As<object, LuaEnvironment>(ref target);
         }
 
@@ -106,7 +105,10 @@ namespace Triton
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern void lua_settop(lua_State* L, int index);
 
-        public static void lua_pop(lua_State* L, int n) => lua_settop(L, -n - 1);
+        public static void lua_pop(lua_State* L, int n)
+        {
+            lua_settop(L, -n - 1);
+        }
 
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
@@ -181,7 +183,10 @@ namespace Triton
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern void lua_createtable(lua_State* L, int narr, int nrec);
 
-        public static void lua_newtable(lua_State* L) => lua_createtable(L, 0, 0);
+        public static void lua_newtable(lua_State* L)
+        {
+            lua_createtable(L, 0, 0);
+        }
 
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern lua_State* lua_newthread(lua_State* L);
@@ -193,8 +198,10 @@ namespace Triton
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern void lua_pushcclosure(lua_State* L, delegate* unmanaged[Cdecl]<lua_State*, int> fn, int n);
 
-        public static void lua_pushcfunction(lua_State* L, delegate* unmanaged[Cdecl]<lua_State*, int> fn) =>
+        public static void lua_pushcfunction(lua_State* L, delegate* unmanaged[Cdecl]<lua_State*, int> fn)
+        {
             lua_pushcclosure(L, fn, 0);
+        }
 
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
@@ -439,6 +446,15 @@ namespace Triton
 
         #region Lua helpers
 
+        public static bool lua_next(lua_State* L, int index)
+        {
+            return lua_next(L, index) != 0;
+
+            [SuppressGCTransition]
+            [DllImport("lua54", CallingConvention = Cdecl)]
+            static extern int lua_next(lua_State* L, int index);
+        }
+
         [SkipLocalsInit]
         public static void luaL_loadstring(lua_State* L, string s)
         {
@@ -453,10 +469,7 @@ namespace Triton
                     bytes[length] = 0;
 
                     if (luaL_loadstring(L, bytes) != LUA_OK)
-                    {
-                        var message = lua_tostring(L, -1);
-                        ThrowHelper.ThrowLuaLoadException(message);
-                    }
+                        ThrowHelper.ThrowLuaLoadException(lua_tostring(L, -1));
                 }
             }
             else
@@ -469,10 +482,7 @@ namespace Triton
                 fixed (byte* bytes = Encoding.UTF8.GetBytes(s + '\0'))
                 {
                     if (luaL_loadstring(L, bytes) != LUA_OK)
-                    {
-                        var message = lua_tostring(L, -1);
-                        ThrowHelper.ThrowLuaLoadException(message);
-                    }
+                        ThrowHelper.ThrowLuaLoadException(lua_tostring(L, -1));
                 }
             }
 
@@ -483,10 +493,7 @@ namespace Triton
         public static LuaResults lua_pcall(lua_State* L, int nargs, int nresults)
         {
             if (lua_pcallk(L, nargs, nresults, 0, null, null) != LUA_OK)
-            {
-                var message = lua_tostring(L, -1);
-                ThrowHelper.ThrowLuaRuntimeException(message);
-            }
+                ThrowHelper.ThrowLuaRuntimeException(lua_tostring(L, -1));
 
             return new(L);
 
@@ -499,23 +506,12 @@ namespace Triton
         {
             int nresults;
             if (lua_resume(L, from, nargs, &nresults) is not (LUA_OK or LUA_YIELD))
-            {
-                var message = lua_tostring(L, -1);
-                ThrowHelper.ThrowLuaRuntimeException(message);
-            }
+                ThrowHelper.ThrowLuaRuntimeException(lua_tostring(L, -1));
+
             return new(L);
 
             [DllImport("lua54", CallingConvention = Cdecl)]
             static extern int lua_resume(lua_State* L, lua_State* from, int nargs, int* nresults);
-        }
-
-        public static bool lua_next(lua_State* L, int index)
-        {
-            return lua_next(L, index) != 0;
-
-            [SuppressGCTransition]
-            [DllImport("lua54", CallingConvention = Cdecl)]
-            static extern int lua_next(lua_State* L, int index);
         }
 
         [SuppressGCTransition]
