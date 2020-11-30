@@ -144,6 +144,15 @@ namespace Triton
         }
 
         [Fact]
+        public void Add_String_NullKey_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+
+            Assert.Throws<ArgumentNullException>(() => table.Add(null!, 1234));
+        }
+
+        [Fact]
         public void Add_String_DuplicateKey_ThrowsArgumentException()
         {
             using var environment = new LuaEnvironment();
@@ -284,6 +293,35 @@ namespace Triton
             using var table = environment.CreateTable();
 
             Assert.False(table.ContainsKey(true));
+        }
+
+        [Fact]
+        public void GetEnumerator()
+        {
+            using var environment = new LuaEnvironment();
+            using var table = environment.CreateTable();
+            table.SetValue("test", 1234);
+            table.SetValue(1, 1234);
+            table.SetValue(true, 1234);
+
+            foreach (var (key, value) in table)
+            {
+                if (key.IsString)
+                {
+                    Assert.Equal("test", (string)key);
+                    Assert.Equal(1234, (long)value);
+                }
+                else if (key.IsInteger)
+                {
+                    Assert.Equal(1, (long)key);
+                    Assert.Equal(1234, (long)value);
+                }
+                else if (key.IsBoolean)
+                {
+                    Assert.True((bool)key);
+                    Assert.Equal(1234, (long)value);
+                }
+            }
         }
 
         [Fact]
@@ -431,35 +469,6 @@ namespace Triton
             using var table = environment.CreateTable();
 
             Assert.False(table.Remove(true, out _));
-        }
-
-        [Fact]
-        public void GetEnumerator()
-        {
-            using var environment = new LuaEnvironment();
-            using var table = environment.CreateTable();
-            table.SetValue("test", 1234);
-            table.SetValue(1, 1234);
-            table.SetValue(true, 1234);
-
-            foreach (var (key, value) in table)
-            {
-                if (key.IsString)
-                {
-                    Assert.Equal("test", (string)key);
-                    Assert.Equal(1234, (long)value);
-                }
-                else if (key.IsInteger)
-                {
-                    Assert.Equal(1, (long)key);
-                    Assert.Equal(1234, (long)value);
-                }
-                else if (key.IsBoolean)
-                {
-                    Assert.True((bool)key);
-                    Assert.Equal(1234, (long)value);
-                }
-            }
         }
     }
 }
