@@ -537,16 +537,6 @@ namespace Triton
         #endregion
 
         /// <summary>
-        /// Determines whether the table contains an element with the specified value.
-        /// </summary>
-        /// <param name="value">The key to find in the table.</param>
-        /// <returns><see langword="true"/> if the table contains an element with the specified value; otherwise, <see langword="false"/>.</returns>
-        public bool ContainsValue(in LuaArgument value)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
         /// Returns an enumerator for the table.
         /// </summary>
         /// <returns>An enumerator for the table.</returns>
