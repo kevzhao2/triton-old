@@ -66,12 +66,22 @@ namespace Triton
         private static readonly StrongBox<PrimitiveTag> s_integerTag = new(PrimitiveTag.Integer);
         private static readonly StrongBox<PrimitiveTag> s_numberTag  = new(PrimitiveTag.Number);
 
+        // Store a union of (bool, long, double, ObjectTag) at offset 0. This allows us to use eight bytes to either
+        // represent a primitive or identify an object tag.
+        //
         [FieldOffset(0)] private readonly bool      _boolean;
         [FieldOffset(0)] private readonly long      _integer;
         [FieldOffset(0)] private readonly double    _number;
         [FieldOffset(0)] private readonly ObjectTag _objectTag;
 
+        // Store either an object or a boxed primitive tag at offset 8. This allows us to use eight bytes to either
+        // identify a primitive or any object.
+        //
+        // All together, this allows us to use sixteen bytes to represent any valid Lua argument.
+        //
         [FieldOffset(8)] private readonly object?   _objectOrPrimitiveTag;
+
+        #region LuaArgument constructors
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private LuaArgument(bool boolean)
@@ -116,6 +126,8 @@ namespace Triton
 
             _objectOrPrimitiveTag = obj;
         }
+
+        #endregion
 
         /// <summary>
         /// Gets the <see langword="nil"/> value.
@@ -218,7 +230,7 @@ namespace Triton
         /// </summary>
         /// <param name="types">The CLR type(s) to convert.</param>
         /// <returns>The resulting argument.</returns>
-        /// <exception cref="ArgumentException"><paramref name="types"/> is empty, contains <see langword="null"/> or contains multiple types with the same generic arity.</exception>
+        /// <exception cref="ArgumentException"><paramref name="types"/> is empty, contains <see langword="null"/> or contains two types with the same generic arity.</exception>
         /// <exception cref="ArgumentNullException"><paramref name="types"/> is <see langword="null"/>.</exception>
         public static LuaArgument FromClrTypes(params Type[] types)
         {
@@ -233,6 +245,9 @@ namespace Triton
                 if (type is null)
                     ThrowHelper.ThrowArgumentException(nameof(types), "Types contains null");
 
+                // We do not want two types with the same generic arity. The intent of taking an array of types is to
+                // allow for generic arity overloading: e.g., Task referring to `Task` or `Task<>`.
+                //
                 var genericArity = type.GetGenericArguments().Length;
                 if (genericArities.Contains(genericArity))
                     ThrowHelper.ThrowArgumentException(nameof(types), "Types contains two types with the same generic arity");

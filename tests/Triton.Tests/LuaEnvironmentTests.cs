@@ -19,6 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Collections.Generic;
 using Xunit;
 
 namespace Triton
@@ -457,6 +458,20 @@ namespace Triton
             using var environment = new LuaEnvironment();
 
             using var thread = environment.CreateThread();
+        }
+
+        [Fact]
+        public void ClrObject()
+        {
+            var list = new List<int>();
+
+            using var environment = new LuaEnvironment();
+
+            environment.SetGlobal("list", LuaArgument.FromClrObject(list));
+
+            environment.Eval("s = tostring(list)");
+
+            var s = environment.GetGlobal("s");
         }
     }
 }

@@ -22,6 +22,7 @@ using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+using Triton.Interop;
 using static Triton.NativeMethods;
 
 namespace Triton
@@ -35,6 +36,7 @@ namespace Triton
     public sealed unsafe class LuaEnvironment : IDisposable
     {
         private readonly lua_State* _state;
+        private readonly MetatableGenerator _metatableGenerator = new();
 
         private bool _isDisposed;
 
@@ -193,12 +195,20 @@ namespace Triton
 
         internal void PushClrObject(lua_State* state, object obj)
         {
-            throw new NotImplementedException();
+            var userdata = lua_newuserdatauv(state, (nuint)IntPtr.Size, 0);
+            *(IntPtr*)userdata = GCHandle.ToIntPtr(GCHandle.Alloc(obj));
+
+            _metatableGenerator.Push(state, obj);
+            lua_setmetatable(state, -2);
         }
 
         internal void PushClrTypes(lua_State* state, Type[] types)
         {
-            throw new NotImplementedException();
+            var userdata = lua_newuserdatauv(state, (nuint)IntPtr.Size, 0);
+            *(nint*)userdata = (nint)GCHandle.ToIntPtr(GCHandle.Alloc(types)) | 1;
+
+            _metatableGenerator.Push(state, types);
+            lua_setmetatable(state, -2);
         }
 
         [ExcludeFromCodeCoverage]
