@@ -97,9 +97,7 @@ namespace Triton
                 coroutine.yield(result)");
             thread.SetFunction(function);
 
-            var result = thread.Resume();
-
-            Assert.Equal(0, (long)result);
+            Assert.Equal(0, (long)thread.Resume());
         }
 
         [Fact]
@@ -115,9 +113,7 @@ namespace Triton
                 coroutine.yield(result)");
             thread.SetFunction(function);
 
-            var result = thread.Resume(1);
-
-            Assert.Equal(1, (long)result);
+            Assert.Equal(1, (long)thread.Resume(1));
         }
 
         [Fact]
@@ -133,9 +129,7 @@ namespace Triton
                 coroutine.yield(result)");
             thread.SetFunction(function);
 
-            var result = thread.Resume(1, 2);
-
-            Assert.Equal(3, (long)result);
+            Assert.Equal(3, (long)thread.Resume(1, 2));
         }
 
         [Fact]
@@ -151,9 +145,7 @@ namespace Triton
                 coroutine.yield(result)");
             thread.SetFunction(function);
 
-            var result = thread.Resume(1, 2, 3);
-
-            Assert.Equal(6, (long)result);
+            Assert.Equal(6, (long)thread.Resume(1, 2, 3));
         }
 
         [Fact]
@@ -169,9 +161,7 @@ namespace Triton
                 coroutine.yield(result)");
             thread.SetFunction(function);
 
-            var result = thread.Resume(1, 2, 3, 4);
-
-            Assert.Equal(10, (long)result);
+            Assert.Equal(10, (long)thread.Resume(1, 2, 3, 4));
         }
 
         [Fact]
@@ -187,9 +177,7 @@ namespace Triton
                 coroutine.yield(result)");
             thread.SetFunction(function);
 
-            var result = thread.Resume(1, 2, 3, 4, 5);
-
-            Assert.Equal(15, (long)result);
+            Assert.Equal(15, (long)thread.Resume(1, 2, 3, 4, 5));
         }
 
         [Fact]
@@ -205,9 +193,7 @@ namespace Triton
                 coroutine.yield(result)");
             thread.SetFunction(function);
 
-            var result = thread.Resume(1, 2, 3, 4, 5, 6);
-
-            Assert.Equal(21, (long)result);
+            Assert.Equal(21, (long)thread.Resume(1, 2, 3, 4, 5, 6));
         }
 
         [Fact]
@@ -223,9 +209,7 @@ namespace Triton
                 coroutine.yield(result)");
             thread.SetFunction(function);
 
-            var result = thread.Resume(1, 2, 3, 4, 5, 6, 7);
-
-            Assert.Equal(28, (long)result);
+            Assert.Equal(28, (long)thread.Resume(1, 2, 3, 4, 5, 6, 7));
         }
 
         [Fact]
@@ -241,9 +225,7 @@ namespace Triton
                 coroutine.yield(result)");
             thread.SetFunction(function);
 
-            var result = thread.Resume(1, 2, 3, 4, 5, 6, 7, 8);
-
-            Assert.Equal(36, (long)result);
+            Assert.Equal(36, (long)thread.Resume(1, 2, 3, 4, 5, 6, 7, 8));
         }
     }
 }
