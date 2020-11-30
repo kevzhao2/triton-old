@@ -52,10 +52,18 @@ namespace Triton
             // retrieve the environment associated with a Lua state, allowing the usage of static callbacks (and hence
             // unmanaged function pointers).
             //
-            *(IntPtr*)lua_getextraspace(state) = GCHandle.ToIntPtr(GCHandle.Alloc(this));
+            var handle = GCHandle.Alloc(this);
+            *(IntPtr*)lua_getextraspace(state) = GCHandle.ToIntPtr(handle);
 
             _state = state;
+
+            Globals = new(_state, LUA_RIDX_GLOBALS);
         }
+
+        /// <summary>
+        /// Gets the globals table.
+        /// </summary>
+        public LuaTable Globals { get; }
 
         /// <inheritdoc/>
         public void Dispose()

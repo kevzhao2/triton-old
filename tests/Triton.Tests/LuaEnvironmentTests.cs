@@ -27,6 +27,17 @@ namespace Triton
     public class LuaEnvironmentTests
     {
         [Fact]
+        public void Globals_Get()
+        {
+            using var environment = new LuaEnvironment();
+            environment.SetGlobal("test", 1234);
+
+            var globals = environment.Globals;
+
+            Assert.Equal(1234, (long)globals.GetValue("test"));
+        }
+
+        [Fact]
         public void GetGlobal_NullName_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();
