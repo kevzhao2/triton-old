@@ -29,7 +29,7 @@ namespace Triton
     internal static class ThrowHelper
     {
         /// <summary>
-        /// Throws an <see cref="ArgumentException"/> with the given parameter name and message.
+        /// Throws an <see cref="ArgumentException"/> with the specified parameter name and message.
         /// </summary>
         /// <param name="paramName">The parameter name.</param>
         /// <param name="message">The message.</param>
@@ -38,7 +38,7 @@ namespace Triton
             throw new ArgumentException(message, paramName);
 
         /// <summary>
-        /// Throws an <see cref="ArgumentNullException"/> with the given parameter name.
+        /// Throws an <see cref="ArgumentNullException"/> with the specified parameter name.
         /// </summary>
         /// <param name="paramName">The parameter name.</param>
         [DoesNotReturn]
@@ -46,7 +46,7 @@ namespace Triton
             throw new ArgumentNullException(paramName);
 
         /// <summary>
-        /// Throws an <see cref="ArgumentOutOfRangeException"/> with the given parameter name and message.
+        /// Throws an <see cref="ArgumentOutOfRangeException"/> with the specified parameter name and message.
         /// </summary>
         /// <param name="paramName">The parameter name.</param>
         /// <param name="message">The message.</param>
@@ -62,7 +62,7 @@ namespace Triton
             throw new InvalidCastException();
 
         /// <summary>
-        /// Throws an <see cref="InvalidOperationException"/> with the given message.
+        /// Throws an <see cref="InvalidOperationException"/> with the specified message.
         /// </summary>
         /// <param name="message">The message.</param>
         [DoesNotReturn]
@@ -70,7 +70,7 @@ namespace Triton
             throw new InvalidOperationException(message);
 
         /// <summary>
-        /// Throws an <see cref="LuaLoadException"/> with the given message.
+        /// Throws a <see cref="LuaLoadException"/> with the specified message.
         /// </summary>
         /// <param name="message">The message.</param>
         [DoesNotReturn]
@@ -78,7 +78,7 @@ namespace Triton
             throw new LuaLoadException(message);
 
         /// <summary>
-        /// Throws an <see cref="LuaRuntimeException"/> with the given message.
+        /// Throws a <see cref="LuaRuntimeException"/> with the specified message.
         /// </summary>
         /// <param name="message">The message.</param>
         [DoesNotReturn]
@@ -86,7 +86,7 @@ namespace Triton
             throw new LuaRuntimeException(message);
 
         /// <summary>
-        /// Throws an <see cref="ObjectDisposedException"/> with the given object name.
+        /// Throws an <see cref="ObjectDisposedException"/> with the specified object name.
         /// </summary>
         /// <param name="objectName">The object name.</param>
         [DoesNotReturn]

@@ -20,6 +20,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using static Triton.NativeMethods;
 
@@ -28,6 +29,10 @@ namespace Triton
     /// <summary>
     /// Represents a Lua function, an object which can be called with arguments to receive results.
     /// </summary>
+    /// <remarks>
+    /// Instances of this class store the functions in the Lua registry in order to reference them. This means that an
+    /// instance is associated with its environment, and <i>must</i> be disposed of to prevent a Lua memory leak.
+    /// </remarks>
     public sealed unsafe class LuaFunction : IDisposable
     {
         private readonly lua_State* _state;
@@ -52,6 +57,8 @@ namespace Triton
             }
         }
 
+        #region Call(...) overloads
+
         /// <summary>
         /// Calls the function with no arguments.
         /// </summary>
@@ -59,9 +66,15 @@ namespace Triton
         /// <exception cref="LuaRuntimeException">The function call results in a Lua runtime error.</exception>
         public LuaResults Call()
         {
-            CallPrologue();  // performs validation
+            ThrowIfDisposed();
 
-            return lua_pcall(_state, 0, LUA_MULTRET);
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            lua_settop(state, 0);  // ensure that the results begin at index 1
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            return lua_pcall(state, 0, LUA_MULTRET);
         }
 
         /// <summary>
@@ -73,10 +86,16 @@ namespace Triton
         public LuaResults Call(
             in LuaArgument argument)
         {
-            CallPrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            return lua_pcall(_state, 1, LUA_MULTRET);
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            lua_settop(state, 0);  // ensure that the results begin at index 1
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            argument.Push(state);
+            return lua_pcall(state, 1, LUA_MULTRET);
         }
 
         /// <summary>
@@ -90,11 +109,17 @@ namespace Triton
             in LuaArgument argument,
             in LuaArgument argument2)
         {
-            CallPrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            argument2.Push(_state);
-            return lua_pcall(_state, 2, LUA_MULTRET);
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            lua_settop(state, 0);  // ensure that the results begin at index 1
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            argument.Push(state);
+            argument2.Push(state);
+            return lua_pcall(state, 2, LUA_MULTRET);
         }
 
         /// <summary>
@@ -110,12 +135,18 @@ namespace Triton
             in LuaArgument argument2,
             in LuaArgument argument3)
         {
-            CallPrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            argument2.Push(_state);
-            argument3.Push(_state);
-            return lua_pcall(_state, 3, LUA_MULTRET);
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            lua_settop(state, 0);  // ensure that the results begin at index 1
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            argument.Push(state);
+            argument2.Push(state);
+            argument3.Push(state);
+            return lua_pcall(state, 3, LUA_MULTRET);
         }
 
         /// <summary>
@@ -133,13 +164,19 @@ namespace Triton
             in LuaArgument argument3,
             in LuaArgument argument4)
         {
-            CallPrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            argument2.Push(_state);
-            argument3.Push(_state);
-            argument4.Push(_state);
-            return lua_pcall(_state, 4, LUA_MULTRET);
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            lua_settop(state, 0);  // ensure that the results begin at index 1
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            argument.Push(state);
+            argument2.Push(state);
+            argument3.Push(state);
+            argument4.Push(state);
+            return lua_pcall(state, 4, LUA_MULTRET);
         }
 
         /// <summary>
@@ -159,14 +196,20 @@ namespace Triton
             in LuaArgument argument4,
             in LuaArgument argument5)
         {
-            CallPrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            argument2.Push(_state);
-            argument3.Push(_state);
-            argument4.Push(_state);
-            argument5.Push(_state);
-            return lua_pcall(_state, 5, LUA_MULTRET);
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            lua_settop(state, 0);  // ensure that the results begin at index 1
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            argument.Push(state);
+            argument2.Push(state);
+            argument3.Push(state);
+            argument4.Push(state);
+            argument5.Push(state);
+            return lua_pcall(state, 5, LUA_MULTRET);
         }
 
         /// <summary>
@@ -188,15 +231,21 @@ namespace Triton
             in LuaArgument argument5,
             in LuaArgument argument6)
         {
-            CallPrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            argument2.Push(_state);
-            argument3.Push(_state);
-            argument4.Push(_state);
-            argument5.Push(_state);
-            argument6.Push(_state);
-            return lua_pcall(_state, 6, LUA_MULTRET);
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            lua_settop(state, 0);  // ensure that the results begin at index 1
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            argument.Push(state);
+            argument2.Push(state);
+            argument3.Push(state);
+            argument4.Push(state);
+            argument5.Push(state);
+            argument6.Push(state);
+            return lua_pcall(state, 6, LUA_MULTRET);
         }
 
         /// <summary>
@@ -220,16 +269,22 @@ namespace Triton
             in LuaArgument argument6,
             in LuaArgument argument7)
         {
-            CallPrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            argument2.Push(_state);
-            argument3.Push(_state);
-            argument4.Push(_state);
-            argument5.Push(_state);
-            argument6.Push(_state);
-            argument7.Push(_state);
-            return lua_pcall(_state, 7, LUA_MULTRET);
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            lua_settop(state, 0);  // ensure that the results begin at index 1
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            argument.Push(state);
+            argument2.Push(state);
+            argument3.Push(state);
+            argument4.Push(state);
+            argument5.Push(state);
+            argument6.Push(state);
+            argument7.Push(state);
+            return lua_pcall(state, 7, LUA_MULTRET);
         }
 
         /// <summary>
@@ -255,41 +310,51 @@ namespace Triton
             in LuaArgument argument7,
             in LuaArgument argument8)
         {
-            CallPrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            argument2.Push(_state);
-            argument3.Push(_state);
-            argument4.Push(_state);
-            argument5.Push(_state);
-            argument6.Push(_state);
-            argument7.Push(_state);
-            argument8.Push(_state);
-            return lua_pcall(_state, 8, LUA_MULTRET);
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            lua_settop(state, 0);  // ensure that the results begin at index 1
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            argument.Push(state);
+            argument2.Push(state);
+            argument3.Push(state);
+            argument4.Push(state);
+            argument5.Push(state);
+            argument6.Push(state);
+            argument7.Push(state);
+            argument8.Push(state);
+            return lua_pcall(state, 8, LUA_MULTRET);
         }
 
+        #endregion
+
+        [ExcludeFromCodeCoverage]
         internal void Push(lua_State* state)
         {
             if (*(GCHandle*)lua_getextraspace(state) != *(GCHandle*)lua_getextraspace(_state))
-                ThrowHelper.ThrowInvalidOperationException("Function is not associated with the given environment");
+                ThrowHelper.ThrowInvalidOperationException("Function is not associated with this environment");
 
-            var type = lua_rawgeti(state, LUA_REGISTRYINDEX, _ref);
-            Debug.Assert(type == LUA_TFUNCTION);
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, _ref);
         }
 
-        private void CallPrologue()
+        [ExcludeFromCodeCoverage]
+        internal string ToDebugString()
         {
-            ThrowIfDisposed();
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
 
-            // Reset the stack so that the results start at index 1.
-            //
-            lua_settop(_state, 0);
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            var ptr = lua_topointer(state, -1);
+            lua_pop(state, 1);  // pop the function off of the stack
 
-            var type = lua_rawgeti(_state, LUA_REGISTRYINDEX, _ref);
-            Debug.Assert(type == LUA_TFUNCTION);
+            return $"function: 0x{Convert.ToString((long)ptr, 16)}";
         }
 
         [DebuggerStepThrough]
+        [ExcludeFromCodeCoverage]
         private void ThrowIfDisposed()
         {
             if (_isDisposed)

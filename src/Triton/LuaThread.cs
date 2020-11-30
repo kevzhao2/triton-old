@@ -20,6 +20,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using static Triton.NativeMethods;
 
@@ -29,6 +30,10 @@ namespace Triton
     /// Represents a Lua thread, an object representing a thread of execution which can be resumed with arguments to
     /// receive results.
     /// </summary>
+    /// <remarks>
+    /// Instances of this class store the threads in the Lua registry in order to reference them. This means that an
+    /// instance is associated with its environment, and <i>must</i> be disposed of to prevent a Lua memory leak.
+    /// </remarks>
     public sealed unsafe class LuaThread : IDisposable
     {
         private readonly lua_State* _state;
@@ -77,16 +82,21 @@ namespace Triton
         {
             if (function is null)
                 ThrowHelper.ThrowArgumentNullException(nameof(function));
-            if (!IsReady)  // performs disposed validation
+
+            ThrowIfDisposed();
+
+            var state = _state;  // local optimization
+
+            if (lua_status(state) == LUA_YIELD)
                 ThrowHelper.ThrowInvalidOperationException("Thread is not ready to execute a function");
 
-            // Reset the stack so that the results start at index 1.
-            //
-            lua_settop(_state, 0);
+            lua_settop(state, 0);  // ensure that the results begin at index 1
 
-            function.Push(_state);
+            function.Push(state);
             _hasFunction = true;
         }
+
+        #region Resume overloads
 
         /// <summary>
         /// Resumes the thread with no arguments.
@@ -96,9 +106,23 @@ namespace Triton
         /// <exception cref="LuaRuntimeException">The thread resumption results in a Lua runtime error.</exception>
         public LuaResults Resume()
         {
-            ResumePrologue();  // performs validation
+            ThrowIfDisposed();
 
-            return lua_resume(_state, null, 0);
+            var state = _state;  // local optimization
+
+            if (lua_status(state) == LUA_YIELD)
+            {
+                lua_settop(state, 0);  // ensure that the results begin at index 1
+            }
+            else
+            {
+                if (!_hasFunction)
+                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
+
+                _hasFunction = false;
+            }
+
+            return lua_resume(state, null, 0);
         }
 
         /// <summary>
@@ -111,10 +135,24 @@ namespace Triton
         public LuaResults Resume(
             in LuaArgument argument)
         {
-            ResumePrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            return lua_resume(_state, null, 1);
+            var state = _state;  // local optimization
+
+            if (lua_status(state) == LUA_YIELD)
+            {
+                lua_settop(state, 0);  // ensure that the results begin at index 1
+            }
+            else
+            {
+                if (!_hasFunction)
+                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
+
+                _hasFunction = false;
+            }
+
+            argument.Push(state);
+            return lua_resume(state, null, 1);
         }
 
         /// <summary>
@@ -129,11 +167,25 @@ namespace Triton
             in LuaArgument argument,
             in LuaArgument argument2)
         {
-            ResumePrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            argument2.Push(_state);
-            return lua_resume(_state, null, 2);
+            var state = _state;  // local optimization
+
+            if (lua_status(state) == LUA_YIELD)
+            {
+                lua_settop(state, 0);  // ensure that the results begin at index 1
+            }
+            else
+            {
+                if (!_hasFunction)
+                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
+
+                _hasFunction = false;
+            }
+
+            argument.Push(state);
+            argument2.Push(state);
+            return lua_resume(state, null, 2);
         }
 
         /// <summary>
@@ -150,12 +202,26 @@ namespace Triton
             in LuaArgument argument2,
             in LuaArgument argument3)
         {
-            ResumePrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            argument2.Push(_state);
-            argument3.Push(_state);
-            return lua_resume(_state, null, 3);
+            var state = _state;  // local optimization
+
+            if (lua_status(state) == LUA_YIELD)
+            {
+                lua_settop(state, 0);  // ensure that the results begin at index 1
+            }
+            else
+            {
+                if (!_hasFunction)
+                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
+
+                _hasFunction = false;
+            }
+
+            argument.Push(state);
+            argument2.Push(state);
+            argument3.Push(state);
+            return lua_resume(state, null, 3);
         }
 
         /// <summary>
@@ -174,13 +240,27 @@ namespace Triton
             in LuaArgument argument3,
             in LuaArgument argument4)
         {
-            ResumePrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            argument2.Push(_state);
-            argument3.Push(_state);
-            argument4.Push(_state);
-            return lua_resume(_state, null, 4);
+            var state = _state;  // local optimization
+
+            if (lua_status(state) == LUA_YIELD)
+            {
+                lua_settop(state, 0);  // ensure that the results begin at index 1
+            }
+            else
+            {
+                if (!_hasFunction)
+                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
+
+                _hasFunction = false;
+            }
+
+            argument.Push(state);
+            argument2.Push(state);
+            argument3.Push(state);
+            argument4.Push(state);
+            return lua_resume(state, null, 4);
         }
 
         /// <summary>
@@ -201,14 +281,28 @@ namespace Triton
             in LuaArgument argument4,
             in LuaArgument argument5)
         {
-            ResumePrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            argument2.Push(_state);
-            argument3.Push(_state);
-            argument4.Push(_state);
-            argument5.Push(_state);
-            return lua_resume(_state, null, 5);
+            var state = _state;  // local optimization
+
+            if (lua_status(state) == LUA_YIELD)
+            {
+                lua_settop(state, 0);  // ensure that the results begin at index 1
+            }
+            else
+            {
+                if (!_hasFunction)
+                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
+
+                _hasFunction = false;
+            }
+
+            argument.Push(state);
+            argument2.Push(state);
+            argument3.Push(state);
+            argument4.Push(state);
+            argument5.Push(state);
+            return lua_resume(state, null, 5);
         }
 
         /// <summary>
@@ -231,15 +325,29 @@ namespace Triton
             in LuaArgument argument5,
             in LuaArgument argument6)
         {
-            ResumePrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            argument2.Push(_state);
-            argument3.Push(_state);
-            argument4.Push(_state);
-            argument5.Push(_state);
-            argument6.Push(_state);
-            return lua_resume(_state, null, 6);
+            var state = _state;  // local optimization
+
+            if (lua_status(state) == LUA_YIELD)
+            {
+                lua_settop(state, 0);  // ensure that the results begin at index 1
+            }
+            else
+            {
+                if (!_hasFunction)
+                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
+
+                _hasFunction = false;
+            }
+
+            argument.Push(state);
+            argument2.Push(state);
+            argument3.Push(state);
+            argument4.Push(state);
+            argument5.Push(state);
+            argument6.Push(state);
+            return lua_resume(state, null, 6);
         }
 
         /// <summary>
@@ -264,16 +372,30 @@ namespace Triton
             in LuaArgument argument6,
             in LuaArgument argument7)
         {
-            ResumePrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            argument2.Push(_state);
-            argument3.Push(_state);
-            argument4.Push(_state);
-            argument5.Push(_state);
-            argument6.Push(_state);
-            argument7.Push(_state);
-            return lua_resume(_state, null, 7);
+            var state = _state;  // local optimization
+
+            if (lua_status(state) == LUA_YIELD)
+            {
+                lua_settop(state, 0);  // ensure that the results begin at index 1
+            }
+            else
+            {
+                if (!_hasFunction)
+                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
+
+                _hasFunction = false;
+            }
+
+            argument.Push(state);
+            argument2.Push(state);
+            argument3.Push(state);
+            argument4.Push(state);
+            argument5.Push(state);
+            argument6.Push(state);
+            argument7.Push(state);
+            return lua_resume(state, null, 7);
         }
 
         /// <summary>
@@ -300,35 +422,13 @@ namespace Triton
             in LuaArgument argument7,
             in LuaArgument argument8)
         {
-            ResumePrologue();  // performs validation
+            ThrowIfDisposed();
 
-            argument.Push(_state);
-            argument2.Push(_state);
-            argument3.Push(_state);
-            argument4.Push(_state);
-            argument5.Push(_state);
-            argument6.Push(_state);
-            argument7.Push(_state);
-            argument8.Push(_state);
-            return lua_resume(_state, null, 8);
-        }
+            var state = _state;  // local optimization
 
-        internal void Push(lua_State* state)
-        {
-            if (*(GCHandle*)lua_getextraspace(state) != *(GCHandle*)lua_getextraspace(_state))
-                ThrowHelper.ThrowInvalidOperationException("Thread is not associated with the given environment");
-
-            var type = lua_rawgeti(state, LUA_REGISTRYINDEX, _ref);
-            Debug.Assert(type == LUA_TTHREAD);
-        }
-
-        private void ResumePrologue()
-        {
-            if (!IsReady)  // performs disposed validation
+            if (lua_status(state) == LUA_YIELD)
             {
-                // Reset the stack so that the results start at index 1.
-                //
-                lua_settop(_state, 0);
+                lua_settop(state, 0);  // ensure that the results begin at index 1
             }
             else
             {
@@ -337,9 +437,34 @@ namespace Triton
 
                 _hasFunction = false;
             }
+
+            argument.Push(state);
+            argument2.Push(state);
+            argument3.Push(state);
+            argument4.Push(state);
+            argument5.Push(state);
+            argument6.Push(state);
+            argument7.Push(state);
+            argument8.Push(state);
+            return lua_resume(state, null, 8);
         }
 
+        #endregion
+
+        [ExcludeFromCodeCoverage]
+        internal void Push(lua_State* state)
+        {
+            if (*(GCHandle*)lua_getextraspace(state) != *(GCHandle*)lua_getextraspace(_state))
+                ThrowHelper.ThrowInvalidOperationException("Thread is not associated with this environment");
+            
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, _ref);
+        }
+
+        [ExcludeFromCodeCoverage]
+        internal string ToDebugString() => $"thread: 0x{Convert.ToString((long)_state, 16)}";
+
         [DebuggerStepThrough]
+        [ExcludeFromCodeCoverage]
         private void ThrowIfDisposed()
         {
             if (_isDisposed)

@@ -18,18 +18,26 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
-using System;
-using BenchmarkDotNet.Running;
-using Triton.Benchmarks.Micro;
+using BenchmarkDotNet.Attributes;
 
-namespace Triton.Benchmarks
+namespace Triton.Benchmarks.Micro
 {
-    class Program
+    [DisassemblyDiagnoser(2)]
+    public class LuaFunctionBenchmarks
     {
-        static void Main(string[] args)
-        {
-            BenchmarkRunner.Run<LuaTableBenchmarks>();
-            Console.ReadKey(true);
-        }
+        private static readonly LuaEnvironment s_environment = new();
+        private static readonly LuaFunction s_function = s_environment.CreateFunction("return 1, 2, 3, 4");
+
+        [Benchmark]
+        public LuaResults Call_NoArguments() => s_function.Call();
+
+        [Benchmark]
+        public LuaResults Call_OneArgument() => s_function.Call(1);
+
+        [Benchmark]
+        public LuaResults Call_TwoArguments() => s_function.Call(1, 2);
+
+        [Benchmark]
+        public LuaResults Call_ThreeArguments() => s_function.Call(1, 2, 3);
     }
 }

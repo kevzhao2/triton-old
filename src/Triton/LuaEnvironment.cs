@@ -44,15 +44,17 @@ namespace Triton
         /// </summary>
         public LuaEnvironment()
         {
-            _state = luaL_newstate();
-            luaL_openlibs(_state);
+            var state = luaL_newstate();
+            luaL_openlibs(state);
 
             // Store a handle to the environment in the extra space portion of the Lua state. This enables us to
             // retrieve the environment associated with a Lua state, allowing the usage of static callbacks (and hence
             // unmanaged function pointers).
             //
             var handle = GCHandle.Alloc(this);
-            *(IntPtr*)lua_getextraspace(_state) = GCHandle.ToIntPtr(handle);
+            *(IntPtr*)lua_getextraspace(state) = GCHandle.ToIntPtr(handle);
+
+            _state = state;
         }
 
         /// <inheritdoc/>
@@ -60,12 +62,14 @@ namespace Triton
         {
             if (!_isDisposed)
             {
+                var state = _state;
+
                 // Cleanup must be done in a very specific order:
                 // - We must retrieve the `GCHandle` in the extra space portion of the Lua state prior to closing the state.
                 // - We must close the state prior to freeing the handle (since the `__gc` metamethods depend on it).
                 //
-                var handle = GCHandle.FromIntPtr(*(IntPtr*)lua_getextraspace(_state));
-                lua_close(_state);
+                var handle = GCHandle.FromIntPtr(*(IntPtr*)lua_getextraspace(state));
+                lua_close(state);
                 handle.Free();
 
                 _isDisposed = true;
@@ -87,12 +91,14 @@ namespace Triton
 
             ThrowIfDisposed();
 
+            var state = _state;
+
             // Reset the top of the stack so that the value will be at index 1.
             //
-            lua_settop(_state, 0);
+            lua_settop(state, 0);
 
-            _ = lua_getglobal(_state, name);
-            return new(_state, 1);
+            _ = lua_getglobal(state, name);
+            return new(state, 1);
         }
 
         /// <summary>
@@ -109,8 +115,10 @@ namespace Triton
 
             ThrowIfDisposed();
 
-            value.Push(_state);
-            lua_setglobal(_state, name);
+            var state = _state;
+
+            value.Push(state);
+            lua_setglobal(state, name);
         }
 
         /// <summary>
@@ -128,12 +136,37 @@ namespace Triton
 
             ThrowIfDisposed();
 
+            var state = _state;
+
             // Reset the top of the stack so that the results will begin at index 1.
             //
-            lua_settop(_state, 0);
+            lua_settop(state, 0);
 
-            luaL_loadstring(_state, str);
-            return lua_pcall(_state, 0, LUA_MULTRET);
+            luaL_loadstring(state, str);
+            return lua_pcall(state, 0, LUA_MULTRET);
+        }
+
+        /// <summary>
+        /// Creates a new table with the given initial capacities.
+        /// </summary>
+        /// <param name="arrayCapacity">The initial capacity of the array portion of the table.</param>
+        /// <param name="hashCapacity">The initial capacity of the hash portion of the table.</param>
+        /// <returns>The resulting table.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="arrayCapacity"/> or <paramref name="hashCapacity"/> are negative.</exception>
+        public LuaTable CreateTable(int arrayCapacity = 0, int hashCapacity = 0)
+        {
+            if (arrayCapacity < 0)
+                ThrowHelper.ThrowArgumentOutOfRangeException(nameof(arrayCapacity), "Array capacity is negative");
+            if (hashCapacity < 0)
+                ThrowHelper.ThrowArgumentOutOfRangeException(nameof(hashCapacity), "Hash capacity is negative");
+
+            ThrowIfDisposed();
+
+            var state = _state;
+
+            lua_createtable(state, arrayCapacity, hashCapacity);
+            var @ref = luaL_ref(state, LUA_REGISTRYINDEX);
+            return new(state, @ref);
         }
 
         /// <summary>
@@ -149,9 +182,11 @@ namespace Triton
 
             ThrowIfDisposed();
 
-            luaL_loadstring(_state, str);
-            var @ref = luaL_ref(_state, LUA_REGISTRYINDEX);
-            return new(_state, @ref);
+            var state = _state;
+
+            luaL_loadstring(state, str);
+            var @ref = luaL_ref(state, LUA_REGISTRYINDEX);
+            return new(state, @ref);
         }
 
         /// <summary>
@@ -162,9 +197,11 @@ namespace Triton
         {
             ThrowIfDisposed();
 
-            var state = lua_newthread(_state);
-            var @ref = luaL_ref(_state, LUA_REGISTRYINDEX);
-            return new(state, @ref);
+            var state = _state;
+
+            var threadState = lua_newthread(state);
+            var @ref = luaL_ref(state, LUA_REGISTRYINDEX);
+            return new(threadState, @ref);
         }
 
         internal object ToClrObject(lua_State* state, int index)

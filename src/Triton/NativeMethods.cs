@@ -19,6 +19,7 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -39,7 +40,7 @@ namespace Triton
     /// Provides access to native methods.
     /// </summary>
     [SuppressMessage("Style", "IDE1006:Naming Styles", Justification = "Naming consistency")]
-    [SkipLocalsInit]
+    [DebuggerStepThrough]
     internal static unsafe class NativeMethods
     {
         public const int LUAI_MAXSTACK = 1000000;
@@ -83,7 +84,7 @@ namespace Triton
         {
             var handle = GCHandle.FromIntPtr(*(IntPtr*)lua_getextraspace(L));
             var target = handle.Target!;
-            return Unsafe.As<object, LuaEnvironment>(ref target);  // optimal cast, should be safe
+            return Unsafe.As<object, LuaEnvironment>(ref target);
         }
 
         [SuppressGCTransition]
@@ -127,7 +128,7 @@ namespace Triton
 
         public static void lua_pushboolean(lua_State* L, bool b)
         {
-            lua_pushboolean(L, Unsafe.As<bool, int>(ref b));
+            lua_pushboolean(L, Unsafe.As<bool, byte>(ref b));
             return;
 
             [SuppressGCTransition]
@@ -143,6 +144,7 @@ namespace Triton
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern void lua_pushnumber(lua_State* L, double n);
 
+        [SkipLocalsInit]
         public static void lua_pushstring(lua_State* L, string s)
         {
             const int bufferSize = 1024;
@@ -214,8 +216,6 @@ namespace Triton
             static extern int lua_isinteger(lua_State* L, int index);
         }
 
-        public static bool lua_isclrobject(lua_State* L, int index) => *(bool*)lua_touserdata(L, index);
-
         public static bool lua_toboolean(lua_State* L, int index)
         {
             return lua_toboolean(L, index) != 0;
@@ -237,6 +237,7 @@ namespace Triton
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern byte* lua_tolstring(lua_State* L, int index, nuint* len);
 
+        [SkipLocalsInit]
         public static string lua_tostring(lua_State* L, int index)
         {
             nuint len;
@@ -257,6 +258,7 @@ namespace Triton
 
         #region Lua getters
 
+        [SkipLocalsInit]
         public static int lua_getglobal(lua_State* L, string name)
         {
             const int bufferSize = 1024;
@@ -290,14 +292,66 @@ namespace Triton
             static extern int lua_getglobal(lua_State* L, byte* name);
         }
 
+        [SkipLocalsInit]
+        public static int lua_getfield(lua_State* L, int index, string k)
+        {
+            const int bufferSize = 1024;
+
+            if (k.Length < bufferSize / 3)
+            {
+                var bytes = stackalloc byte[bufferSize];
+                fixed (char* chars = k)
+                {
+                    var length = Encoding.UTF8.GetBytes(chars, k.Length, bytes, bufferSize);
+                    bytes[length] = 0;
+
+                    return lua_getfield(L, index, bytes);
+                }
+            }
+            else
+            {
+                return SlowPath(L, index, k);
+            }
+
+            static int SlowPath(lua_State* L, int index, string k)
+            {
+                fixed (byte* bytes = Encoding.UTF8.GetBytes(k + '\0'))
+                {
+                    return lua_getfield(L, index, bytes);
+                }
+            }
+
+            [SuppressGCTransition]
+            [DllImport("lua54", CallingConvention = Cdecl)]
+            static extern int lua_getfield(lua_State* L, int index, byte* k);
+        }
+
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern int lua_geti(lua_State* L, int index, long i);
+
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern int lua_gettable(lua_State* L, int index);
+
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern int lua_rawgeti(lua_State* L, int index, long n);
+
+        public static bool lua_getmetatable(lua_State* L, int index)
+        {
+            return lua_getmetatable(L, index) != 0;
+
+            [SuppressGCTransition]
+            [DllImport("lua54", CallingConvention = Cdecl)]
+            static extern int lua_getmetatable(lua_State* L, int index);
+        }
 
         #endregion
 
         #region Lua setters
 
+        [SkipLocalsInit]
         public static void lua_setglobal(lua_State* L, string name)
         {
             const int bufferSize = 1024;
@@ -331,14 +385,61 @@ namespace Triton
             static extern void lua_setglobal(lua_State* L, byte* name);
         }
 
+        [SkipLocalsInit]
+        public static void lua_setfield(lua_State* L, int index, string k)
+        {
+            const int bufferSize = 1024;
+
+            if (k.Length < bufferSize / 3)
+            {
+                var bytes = stackalloc byte[bufferSize];
+                fixed (char* chars = k)
+                {
+                    var length = Encoding.UTF8.GetBytes(chars, k.Length, bytes, bufferSize);
+                    bytes[length] = 0;
+
+                    lua_setfield(L, index, bytes);
+                }
+            }
+            else
+            {
+                SlowPath(L, index, k);
+            }
+
+            static void SlowPath(lua_State* L, int index, string k)
+            {
+                fixed (byte* bytes = Encoding.UTF8.GetBytes(k + '\0'))
+                {
+                    lua_setfield(L, index, bytes);
+                }
+            }
+
+            [SuppressGCTransition]
+            [DllImport("lua54", CallingConvention = Cdecl)]
+            static extern void lua_setfield(lua_State* L, int index, byte* k);
+        }
+
         [SuppressGCTransition]
         [DllImport("lua54", CallingConvention = Cdecl)]
-        public static extern void lua_rawseti(lua_State* L, int index, long n);
+        public static extern void lua_seti(lua_State* L, int index, long i);
+
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern void lua_settable(lua_State* L, int index);
+
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern void lua_rawseti(lua_State* L, int index, long i);
+
+        [SuppressGCTransition]
+        [DllImport("lua54", CallingConvention = Cdecl)]
+        public static extern void lua_setmetatable(lua_State* L, int index);
 
         #endregion
 
         #region Lua helpers
 
+        [SkipLocalsInit]
         public static void luaL_loadstring(lua_State* L, string s)
         {
             const int bufferSize = 1024;
@@ -406,6 +507,15 @@ namespace Triton
 
             [DllImport("lua54", CallingConvention = Cdecl)]
             static extern int lua_resume(lua_State* L, lua_State* from, int nargs, int* nresults);
+        }
+
+        public static bool lua_next(lua_State* L, int index)
+        {
+            return lua_next(L, index) != 0;
+
+            [SuppressGCTransition]
+            [DllImport("lua54", CallingConvention = Cdecl)]
+            static extern int lua_next(lua_State* L, int index);
         }
 
         [SuppressGCTransition]

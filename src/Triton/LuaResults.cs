@@ -20,12 +20,22 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using static Triton.NativeMethods;
 
 namespace Triton
 {
     /// <summary>
-    /// Represents multiple Lua results. This structure is intended to be ephemeral.
+    /// Represents multiple Lua results.
     /// </summary>
+    /// <remarks>
+    /// This structure is ephemeral and is invalidated immediately after calling another API. It allows for lazy
+    /// computation; if the result is not inspected, no extra work is done.
+    /// </remarks>
+    [DebuggerDisplay("{ToDebugString(),nq}")]
+    [DebuggerStepThrough]
     public unsafe readonly ref struct LuaResults
     {
         private readonly lua_State* _state;
@@ -34,6 +44,8 @@ namespace Triton
         {
             _state = state;
         }
+
+        #region IsXxx properties
 
         /// <inheritdoc cref="LuaResult.IsNil"/>
         public bool IsNil => ((LuaResult)this).IsNil;
@@ -65,6 +77,10 @@ namespace Triton
         /// <inheritdoc cref="LuaResult.IsClrTypes"/>
         public bool IsClrTypes => ((LuaResult)this).IsClrTypes;
 
+        #endregion
+
+        #region Deconstruct(...) overloads
+
         /// <summary>
         /// Deconstructs two results.
         /// </summary>
@@ -74,8 +90,10 @@ namespace Triton
             out LuaResult result,
             out LuaResult result2)
         {
-            result  = new(_state, 1);
-            result2 = new(_state, 2);
+            var state = _state;  // local optimization
+
+            result  = new(state, 1);
+            result2 = new(state, 2);
         }
 
         /// <summary>
@@ -89,9 +107,11 @@ namespace Triton
             out LuaResult result2,
             out LuaResult result3)
         {
-            result  = new(_state, 1);
-            result2 = new(_state, 2);
-            result3 = new(_state, 3);
+            var state = _state;  // local optimization
+
+            result  = new(state, 1);
+            result2 = new(state, 2);
+            result3 = new(state, 3);
         }
 
         /// <summary>
@@ -107,10 +127,12 @@ namespace Triton
             out LuaResult result3,
             out LuaResult result4)
         {
-            result  = new(_state, 1);
-            result2 = new(_state, 2);
-            result3 = new(_state, 3);
-            result4 = new(_state, 4);
+            var state = _state;  // local optimization
+
+            result  = new(state, 1);
+            result2 = new(state, 2);
+            result3 = new(state, 3);
+            result4 = new(state, 4);
         }
 
         /// <summary>
@@ -128,11 +150,13 @@ namespace Triton
             out LuaResult result4,
             out LuaResult result5)
         {
-            result  = new(_state, 1);
-            result2 = new(_state, 2);
-            result3 = new(_state, 3);
-            result4 = new(_state, 4);
-            result5 = new(_state, 5);
+            var state = _state;  // local optimization
+
+            result  = new(state, 1);
+            result2 = new(state, 2);
+            result3 = new(state, 3);
+            result4 = new(state, 4);
+            result5 = new(state, 5);
         }
 
         /// <summary>
@@ -152,12 +176,14 @@ namespace Triton
             out LuaResult result5,
             out LuaResult result6)
         {
-            result  = new(_state, 1);
-            result2 = new(_state, 2);
-            result3 = new(_state, 3);
-            result4 = new(_state, 4);
-            result5 = new(_state, 5);
-            result6 = new(_state, 6);
+            var state = _state;  // local optimization
+
+            result  = new(state, 1);
+            result2 = new(state, 2);
+            result3 = new(state, 3);
+            result4 = new(state, 4);
+            result5 = new(state, 5);
+            result6 = new(state, 6);
         }
 
         /// <summary>
@@ -179,13 +205,15 @@ namespace Triton
             out LuaResult result6,
             out LuaResult result7)
         {
-            result  = new(_state, 1);
-            result2 = new(_state, 2);
-            result3 = new(_state, 3);
-            result4 = new(_state, 4);
-            result5 = new(_state, 5);
-            result6 = new(_state, 6);
-            result7 = new(_state, 7);
+            var state = _state;  // local optimization
+
+            result  = new(state, 1);
+            result2 = new(state, 2);
+            result3 = new(state, 3);
+            result4 = new(state, 4);
+            result5 = new(state, 5);
+            result6 = new(state, 6);
+            result7 = new(state, 7);
         }
 
         /// <summary>
@@ -209,15 +237,21 @@ namespace Triton
             out LuaResult result7,
             out LuaResult result8)
         {
-            result  = new(_state, 1);
-            result2 = new(_state, 2);
-            result3 = new(_state, 3);
-            result4 = new(_state, 4);
-            result5 = new(_state, 5);
-            result6 = new(_state, 6);
-            result7 = new(_state, 7);
-            result8 = new(_state, 8);
+            var state = _state;  // local optimization
+
+            result  = new(state, 1);
+            result2 = new(state, 2);
+            result3 = new(state, 3);
+            result4 = new(state, 4);
+            result5 = new(state, 5);
+            result6 = new(state, 6);
+            result7 = new(state, 7);
+            result8 = new(state, 8);
         }
+
+        #endregion
+
+        #region ToXxx() methods
 
         /// <inheritdoc cref="LuaResult.ToBoolean"/>
         public bool ToBoolean() => ((LuaResult)this).ToBoolean();
@@ -246,11 +280,34 @@ namespace Triton
         /// <inheritdoc cref="LuaResult.ToClrTypes"/>
         public IReadOnlyList<Type> ToClrTypes() => ((LuaResult)this).ToClrTypes();
 
+        #endregion
+
+        [ExcludeFromCodeCoverage]
+        internal string ToDebugString()
+        {
+            var state = _state;  // local optimization
+
+            if (state is null)
+                return "<uninitialized>";
+
+            var top = Math.Min(lua_gettop(state), 9);  // show at most eight values
+            return top switch
+            {
+                0 => "()",
+                1 => ToDebugString(1),
+                _ => $"({string.Join(", ", Enumerable.Range(1, top).Select(i => i < 9 ? ToDebugString(i) : "..."))})"
+            };
+
+            string ToDebugString(int index) => new LuaResult(state, index).ToDebugString();
+        }
+
         /// <summary>
-        /// Decays the results into an result.
+        /// Decays the results into a single <see cref="LuaResult"/>.
         /// </summary>
         /// <param name="results">The Lua results to convert.</param>
         public static implicit operator LuaResult(LuaResults results) => *(LuaResult*)&results;
+
+        #region explicit operators
 
         /// <inheritdoc cref="LuaResult.explicit operator bool"/>
         public static explicit operator bool(LuaResults results) => (bool)(LuaResult)results;
@@ -272,5 +329,7 @@ namespace Triton
 
         /// <inheritdoc cref="LuaResult.explicit operator LuaThread"/>
         public static explicit operator LuaThread(LuaResults results) => (LuaThread)(LuaResult)results;
+
+        #endregion
     }
 }

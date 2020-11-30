@@ -31,18 +31,50 @@ namespace Triton.Benchmarks.Micro
         [GlobalSetup]
         public void Setup()
         {
-            // Pad the global names so that the string sizes match.
-            //
-            _environment.SetGlobal("boolean", true);
-            _environment.SetGlobal("integer", 1234);
-            _environment.SetGlobal("number ", 1.234);
-            _environment.SetGlobal("string ", "test");
+            _environment.Eval(@"
+                boolean = true
+                integer = 1234
+                number_ = 1.234
+                string_ = 'test'
+                table__ = {}
+                func___ = function() end
+                thread_ = coroutine.create(function() end)");
         }
+
+        [Benchmark]
+        public bool GetGlobal_Boolean() => (bool)_environment.GetGlobal("boolean");
 
         [Benchmark]
         public long GetGlobal_Integer() => (long)_environment.GetGlobal("integer");
 
         [Benchmark]
-        public string GetGlobal_String() => (string)_environment.GetGlobal("string ");
+        public double GetGlobal_Number() => (double)_environment.GetGlobal("number_");
+
+        [Benchmark]
+        public string GetGlobal_String() => (string)_environment.GetGlobal("string_");
+
+        [Benchmark]
+        public LuaTable GetGlobal_Table()
+        {
+            var table = (LuaTable)_environment.GetGlobal("table__");
+            table.Dispose();
+            return table;
+        }
+
+        [Benchmark]
+        public LuaFunction GetGlobal_Function()
+        {
+            var function = (LuaFunction)_environment.GetGlobal("func___");
+            function.Dispose();
+            return function;
+        }
+
+        [Benchmark]
+        public LuaThread GetGlobal_Thread()
+        {
+            var thread = (LuaThread)_environment.GetGlobal("thread_");
+            thread.Dispose();
+            return thread;
+        }
     }
 }

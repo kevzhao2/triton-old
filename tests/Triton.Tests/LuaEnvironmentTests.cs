@@ -228,6 +228,69 @@ namespace Triton
         }
 
         [Fact]
+        public void Eval_TableResult()
+        {
+            using var environment = new LuaEnvironment();
+
+            var result = environment.Eval("return {}");
+
+            Assert.False(result.IsNil);
+            Assert.False(result.IsBoolean);
+            Assert.False(result.IsInteger);
+            Assert.False(result.IsFloat);
+            Assert.False(result.IsString);
+            Assert.True(result.IsTable);
+            Assert.False(result.IsFunction);
+            Assert.False(result.IsThread);
+            Assert.False(result.IsClrObject);
+            Assert.False(result.IsClrTypes);
+            _ = (LuaTable)result;
+            _ = result.ToTable();
+        }
+
+        [Fact]
+        public void Eval_FunctionResult()
+        {
+            using var environment = new LuaEnvironment();
+
+            var result = environment.Eval("return function() end");
+
+            Assert.False(result.IsNil);
+            Assert.False(result.IsBoolean);
+            Assert.False(result.IsInteger);
+            Assert.False(result.IsFloat);
+            Assert.False(result.IsString);
+            Assert.False(result.IsTable);
+            Assert.True(result.IsFunction);
+            Assert.False(result.IsThread);
+            Assert.False(result.IsClrObject);
+            Assert.False(result.IsClrTypes);
+            _ = (LuaFunction)result;
+            _ = result.ToFunction();
+        }
+
+        [Fact]
+        public void Eval_ThreadResult()
+        {
+            using var environment = new LuaEnvironment();
+
+            var result = environment.Eval("return coroutine.create(function() end)");
+
+            Assert.False(result.IsNil);
+            Assert.False(result.IsBoolean);
+            Assert.False(result.IsInteger);
+            Assert.False(result.IsFloat);
+            Assert.False(result.IsString);
+            Assert.False(result.IsTable);
+            Assert.False(result.IsFunction);
+            Assert.True(result.IsThread);
+            Assert.False(result.IsClrObject);
+            Assert.False(result.IsClrTypes);
+            _ = (LuaThread)result;
+            _ = result.ToThread();
+        }
+
+        [Fact]
         public void Eval_OneResult()
         {
             using var environment = new LuaEnvironment();
@@ -292,6 +355,7 @@ namespace Triton
         {
             using var environment = new LuaEnvironment();
 
+            var results = environment.Eval("return 1, 2, 3, 4, 5, 6");
             var (result, result2, result3, result4, result5, result6) = environment.Eval("return 1, 2, 3, 4, 5, 6");
 
             Assert.Equal(1, (long)result);
@@ -338,6 +402,30 @@ namespace Triton
         }
 
         [Fact]
+        public void CreateTable_NegativeArrayCapacity_ThrowsArgumentOutOfRangeException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => environment.CreateTable(-1, 0));
+        }
+
+        [Fact]
+        public void CreateTable_NegativeHashCapacity_ThrowsArgumentOutOfRangeException()
+        {
+            using var environment = new LuaEnvironment();
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => environment.CreateTable(0, -1));
+        }
+
+        [Fact]
+        public void CreateTable()
+        {
+            using var environment = new LuaEnvironment();
+
+            using var table = environment.CreateTable();
+        }
+
+        [Fact]
         public void CreateFunction_NullString_ThrowsArgumentNullException()
         {
             using var environment = new LuaEnvironment();
@@ -357,6 +445,7 @@ namespace Triton
         public void CreateFunction()
         {
             using var environment = new LuaEnvironment();
+
             using var function = environment.CreateFunction(@"
                 result = 0
                 for _, val in ipairs({...}) do
@@ -369,6 +458,7 @@ namespace Triton
         public void CreateThread()
         {
             using var environment = new LuaEnvironment();
+
             using var thread = environment.CreateThread();
         }
     }
