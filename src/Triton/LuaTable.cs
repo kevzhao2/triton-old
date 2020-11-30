@@ -548,7 +548,24 @@ namespace Triton
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is <see langword="null"/>.</exception>
         public bool Remove(string key)
         {
-            throw new NotImplementedException();
+            if (key is null)
+                ThrowHelper.ThrowArgumentNullException(nameof(key));
+
+            ThrowIfDisposed();
+
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            var type = lua_getfield(state, -1, key);
+            if (type != LUA_TNIL)
+            {
+                lua_pushnil(state);
+                lua_setfield(state, -3, key);
+            }
+
+            lua_pop(state, 2);  // pop the table and value off of the stack
+            return type != LUA_TNIL;
         }
 
         /// <inheritdoc cref="Remove(in LuaArgument, out LuaResult)"/>
@@ -561,7 +578,21 @@ namespace Triton
         /// <inheritdoc cref="Remove(in LuaArgument)"/>
         public bool Remove(long key)
         {
-            throw new NotImplementedException();
+            ThrowIfDisposed();
+
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            var type = lua_geti(state, -1, key);
+            if (type != LUA_TNIL)
+            {
+                lua_pushnil(state);
+                lua_seti(state, -3, key);
+            }
+
+            lua_pop(state, 2);  // pop the table and value off of the stack
+            return type != LUA_TNIL;
         }
 
         /// <inheritdoc cref="Remove(in LuaArgument, out LuaResult)"/>
@@ -577,7 +608,23 @@ namespace Triton
         /// <returns><see langword="true"/> if the key is successfully removed; otherwise, <see langword="false"/>.</returns>
         public bool Remove(in LuaArgument key)
         {
-            throw new NotImplementedException();
+            ThrowIfDisposed();
+
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            key.Push(state);
+            var type = lua_gettable(state, -2);
+            if (type != LUA_TNIL)
+            {
+                key.Push(state);
+                lua_pushnil(state);
+                lua_settable(state, -4);
+            }
+
+            lua_pop(state, 2);  // pop the table and value off of the stack
+            return type != LUA_TNIL;
         }
 
         /// <summary>
