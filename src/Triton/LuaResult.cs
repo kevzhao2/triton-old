@@ -39,6 +39,11 @@ namespace Triton
     [DebuggerStepThrough]
     public unsafe readonly ref struct LuaResult
     {
+        // Store a combination of the Lua state and index. This allows us to use eight bytes to represent a Lua result,
+        // making them extremely fast.
+        //
+        // The limitation is that we cannot reference an index greater than 8, but this is unlikely to have an impact.
+        //
         private readonly nint _stateAndIndex;
 
         internal LuaResult(lua_State* state, int index)
@@ -50,6 +55,10 @@ namespace Triton
         }
 
         #region IsXxx properties
+
+        // We gracefully handle a default `LuaResult` by returning `false` for all of these properties. This is required
+        // for debugger support!
+        //
 
         /// <summary>
         /// Gets a value indicating whether the result is <see langword="nil"/>.
@@ -198,6 +207,9 @@ namespace Triton
         }
 
         #region ToXxx() methods
+
+        // We gracefully handle a default `LuaResult` by throwing an `InvalidCastException` for all of these methods.
+        //
 
         /// <summary>
         /// Converts the result into a boolean, performing coercion if necessary.

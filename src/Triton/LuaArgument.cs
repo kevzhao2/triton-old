@@ -58,8 +58,8 @@ namespace Triton
             Table,
             Function,
             Thread,
-            ClrObject,
-            ClrTypes
+            ClrTypes,  // intentionally placed before `ClrObject` to allow for the common case to be fastest
+            ClrObject
         }
 
         private static readonly StrongBox<PrimitiveTag> s_booleanTag = new(PrimitiveTag.Boolean);
@@ -77,12 +77,16 @@ namespace Triton
         // Store either an object or a boxed primitive tag at offset 8. This allows us to use eight bytes to either
         // identify a primitive or any object.
         //
-        // All together, this allows us to use sixteen bytes to represent any valid Lua argument.
+        // All together, this allows us to use sixteen bytes to represent any valid Lua argument, making them extremely
+        // fast.
         //
         [FieldOffset(8)] private readonly object?   _objectOrPrimitiveTag;
 
-        #region LuaArgument constructors
+        #region constructors
 
+        // These constructors are marked with `AggressiveInlining` to ensure that the `Unsafe.SkipInit` calls do not
+        // block inlining.
+        //
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private LuaArgument(bool boolean)
         {
@@ -246,7 +250,7 @@ namespace Triton
                     ThrowHelper.ThrowArgumentException(nameof(types), "Types contains null");
 
                 // We do not want two types with the same generic arity. The intent of taking an array of types is to
-                // allow for generic arity overloading: e.g., Task referring to `Task` or `Task<>`.
+                // allow for generic arity overloading: e.g., a single value referring to either `Task` or `Task<>`.
                 //
                 var genericArity = type.GetGenericArguments().Length;
                 if (genericArities.Contains(genericArity))
@@ -270,50 +274,56 @@ namespace Triton
             }
             else if (objectOrPrimitiveTag.GetType() == typeof(StrongBox<PrimitiveTag>))
             {
-                var tag = Unsafe.As<object, StrongBox<PrimitiveTag>>(ref objectOrPrimitiveTag).Value;
+                var tag = Unsafe.As<object, StrongBox<PrimitiveTag>>(ref objectOrPrimitiveTag).Value;  // optimal cast
                 Debug.Assert(tag is >= PrimitiveTag.Boolean and <= PrimitiveTag.Number);
 
-                if (tag == PrimitiveTag.Boolean)
-                    lua_pushboolean(state, _boolean);
-                else if (tag == PrimitiveTag.Integer)
+                // These if statements are optimal for primitives. We check for integers and numbers first since these
+                // are more common than booleans.
+                //
+                if (tag == PrimitiveTag.Integer)
                     lua_pushinteger(state, _integer);
-                else
+                else if (tag == PrimitiveTag.Number)
                     lua_pushnumber(state, _number);
+                else
+                    lua_pushboolean(state, _boolean);
             }
             else
             {
-                var tag = _objectTag;
-                Debug.Assert(tag is >= ObjectTag.String and <= ObjectTag.ClrTypes);
+                Debug.Assert(_objectTag is >= ObjectTag.String and <= ObjectTag.ClrObject);
 
-                switch (tag)
+                // This switch statement is optimal for objects. We check for CLR objects as the default case since
+                // these are the most common.
+                //
+                switch (_objectTag)
                 {
                     case ObjectTag.String:
-                        lua_pushstring(state, Unsafe.As<object, string>(ref objectOrPrimitiveTag));
+                        lua_pushstring(state, Unsafe.As<object, string>(ref objectOrPrimitiveTag));  // optimal cast
                         break;
 
                     case ObjectTag.Table:
-                        Unsafe.As<object, LuaTable>(ref objectOrPrimitiveTag).Push(state);
+                        Unsafe.As<object, LuaTable>(ref objectOrPrimitiveTag).Push(state);  // optimal cast
                         break;
 
                     case ObjectTag.Function:
-                        Unsafe.As<object, LuaFunction>(ref objectOrPrimitiveTag).Push(state);
+                        Unsafe.As<object, LuaFunction>(ref objectOrPrimitiveTag).Push(state);  // optimal cast
                         break;
 
                     case ObjectTag.Thread:
-                        Unsafe.As<object, LuaThread>(ref objectOrPrimitiveTag).Push(state);
+                        Unsafe.As<object, LuaThread>(ref objectOrPrimitiveTag).Push(state);  // optimal cast
                         break;
 
-                    case ObjectTag.ClrObject:
+                    case ObjectTag.ClrTypes:
                     {
                         var environment = lua_getenvironment(state);
-                        environment.PushClrObject(state, objectOrPrimitiveTag);
+                        var types = Unsafe.As<object, Type[]>(ref objectOrPrimitiveTag);  // optimal cast
+                        environment.PushClrTypes(state, types);
                         break;
                     }
 
                     default:
                     {
                         var environment = lua_getenvironment(state);
-                        environment.PushClrTypes(state, Unsafe.As<object, Type[]>(ref objectOrPrimitiveTag));
+                        environment.PushClrObject(state, objectOrPrimitiveTag);
                         break;
                     }
                 }
@@ -331,7 +341,7 @@ namespace Triton
             }
             else if (objectOrPrimitiveTag.GetType() == typeof(StrongBox<PrimitiveTag>))
             {
-                var tag = Unsafe.As<object, StrongBox<PrimitiveTag>>(ref objectOrPrimitiveTag).Value;
+                var tag = Unsafe.As<object, StrongBox<PrimitiveTag>>(ref objectOrPrimitiveTag).Value;  // optimal cast
                 Debug.Assert(tag is >= PrimitiveTag.Boolean and <= PrimitiveTag.Number);
 
                 return tag switch
@@ -343,31 +353,30 @@ namespace Triton
             }
             else
             {
-                var tag = _objectTag;
-                Debug.Assert(tag is >= ObjectTag.String and <= ObjectTag.ClrTypes);
+                Debug.Assert(_objectTag is >= ObjectTag.String and <= ObjectTag.ClrObject);
 
-                switch (tag)
+                switch (_objectTag)
                 {
                     case ObjectTag.String:
-                        return $"\"{Unsafe.As<object, string>(ref objectOrPrimitiveTag)}\"";
+                        return $"\"{Unsafe.As<object, string>(ref objectOrPrimitiveTag)}\"";  // optimal cast
 
                     case ObjectTag.Table:
-                        return Unsafe.As<object, LuaTable>(ref objectOrPrimitiveTag).ToDebugString();
+                        return Unsafe.As<object, LuaTable>(ref objectOrPrimitiveTag).ToDebugString();  // optimal cast
 
                     case ObjectTag.Function:
-                        return Unsafe.As<object, LuaFunction>(ref objectOrPrimitiveTag).ToDebugString();
+                        return Unsafe.As<object, LuaFunction>(ref objectOrPrimitiveTag).ToDebugString();  // optimal cast
 
                     case ObjectTag.Thread:
-                        return Unsafe.As<object, LuaThread>(ref objectOrPrimitiveTag).ToDebugString();
+                        return Unsafe.As<object, LuaThread>(ref objectOrPrimitiveTag).ToDebugString();  // optimal cast
 
-                    case ObjectTag.ClrObject:
-                        return $"CLR object: {objectOrPrimitiveTag}";
-
-                    default:
-                        var types = Unsafe.As<object, Type[]>(ref objectOrPrimitiveTag);
+                    case ObjectTag.ClrTypes:
+                        var types = Unsafe.As<object, Type[]>(ref objectOrPrimitiveTag);  // optimal cast
                         return types.Length == 1 ?
                             $"CLR type: {types[0]}" :
                             $"CLR types: ({string.Join<Type>(", ", types)})";
+
+                    default:
+                        return $"CLR object: {objectOrPrimitiveTag}";
                 }
             }
         }

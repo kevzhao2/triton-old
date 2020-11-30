@@ -25,7 +25,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace Triton
 {
     /// <summary>
-    /// Provides helper methods for throwing exceptions.
+    /// Provides helper methods for throwing exceptions to reduce code size.
     /// </summary>
     [DebuggerStepThrough]
     [ExcludeFromCodeCoverage]

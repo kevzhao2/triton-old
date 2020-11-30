@@ -78,7 +78,7 @@ namespace Triton
         [DllImport("lua54", CallingConvention = Cdecl)]
         public static extern void luaL_openlibs(lua_State* L);
 
-        public static void* lua_getextraspace(lua_State* L) => (void*)((IntPtr)L - IntPtr.Size);
+        public static void* lua_getextraspace(lua_State* L) => (void*)((nint)L - IntPtr.Size);
 
         public static LuaEnvironment lua_getenvironment(lua_State* L)
         {
@@ -220,7 +220,7 @@ namespace Triton
 
             [SuppressGCTransition]
             [DllImport("lua54", CallingConvention = Cdecl)]
-            static extern int lua_isinteger(lua_State* L, int index);
+            static extern int lua_isinteger(lua_State* L, int index);  // `bool` is not blittable
         }
 
         public static bool lua_toboolean(lua_State* L, int index)
@@ -229,7 +229,7 @@ namespace Triton
 
             [SuppressGCTransition]
             [DllImport("lua54", CallingConvention = Cdecl)]
-            static extern int lua_toboolean(lua_State* L, int index);
+            static extern int lua_toboolean(lua_State* L, int index);  // `bool` is not blittable
         }
 
         [SuppressGCTransition]
@@ -351,7 +351,7 @@ namespace Triton
 
             [SuppressGCTransition]
             [DllImport("lua54", CallingConvention = Cdecl)]
-            static extern int lua_getmetatable(lua_State* L, int index);
+            static extern int lua_getmetatable(lua_State* L, int index);  // `bool` is not blittable
         }
 
         #endregion
@@ -452,7 +452,7 @@ namespace Triton
 
             [SuppressGCTransition]
             [DllImport("lua54", CallingConvention = Cdecl)]
-            static extern int lua_next(lua_State* L, int index);
+            static extern int lua_next(lua_State* L, int index);  // `bool` is not blittable
         }
 
         [SkipLocalsInit]

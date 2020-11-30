@@ -37,6 +37,8 @@ namespace Triton
     [DebuggerStepThrough]
     public unsafe readonly ref struct LuaResults
     {
+        // Store the Lua state. This allows us to use eight bytes to represent Lua results, making them extremely fast.
+        //
         private readonly lua_State* _state;
 
         internal LuaResults(lua_State* state)
@@ -45,6 +47,9 @@ namespace Triton
         }
 
         #region IsXxx properties
+
+        // These properties are forwarded to the `LuaResult` structure, which means that the first result is checked.
+        //
 
         /// <inheritdoc cref="LuaResult.IsNil"/>
         public bool IsNil => ((LuaResult)this).IsNil;
@@ -252,6 +257,9 @@ namespace Triton
 
         #region ToXxx() methods
 
+        // These methods are forwarded to the `LuaResult` structure, which means that the first result is converted.
+        //
+
         /// <inheritdoc cref="LuaResult.ToBoolean"/>
         public bool ToBoolean() => ((LuaResult)this).ToBoolean();
 
@@ -289,7 +297,7 @@ namespace Triton
             if (state is null)
                 return "<uninitialized>";
 
-            var top = Math.Min(lua_gettop(state), 9);  // show at most eight values (maybe including an ellipsis)
+            var top = Math.Min(lua_gettop(state), 9);  // show at most eight values (including an ellipsis)
             return top == 1 ?
                 ToDebugString(1) :
                 $"({string.Join(", ", Enumerable.Range(1, top).Select(ToDebugString))})";
@@ -303,9 +311,12 @@ namespace Triton
         /// Decays the results into a single <see cref="LuaResult"/>.
         /// </summary>
         /// <param name="results">The Lua results to convert.</param>
-        public static implicit operator LuaResult(LuaResults results) => *(LuaResult*)&results;
+        public static implicit operator LuaResult(LuaResults results) => *(LuaResult*)&results;  // reinterpret
 
         #region explicit operators
+
+        // These operators are forwarded to the `LuaResult` structure, which means that the first result is converted.
+        //
 
         /// <inheritdoc cref="LuaResult.explicit operator bool"/>
         public static explicit operator bool(LuaResults results) => (bool)(LuaResult)results;

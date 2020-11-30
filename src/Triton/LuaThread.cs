@@ -89,10 +89,10 @@ namespace Triton
             if (lua_status(state) == LUA_YIELD)
                 ThrowHelper.ThrowInvalidOperationException("Thread is not ready to execute a function");
 
-            lua_settop(state, 0);  // ensure that the results will begin at index 1
+            lua_settop(state, 0);  // ensure that the function will be at index 1
 
             function.Push(state);
-            _hasFunction = true;
+            _hasFunction = true;  // mark the thread as having a function to reduce the number of P/Invokes
         }
 
         #region Resume overloads
@@ -110,16 +110,9 @@ namespace Triton
             var state = _state;  // local optimization
 
             if (lua_status(state) == LUA_YIELD)
-            {
                 lua_settop(state, 0);  // ensure that the results will begin at index 1
-            }
             else
-            {
-                if (!_hasFunction)
-                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
-
-                _hasFunction = false;
-            }
+                ThrowIfNoFunction();
 
             return lua_resume(state, null, 0);
         }
@@ -139,16 +132,9 @@ namespace Triton
             var state = _state;  // local optimization
 
             if (lua_status(state) == LUA_YIELD)
-            {
                 lua_settop(state, 0);  // ensure that the results will begin at index 1
-            }
             else
-            {
-                if (!_hasFunction)
-                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
-
-                _hasFunction = false;
-            }
+                ThrowIfNoFunction();
 
             argument.Push(state);
             return lua_resume(state, null, 1);
@@ -171,16 +157,9 @@ namespace Triton
             var state = _state;  // local optimization
 
             if (lua_status(state) == LUA_YIELD)
-            {
                 lua_settop(state, 0);  // ensure that the results will begin at index 1
-            }
             else
-            {
-                if (!_hasFunction)
-                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
-
-                _hasFunction = false;
-            }
+                ThrowIfNoFunction();
 
             argument.Push(state);
             argument2.Push(state);
@@ -206,16 +185,9 @@ namespace Triton
             var state = _state;  // local optimization
 
             if (lua_status(state) == LUA_YIELD)
-            {
                 lua_settop(state, 0);  // ensure that the results will begin at index 1
-            }
             else
-            {
-                if (!_hasFunction)
-                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
-
-                _hasFunction = false;
-            }
+                ThrowIfNoFunction();
 
             argument.Push(state);
             argument2.Push(state);
@@ -244,16 +216,9 @@ namespace Triton
             var state = _state;  // local optimization
 
             if (lua_status(state) == LUA_YIELD)
-            {
                 lua_settop(state, 0);  // ensure that the results will begin at index 1
-            }
             else
-            {
-                if (!_hasFunction)
-                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
-
-                _hasFunction = false;
-            }
+                ThrowIfNoFunction();
 
             argument.Push(state);
             argument2.Push(state);
@@ -285,16 +250,9 @@ namespace Triton
             var state = _state;  // local optimization
 
             if (lua_status(state) == LUA_YIELD)
-            {
                 lua_settop(state, 0);  // ensure that the results will begin at index 1
-            }
             else
-            {
-                if (!_hasFunction)
-                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
-
-                _hasFunction = false;
-            }
+                ThrowIfNoFunction();
 
             argument.Push(state);
             argument2.Push(state);
@@ -329,16 +287,9 @@ namespace Triton
             var state = _state;  // local optimization
 
             if (lua_status(state) == LUA_YIELD)
-            {
                 lua_settop(state, 0);  // ensure that the results will begin at index 1
-            }
             else
-            {
-                if (!_hasFunction)
-                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
-
-                _hasFunction = false;
-            }
+                ThrowIfNoFunction();
 
             argument.Push(state);
             argument2.Push(state);
@@ -376,16 +327,9 @@ namespace Triton
             var state = _state;  // local optimization
 
             if (lua_status(state) == LUA_YIELD)
-            {
                 lua_settop(state, 0);  // ensure that the results will begin at index 1
-            }
             else
-            {
-                if (!_hasFunction)
-                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
-
-                _hasFunction = false;
-            }
+                ThrowIfNoFunction();
 
             argument.Push(state);
             argument2.Push(state);
@@ -426,16 +370,9 @@ namespace Triton
             var state = _state;  // local optimization
 
             if (lua_status(state) == LUA_YIELD)
-            {
                 lua_settop(state, 0);  // ensure that the results will begin at index 1
-            }
             else
-            {
-                if (!_hasFunction)
-                    ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
-
-                _hasFunction = false;
-            }
+                ThrowIfNoFunction();
 
             argument.Push(state);
             argument2.Push(state);
@@ -453,6 +390,9 @@ namespace Triton
         [ExcludeFromCodeCoverage]
         internal void Push(lua_State* state)
         {
+            // Checking pointer equality is sufficient for checking environment equality, since only one handle is
+            // allocated per environment.
+            //
             if (*(IntPtr*)lua_getextraspace(state) != *(IntPtr*)lua_getextraspace(_state))
                 ThrowHelper.ThrowInvalidOperationException("Thread is not associated with this environment");
             
@@ -468,6 +408,16 @@ namespace Triton
         {
             if (_isDisposed)
                 ThrowHelper.ThrowObjectDisposedException(nameof(LuaThread));
+        }
+
+        [DebuggerStepThrough]
+        [ExcludeFromCodeCoverage]
+        private void ThrowIfNoFunction()
+        {
+            if (!_hasFunction)
+                ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
+
+            _hasFunction = false;  // reset the mark since the function will immediately be used
         }
     }
 }
