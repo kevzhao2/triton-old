@@ -26,6 +26,7 @@ namespace Triton
     /// <summary>
     /// Provides helper methods for throwing exceptions.
     /// </summary>
+    [ExcludeFromCodeCoverage]
     internal static class ThrowHelper
     {
         /// <summary>
