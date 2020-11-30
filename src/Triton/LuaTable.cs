@@ -59,7 +59,7 @@ namespace Triton
             {
                 var state = _state;  // local optimization
 
-                key = new(state, 2);
+                key   = new(state, 2);
                 value = new(state, 3);
             }
         }

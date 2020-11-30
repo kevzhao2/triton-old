@@ -82,7 +82,7 @@ namespace Triton
 
         public static LuaEnvironment lua_getenvironment(lua_State* L)
         {
-            var handle = GCHandle.FromIntPtr(*(IntPtr*)lua_getextraspace(L));
+            var handle = *(GCHandle*)lua_getextraspace(L);
             var target = handle.Target!;
             return Unsafe.As<object, LuaEnvironment>(ref target);
         }

@@ -295,9 +295,7 @@ namespace Triton
         {
             using var environment = new LuaEnvironment();
 
-            var result = environment.Eval("return 1");
-
-            Assert.Equal(1, (long)result);
+            Assert.Equal(1, (long)environment.Eval("return 1"));
         }
 
         [Fact]
@@ -355,7 +353,6 @@ namespace Triton
         {
             using var environment = new LuaEnvironment();
 
-            var results = environment.Eval("return 1, 2, 3, 4, 5, 6");
             var (result, result2, result3, result4, result5, result6) = environment.Eval("return 1, 2, 3, 4, 5, 6");
 
             Assert.Equal(1, (long)result);

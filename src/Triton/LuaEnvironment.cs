@@ -21,18 +21,18 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using static Triton.NativeMethods;
 
 namespace Triton
 {
     /// <summary>
-    /// Represents a managed Lua environment. This class is the entrypoint for embedding Lua into a CLR application.
-    /// 
-    /// <para/>
-    /// 
-    /// This class is <i>not</i> thread-safe.
+    /// Represents a managed Lua environment, the entrypoint for embedding Lua into a CLR application.
     /// </summary>
+    /// <remarks>
+    /// This class is <i>not</i> thread-safe.
+    /// </remarks>
     public sealed unsafe class LuaEnvironment : IDisposable
     {
         private readonly lua_State* _state;
@@ -51,8 +51,7 @@ namespace Triton
             // retrieve the environment associated with a Lua state, allowing the usage of static callbacks (and hence
             // unmanaged function pointers).
             //
-            var handle = GCHandle.Alloc(this);
-            *(IntPtr*)lua_getextraspace(state) = GCHandle.ToIntPtr(handle);
+            *(GCHandle*)lua_getextraspace(state) = GCHandle.Alloc(this);
 
             _state = state;
         }
@@ -65,10 +64,10 @@ namespace Triton
                 var state = _state;  // local optimization
 
                 // Cleanup must be done in a very specific order:
-                // - We must retrieve the `GCHandle` in the extra space portion of the Lua state prior to closing the state.
+                // - We must retrieve the `GCHandle` in the extra space portion of the Lua state prior to closing it.
                 // - We must close the state prior to freeing the handle (since the `__gc` metamethods depend on it).
                 //
-                var handle = GCHandle.FromIntPtr(*(IntPtr*)lua_getextraspace(state));
+                var handle = *(GCHandle*)lua_getextraspace(state);
                 lua_close(state);
                 handle.Free();
 
@@ -85,9 +84,7 @@ namespace Triton
         public LuaResult GetGlobal(string name)
         {
             if (name is null)
-            {
                 ThrowHelper.ThrowArgumentNullException(nameof(name));
-            }
 
             ThrowIfDisposed();
 
@@ -107,9 +104,7 @@ namespace Triton
         public void SetGlobal(string name, LuaArgument value)
         {
             if (name is null)
-            {
                 ThrowHelper.ThrowArgumentNullException(nameof(name));
-            }
 
             ThrowIfDisposed();
 
@@ -207,6 +202,7 @@ namespace Triton
             throw new NotImplementedException();
         }
 
+        [ExcludeFromCodeCoverage]
         [DebuggerStepThrough]
         private void ThrowIfDisposed()
         {
