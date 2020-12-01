@@ -390,7 +390,7 @@ namespace Triton
         [ExcludeFromCodeCoverage]
         internal void Push(lua_State* state)
         {
-            // Checking pointer equality is sufficient for checking environment equality, since only one handle is
+            // Checking pointer equality is sufficient for checking environment equality since only one handle is
             // allocated per environment.
             //
             if (*(IntPtr*)lua_getextraspace(state) != *(IntPtr*)lua_getextraspace(_state))

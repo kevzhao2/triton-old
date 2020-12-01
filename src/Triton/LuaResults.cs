@@ -294,6 +294,8 @@ namespace Triton
         {
             var state = _state;  // local optimization
 
+            // Gracefully handle a default value. This is required for debugger support!
+            //
             if (state is null)
                 return "<uninitialized>";
 
