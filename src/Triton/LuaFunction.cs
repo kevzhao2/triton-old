@@ -328,6 +328,33 @@ namespace Triton
             return lua_pcall(state, 8, LUA_MULTRET);
         }
 
+        /// <summary>
+        /// Calls the function with the specified arguments.
+        /// </summary>
+        /// <param name="arguments">The arguments.</param>
+        /// <returns>The results of the function call.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="arguments"/> is <see langword="null"/>.</exception>
+        /// <exception cref="LuaRuntimeException">The function call results in a Lua runtime error.</exception>
+        public LuaResults Call(params LuaArgument[] arguments)
+        {
+            if (arguments is null)
+                ThrowHelper.ThrowArgumentNullException(nameof(arguments));
+
+            ThrowIfDisposed();
+
+            var state = _state;  // local optimization
+            var @ref = _ref;     // local optimization
+
+            lua_settop(state, 0);  // ensure that the results will begin at index 1
+
+            _ = lua_rawgeti(state, LUA_REGISTRYINDEX, @ref);
+            for (var i = 0; i < arguments.Length; ++i)
+            {
+                arguments[i].Push(state);
+            }
+            return lua_pcall(state, arguments.Length, LUA_MULTRET);
+        }
+
         #endregion
 
         [ExcludeFromCodeCoverage]

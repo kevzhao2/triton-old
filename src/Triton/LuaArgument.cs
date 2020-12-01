@@ -31,13 +31,10 @@ namespace Triton
     /// <summary>
     /// Represents the argument of a Lua access as a tagged union.
     /// </summary>
-    /// <remarks>
-    /// This structure is ephemeral.
-    /// </remarks>
     [DebuggerDisplay("{ToDebugString(),nq}")]
     [DebuggerStepThrough]
     [StructLayout(LayoutKind.Explicit)]
-    public readonly ref struct LuaArgument
+    public readonly struct LuaArgument
     {
         private enum PrimitiveTag
         {

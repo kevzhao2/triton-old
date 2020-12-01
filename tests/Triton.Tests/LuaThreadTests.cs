@@ -63,6 +63,15 @@ namespace Triton
 
             Assert.True(thread.IsReady);
         }
+        
+        [Fact]
+        public void Resume_NullArguments_ThrowsArgumentNullException()
+        {
+            using var environment = new LuaEnvironment();
+            using var thread = environment.CreateThread();
+
+            Assert.Throws<ArgumentNullException>(() => thread.Resume(null!));
+        }
 
         [Fact]
         public void Resume_NoFunction_ThrowsInvalidOperationException()
@@ -226,6 +235,22 @@ namespace Triton
             thread.SetFunction(function);
 
             Assert.Equal(36, (long)thread.Resume(1, 2, 3, 4, 5, 6, 7, 8));
+        }
+
+        [Fact]
+        public void Resume_ManyArguments()
+        {
+            using var environment = new LuaEnvironment();
+            using var thread = environment.CreateThread();
+            using var function = environment.CreateFunction(@"
+                result = 0
+                for _, val in ipairs({...}) do
+                    result = result + val
+                end
+                coroutine.yield(result)");
+            thread.SetFunction(function);
+
+            Assert.Equal(136, (long)thread.Resume(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16));
         }
     }
 }

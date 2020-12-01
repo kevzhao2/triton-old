@@ -383,6 +383,35 @@ namespace Triton
             return lua_resume(state, null, 8);
         }
 
+        /// <summary>
+        /// Resumes the thread with the specified arguments.
+        /// </summary>
+        /// <param name="arguments">The arguments.</param>
+        /// <returns>The results of the thread resumption.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="arguments"/> is <see langword="null"/>.</exception>
+        /// <exception cref="InvalidOperationException">The thread has no function to execute.</exception>
+        /// <exception cref="LuaRuntimeException">The thread resumption results in a Lua runtime error.</exception>
+        public LuaResults Resume(params LuaArgument[] arguments)
+        {
+            if (arguments is null)
+                ThrowHelper.ThrowArgumentNullException(nameof(arguments));
+
+            ThrowIfDisposed();
+
+            var state = _state;  // local optimization
+
+            if (lua_status(state) == LUA_YIELD)
+                lua_settop(state, 0);  // ensure that the results will begin at index 1
+            else if (lua_gettop(state) != 1)
+                ThrowHelper.ThrowInvalidOperationException("Thread has no function to execute");
+
+            for (var i = 0; i < arguments.Length; ++i)
+            {
+                arguments[i].Push(state);
+            }
+            return lua_resume(state, null, arguments.Length);
+        }
+
         #endregion
 
         [ExcludeFromCodeCoverage]
