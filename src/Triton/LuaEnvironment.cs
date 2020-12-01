@@ -19,8 +19,11 @@
 // IN THE SOFTWARE.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using Triton.Interop;
 using static Triton.NativeMethods;
@@ -58,16 +61,16 @@ namespace Triton
             _state = state;
 
             MainThread = new(_state, LUA_RIDX_MAINTHREAD);
-            Globals = new(_state, LUA_RIDX_GLOBALS);
+            Globals    = new(_state, LUA_RIDX_GLOBALS);
         }
 
         /// <summary>
-        /// Gets the main thread.
+        /// Gets the environment's main thread.
         /// </summary>
         public LuaThread MainThread { get; }
 
         /// <summary>
-        /// Gets the globals table.
+        /// Gets the environment's globals table.
         /// </summary>
         public LuaTable Globals { get; }
 
@@ -108,6 +111,7 @@ namespace Triton
             lua_settop(state, 0);  // ensure that the value will be at index 1
 
             _ = lua_getglobal(state, name);
+
             return new(state, 1);
         }
 
@@ -209,10 +213,61 @@ namespace Triton
             return new(threadState, luaL_ref(state, LUA_REGISTRYINDEX));
         }
 
+        /// <summary>
+        /// Imports the exported types from the specified assembly as globals.
+        /// </summary>
+        /// <param name="assembly">The assembly to import exported types from.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="assembly"/> is <see langword="null"/>.</exception>
+        public void ImportTypes(Assembly assembly)
+        {
+            if (assembly is null)
+                ThrowHelper.ThrowArgumentNullException(nameof(assembly));
+
+            ThrowIfDisposed();
+
+            // Create a mapping from namespace to table. This allows us to obtain the relevant table for a namespace
+            // without having to perform a recursive traversal each time.
+            //
+            var tables = new Dictionary<string, LuaTable>();
+
+            foreach (var grouping in assembly.ExportedTypes
+                .Where(t => !t.IsNested)
+                .GroupBy(t => t.FullName!.Split('`')[0]))
+            {
+                var fullName = grouping.Key;
+                var types = LuaArgument.FromClrTypes(grouping.ToArray());
+
+                var index = fullName.LastIndexOf('.');
+                if (index == -1)
+                    SetGlobal(fullName, types);
+                else
+                    GetTable(fullName[..index]).SetValue(fullName[(index + 1)..], types);
+            }
+
+            foreach (var table in tables.Values)
+                table.Dispose();
+            return;
+
+            LuaTable GetTable(string @namespace)
+            {
+                if (tables.TryGetValue(@namespace, out var table))
+                    return table;
+
+                var index = @namespace.LastIndexOf('.');
+                if (index == -1)
+                    SetGlobal(@namespace, table = CreateTable());
+                else
+                    GetTable(@namespace[..index]).SetValue(@namespace[(index + 1)..], table = CreateTable());
+
+                tables.Add(@namespace, table);
+                return table;
+            }
+        }
+
         internal void PushClrObject(lua_State* state, object obj)
         {
-            var userdata = lua_newuserdatauv(state, (nuint)IntPtr.Size, 0);
-            *(IntPtr*)userdata = GCHandle.ToIntPtr(GCHandle.Alloc(obj));
+            var handle = GCHandle.Alloc(obj);
+            *(IntPtr*)lua_newuserdatauv(state, (nuint)IntPtr.Size, 0) = GCHandle.ToIntPtr(handle);
 
             _metatableGenerator.Push(state, obj);
             lua_setmetatable(state, -2);
@@ -220,8 +275,8 @@ namespace Triton
 
         internal void PushClrTypes(lua_State* state, Type[] types)
         {
-            var userdata = lua_newuserdatauv(state, (nuint)IntPtr.Size, 0);
-            *(nint*)userdata = (nint)GCHandle.ToIntPtr(GCHandle.Alloc(types)) | 1;
+            var handle = GCHandle.Alloc(types);
+            *(nint*)lua_newuserdatauv(state, (nuint)IntPtr.Size, 0) = (nint)GCHandle.ToIntPtr(handle) | 1;
 
             _metatableGenerator.Push(state, types);
             lua_setmetatable(state, -2);

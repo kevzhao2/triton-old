@@ -480,17 +480,52 @@ namespace Triton
         }
 
         [Fact]
-        public void ClrObject()
+        public void ImportTypes_NullAssembly_ThrowsArgumentNullException()
         {
-            var list = new List<int>();
-
             using var environment = new LuaEnvironment();
 
-            environment.SetGlobal("list", LuaArgument.FromClrObject(list));
+            Assert.Throws<ArgumentNullException>(() => environment.ImportTypes(null!));
+        }
 
-            environment.Eval("s = tostring(list)");
+        [Fact]
+        public void ImportTypes_NonOverloadedType()
+        {
+            using var environment = new LuaEnvironment();
 
-            var s = environment.GetGlobal("s");
+            environment.ImportTypes(typeof(DateTime).Assembly);
+
+            Assert.Equal(new[] { typeof(DateTime) }, environment.Eval("return System.DateTime").ToClrTypes());
+        }
+
+        [Fact]
+        public void ImportTypes_OverloadedTypes()
+        {
+            using var environment = new LuaEnvironment();
+
+            environment.ImportTypes(typeof(Action).Assembly);
+
+            Assert.Equal(
+                new[]
+                {
+                    typeof(Action),
+                    typeof(Action<>),
+                    typeof(Action<,>),
+                    typeof(Action<,,>),
+                    typeof(Action<,,,>),
+                    typeof(Action<,,,,>),
+                    typeof(Action<,,,,,>),
+                    typeof(Action<,,,,,,>),
+                    typeof(Action<,,,,,,,>),
+                    typeof(Action<,,,,,,,,>),
+                    typeof(Action<,,,,,,,,,>),
+                    typeof(Action<,,,,,,,,,,>),
+                    typeof(Action<,,,,,,,,,,,>),
+                    typeof(Action<,,,,,,,,,,,,>),
+                    typeof(Action<,,,,,,,,,,,,,>),
+                    typeof(Action<,,,,,,,,,,,,,,>),
+                    typeof(Action<,,,,,,,,,,,,,,,>)
+                },
+                environment.Eval("return System.Action").ToClrTypes());
         }
     }
 }

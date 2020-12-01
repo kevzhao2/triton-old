@@ -42,7 +42,8 @@ namespace Triton
         // Store a combination of the Lua state and index. This allows us to use eight bytes to represent a Lua result,
         // making them extremely fast.
         //
-        // The limitation is that we cannot reference an index greater than 8, but this is unlikely to have an impact.
+        // The limitation is that we cannot reference an index greater than 8, but this is unlikely to have a real-world
+        // impact.
         //
         private readonly nint _stateAndIndex;
 
@@ -55,10 +56,6 @@ namespace Triton
         }
 
         #region IsXxx properties
-
-        // We gracefully handle a default `LuaResult` by returning `false` for all of these properties. This is required
-        // for debugger support!
-        //
 
         /// <summary>
         /// Gets a value indicating whether the result is <see langword="nil"/>.
@@ -207,9 +204,6 @@ namespace Triton
         }
 
         #region ToXxx() methods
-
-        // We gracefully handle a default `LuaResult` by throwing an `InvalidCastException` for all of these methods.
-        //
 
         /// <summary>
         /// Converts the result into a boolean, performing coercion if necessary.
@@ -376,7 +370,7 @@ namespace Triton
                 ThrowHelper.ThrowInvalidCastException();
 
             var userdata = lua_touserdata(state, index);
-            if (userdata is null || (*(nint*)userdata & 1) != 0)
+            if (userdata is null)
                 ThrowHelper.ThrowInvalidCastException();
 
             var ptr = *(nint*)userdata;
@@ -400,7 +394,7 @@ namespace Triton
                 ThrowHelper.ThrowInvalidCastException();
 
             var userdata = lua_touserdata(state, index);
-            if (userdata is null || ((nint)userdata & 1) == 0)
+            if (userdata is null)
                 ThrowHelper.ThrowInvalidCastException();
 
             var ptr = *(nint*)userdata;
@@ -419,6 +413,8 @@ namespace Triton
         {
             var (state, index) = this;
 
+            // Gracefully handle a default value. This is required for debugger support!
+            //
             if (state is null)
                 return "<uninitialized>";
 
