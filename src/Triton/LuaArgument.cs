@@ -39,9 +39,6 @@ namespace Triton
     [StructLayout(LayoutKind.Explicit)]
     public readonly ref struct LuaArgument
     {
-        /// <summary>
-        /// Specifies the tag of a primitive <see cref="LuaArgument"/>.
-        /// </summary>
         private enum PrimitiveTag
         {
             Boolean,
@@ -49,37 +46,34 @@ namespace Triton
             Number
         }
 
-        /// <summary>
-        /// Specifies the tag of an object <see cref="LuaArgument"/>.
-        /// </summary>
         private enum ObjectTag
         {
             String,
             Table,
             Function,
             Thread,
-            ClrTypes,  // intentionally placed before `ClrObject` to allow for the common case to be fastest
-            ClrObject
+            ClrObject,
+            ClrTypes
         }
 
         private static readonly StrongBox<PrimitiveTag> s_booleanTag = new(PrimitiveTag.Boolean);
         private static readonly StrongBox<PrimitiveTag> s_integerTag = new(PrimitiveTag.Integer);
         private static readonly StrongBox<PrimitiveTag> s_numberTag  = new(PrimitiveTag.Number);
 
-        // Store a union of (bool, long, double, ObjectTag) at offset 0. This allows us to use eight bytes to either
-        // represent a primitive or identify an object tag.
+        // At field offset 0, keep a union of (`bool`, `long`, `double`, `ObjectTag`) at field offset 0. This either
+        // represents a primitive or helps identify an object.
+        //
+        // At field offset 8, keep either a boxed primitive tag or a object. This either identifies a primitive or
+        // represents an object.
+        //
+        // All together, the `LuaArgument` structure can represent any Lua argument using just sixteen bytes, making it
+        // quite efficient.
         //
         [FieldOffset(0)] private readonly bool      _boolean;
         [FieldOffset(0)] private readonly long      _integer;
         [FieldOffset(0)] private readonly double    _number;
         [FieldOffset(0)] private readonly ObjectTag _objectTag;
 
-        // Store either an object or a boxed primitive tag at offset 8. This allows us to use eight bytes to either
-        // identify a primitive or any object.
-        //
-        // All together, this allows us to use sixteen bytes to represent any valid Lua argument, making them extremely
-        // fast.
-        //
         [FieldOffset(8)] private readonly object?   _objectOrPrimitiveTag;
 
         #region constructors
@@ -249,8 +243,8 @@ namespace Triton
                 if (type is null)
                     ThrowHelper.ThrowArgumentException(nameof(types), "Types contains null");
 
-                // We do not want two types with the same generic arity. The intent of taking an array of types is to
-                // allow for generic arity overloading: e.g., a single value referring to either `Task` or `Task<>`.
+                // Do not allow types to have the same generic arity. The intent of accepting an array of types is to
+                // allow for generic arity overloading: e.g., System.Task referring to either `Task` or `Task<>`.
                 //
                 var genericArity = type.GetGenericArguments().Length;
                 if (genericArities.Contains(genericArity))
@@ -274,112 +268,84 @@ namespace Triton
             }
             else if (objectOrPrimitiveTag.GetType() == typeof(StrongBox<PrimitiveTag>))
             {
-                var tag = Unsafe.As<object, StrongBox<PrimitiveTag>>(ref objectOrPrimitiveTag).Value;  // optimal cast
-                Debug.Assert(tag is >= PrimitiveTag.Boolean and <= PrimitiveTag.Number);
-
-                // These if statements are optimal for primitives. We check for integers and numbers first since these
-                // are more common than booleans.
+                // Using an unsafe cast to obtain the primitive tag results in optimal codegen.
                 //
+                // The if statements first check for integers and numbers since those are more common than booleans.
+                //
+                var tag = Unsafe.As<object, StrongBox<PrimitiveTag>>(ref objectOrPrimitiveTag).Value;
                 if (tag == PrimitiveTag.Integer)
                     lua_pushinteger(state, _integer);
                 else if (tag == PrimitiveTag.Number)
                     lua_pushnumber(state, _number);
-                else
+                else  // `Boolean`
                     lua_pushboolean(state, _boolean);
             }
             else
             {
-                Debug.Assert(_objectTag is >= ObjectTag.String and <= ObjectTag.ClrObject);
-
-                // This switch statement is optimal for objects. We check for CLR objects as the default case since
-                // these are the most common.
+                // Using unsafe casts to obtain the relevant types results in optimal codegen.
+                //
+                // The switch statement's default case is CLR objects since those are more common than the other
+                // objects.
                 //
                 switch (_objectTag)
                 {
                     case ObjectTag.String:
-                        lua_pushstring(state, Unsafe.As<object, string>(ref objectOrPrimitiveTag));  // optimal cast
+                        lua_pushstring(state, Unsafe.As<object, string>(ref objectOrPrimitiveTag));
                         break;
 
                     case ObjectTag.Table:
-                        Unsafe.As<object, LuaTable>(ref objectOrPrimitiveTag).Push(state);  // optimal cast
+                        Unsafe.As<object, LuaTable>(ref objectOrPrimitiveTag).Push(state);
                         break;
 
                     case ObjectTag.Function:
-                        Unsafe.As<object, LuaFunction>(ref objectOrPrimitiveTag).Push(state);  // optimal cast
+                        Unsafe.As<object, LuaFunction>(ref objectOrPrimitiveTag).Push(state);
                         break;
 
                     case ObjectTag.Thread:
-                        Unsafe.As<object, LuaThread>(ref objectOrPrimitiveTag).Push(state);  // optimal cast
+                        Unsafe.As<object, LuaThread>(ref objectOrPrimitiveTag).Push(state);
                         break;
 
-                    case ObjectTag.ClrTypes:
-                    {
-                        var environment = lua_getenvironment(state);
-                        var types = Unsafe.As<object, Type[]>(ref objectOrPrimitiveTag);  // optimal cast
-                        environment.PushClrTypes(state, types);
-                        break;
-                    }
-
-                    default:
+                    default:  // `ClrObject`
                     {
                         var environment = lua_getenvironment(state);
                         environment.PushClrObject(state, objectOrPrimitiveTag);
                         break;
                     }
-                }
-            }
-        }
-
-        [ExcludeFromCodeCoverage]
-        internal string ToDebugString()
-        {
-            var objectOrPrimitiveTag = _objectOrPrimitiveTag;  // local optimization
-
-            if (objectOrPrimitiveTag is null)
-            {
-                return "nil";
-            }
-            else if (objectOrPrimitiveTag.GetType() == typeof(StrongBox<PrimitiveTag>))
-            {
-                var tag = Unsafe.As<object, StrongBox<PrimitiveTag>>(ref objectOrPrimitiveTag).Value;  // optimal cast
-                Debug.Assert(tag is >= PrimitiveTag.Boolean and <= PrimitiveTag.Number);
-
-                return tag switch
-                {
-                    PrimitiveTag.Boolean => _boolean.ToString(),
-                    PrimitiveTag.Integer => _integer.ToString(),
-                    _                    => _number.ToString()
-                };
-            }
-            else
-            {
-                Debug.Assert(_objectTag is >= ObjectTag.String and <= ObjectTag.ClrObject);
-
-                switch (_objectTag)
-                {
-                    case ObjectTag.String:
-                        return $"\"{Unsafe.As<object, string>(ref objectOrPrimitiveTag)}\"";  // optimal cast
-
-                    case ObjectTag.Table:
-                        return Unsafe.As<object, LuaTable>(ref objectOrPrimitiveTag).ToDebugString();  // optimal cast
-
-                    case ObjectTag.Function:
-                        return Unsafe.As<object, LuaFunction>(ref objectOrPrimitiveTag).ToDebugString();  // optimal cast
-
-                    case ObjectTag.Thread:
-                        return Unsafe.As<object, LuaThread>(ref objectOrPrimitiveTag).ToDebugString();  // optimal cast
 
                     case ObjectTag.ClrTypes:
-                        var types = Unsafe.As<object, Type[]>(ref objectOrPrimitiveTag);  // optimal cast
-                        return types.Length == 1 ?
-                            $"CLR type: {types[0]}" :
-                            $"CLR types: ({string.Join<Type>(", ", types)})";
-
-                    default:
-                        return $"CLR object: {objectOrPrimitiveTag}";
+                    {
+                        var environment = lua_getenvironment(state);
+                        var types = Unsafe.As<object, Type[]>(ref objectOrPrimitiveTag);
+                        environment.PushClrTypes(state, types);
+                        break;
+                    }
                 }
             }
         }
+
+        // Because this method is not on a hot path, it is optimized for readability instead.
+        //
+        [ExcludeFromCodeCoverage]
+        internal string ToDebugString() =>
+            _objectOrPrimitiveTag switch
+            {
+                null => "nil",
+                StrongBox<PrimitiveTag> { Value: var tag } => tag switch
+                {
+                    PrimitiveTag.Boolean => _boolean.ToDebugString(),
+                    PrimitiveTag.Integer => _integer.ToDebugString(),
+                    _                    => _number.ToDebugString()
+                },
+                var obj => _objectTag switch
+                {
+                    ObjectTag.String   => ((string)obj).ToDebugString(),
+                    ObjectTag.Table    => ((LuaTable)obj).ToDebugString(),
+                    ObjectTag.Function => ((LuaFunction)obj).ToDebugString(),
+                    ObjectTag.Thread   => ((LuaThread)obj).ToDebugString(),
+                    ObjectTag.ClrTypes => ((Type[])obj).ToDebugString(),
+                    _                  => obj.ToDebugString()
+                }
+            };
 
         #region implicit operators
 

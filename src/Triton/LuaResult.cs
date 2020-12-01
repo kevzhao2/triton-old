@@ -32,18 +32,17 @@ namespace Triton
     /// Represents a Lua result.
     /// </summary>
     /// <remarks>
-    /// This structure is ephemeral and is invalidated immediately after calling another Lua API. It allows for lazy
-    /// computation; if the result is not inspected, no extra work is done.
+    /// This structure is ephemeral and is invalidated immediately after calling another Lua API.
     /// </remarks>
     [DebuggerDisplay("{ToDebugString(),nq}")]
     [DebuggerStepThrough]
     public unsafe readonly ref struct LuaResult
     {
-        // Store a combination of the Lua state and index. This allows us to use eight bytes to represent a Lua result,
-        // making them extremely fast.
+        // Keep a combination of the Lua state and index.
         //
-        // The limitation is that we cannot reference an index greater than 8, but this is unlikely to have a real-world
-        // impact.
+        // The `LuaResult` structure can lazily represent any Lua result with indices 1 through 8 using just eight
+        // bytes, making it quite efficient. The limitation of not being able to represent a result with index greater
+        // than 8 is very unlikely to have a real-world impact.
         //
         private readonly nint _stateAndIndex;
 
@@ -240,7 +239,7 @@ namespace Triton
             if (state is null)
                 ThrowHelper.ThrowInvalidCastException();
 
-            bool isInteger;
+            bool isInteger;  // skip initialization
 
             var result = lua_tointegerx(state, index, &isInteger);
             if (!isInteger)
@@ -265,7 +264,7 @@ namespace Triton
             if (state is null)
                 ThrowHelper.ThrowInvalidCastException();
 
-            bool isNumber;
+            bool isNumber;  // skip initialization
 
             var result = lua_tonumberx(state, index, &isNumber);
             if (!isNumber)
@@ -291,7 +290,7 @@ namespace Triton
             if (state is null)
                 ThrowHelper.ThrowInvalidCastException();
 
-            nuint len;
+            nuint len;  // skip initialization
 
             var bytes = lua_tolstring(state, index, &len);
             if (bytes is null)
@@ -377,7 +376,7 @@ namespace Triton
             if ((ptr & 1) != 0)
                 ThrowHelper.ThrowInvalidCastException();
 
-            var handle = GCHandle.FromIntPtr(ptr);
+            var handle = GCHandle.FromIntPtr(ptr);  // lowest bit is already cleared
             return handle.Target!;
         }
 
@@ -401,64 +400,33 @@ namespace Triton
             if ((ptr & 1) == 0)
                 ThrowHelper.ThrowInvalidCastException();
 
-            var handle = GCHandle.FromIntPtr(ptr & ~1);
+            var handle = GCHandle.FromIntPtr(ptr & ~1);  // clear lowest bit
             var target = handle.Target!;
-            return Unsafe.As<object, Type[]>(ref target);
+            return Unsafe.As<object, Type[]>(ref target);  // using an unsafe cast results in optimal codegen
         }
 
         #endregion
 
+        // Because this method is not on a hot path, it is optimized for readability instead.
+        //
         [ExcludeFromCodeCoverage]
         internal string ToDebugString()
         {
             var (state, index) = this;
 
-            // Gracefully handle a default value. This is required for debugger support!
-            //
-            if (state is null)
-                return "<uninitialized>";
-
-            switch (lua_type(state, index))
-            {
-                default:
-                    return "nil";
-
-                case LUA_TBOOLEAN:
-                    return lua_toboolean(state, index) ? "true" : "false";
-
-                case LUA_TNUMBER:
-                    return lua_isinteger(state, index) ?
-                        lua_tointegerx(state, index, null).ToString() :
-                        lua_tonumberx(state, index, null).ToString();
-
-                case LUA_TSTRING:
-                    return $"\"{lua_tostring(state, index)}\"";
-
-                case LUA_TTABLE:
-                    return $"table: 0x{(long)lua_topointer(state, index):x)}";
-
-                case LUA_TFUNCTION:
-                    return $"function: 0x{(long)lua_topointer(state, index):x)}";
-
-                case LUA_TTHREAD:
-                    return $"thread: 0x{(long)lua_topointer(state, index):x)}";
-
-                case LUA_TUSERDATA:
-                    var ptr = *(nint*)lua_touserdata(state, index);
-                    if ((ptr & 1) == 0)
-                    {
-                        var target = GCHandle.FromIntPtr(ptr).Target!;
-                        return $"CLR object: {target}";
-                    }
-                    else
-                    {
-                        var target = GCHandle.FromIntPtr(ptr & ~1).Target!;
-                        var types = Unsafe.As<object, Type[]>(ref target);
-                        return types.Length == 1 ?
-                            $"CLR type: {types[0]}" :
-                            $"CLR types: ({string.Join<Type>(", ", types)})";
-                    }
-            }
+            return state is null ?
+                "<uninitialized>" :
+                lua_type(state, index) switch
+                {
+                    LUA_TBOOLEAN  => ToBoolean().ToDebugString(),
+                    LUA_TNUMBER   => IsInteger ? ToInteger().ToDebugString() : ToNumber().ToDebugString(),
+                    LUA_TSTRING   => ToString().ToDebugString(),
+                    LUA_TTABLE    => $"table: 0x{(nint)lua_topointer(state, index):x}",
+                    LUA_TFUNCTION => $"function: 0x{(nint)lua_topointer(state, index):x}",
+                    LUA_TTHREAD   => $"thread: 0x{(nint)lua_topointer(state, index):x}",
+                    LUA_TUSERDATA => IsClrObject ? ToClrObject().ToDebugString() : ToClrTypes().ToDebugString(),
+                    _             => "nil"
+                };
         }
 
         #region explicit operators

@@ -41,6 +41,9 @@ namespace Triton
         private readonly lua_State* _state;
         private readonly MetatableGenerator _metatableGenerator = new();
 
+        // Stores a mapping from namespaces to tables. This reduces the 
+        private readonly Dictionary<string, LuaTable> _namespaceTables = new();
+
         private bool _isDisposed;
 
         /// <summary>
@@ -225,11 +228,6 @@ namespace Triton
 
             ThrowIfDisposed();
 
-            // Create a mapping from namespace to table. This allows us to obtain the relevant table for a namespace
-            // without having to perform a recursive traversal each time.
-            //
-            var tables = new Dictionary<string, LuaTable>();
-
             foreach (var grouping in assembly.ExportedTypes
                 .Where(t => !t.IsNested)
                 .GroupBy(t => t.FullName!.Split('`')[0]))
@@ -244,13 +242,12 @@ namespace Triton
                     GetTable(fullName[..index]).SetValue(fullName[(index + 1)..], types);
             }
 
-            foreach (var table in tables.Values)
-                table.Dispose();
             return;
 
+            // Recursively gets the table corresponding to the specified namespace. This uses 
             LuaTable GetTable(string @namespace)
             {
-                if (tables.TryGetValue(@namespace, out var table))
+                if (_namespaceTables.TryGetValue(@namespace, out var table))
                     return table;
 
                 var index = @namespace.LastIndexOf('.');
@@ -259,7 +256,7 @@ namespace Triton
                 else
                     GetTable(@namespace[..index]).SetValue(@namespace[(index + 1)..], table = CreateTable());
 
-                tables.Add(@namespace, table);
+                _namespaceTables.Add(@namespace, table);
                 return table;
             }
         }

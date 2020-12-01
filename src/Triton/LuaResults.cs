@@ -30,14 +30,17 @@ namespace Triton
     /// Represents multiple Lua results.
     /// </summary>
     /// <remarks>
-    /// This structure is ephemeral and is invalidated immediately after calling another Lua API. It allows for lazy
-    /// computation; if the results are not inspected, no extra work is done.
+    /// This structure is ephemeral and is invalidated immediately after calling another Lua API.
     /// </remarks>
     [DebuggerDisplay("{ToDebugString(),nq}")]
     [DebuggerStepThrough]
     public unsafe readonly ref struct LuaResults
     {
-        // Store the Lua state. This allows us to use eight bytes to represent Lua results, making them extremely fast.
+        // Keep the Lua state.
+        //
+        // The `LuaResults` structure can lazily represent up to 8 Lua results using just eight bytes, making it quite
+        // efficient. The limitation of not being able to represent more than eight results is very unlikely to have a
+        // real-world impact.
         //
         private readonly lua_State* _state;
 
@@ -47,9 +50,6 @@ namespace Triton
         }
 
         #region IsXxx properties
-
-        // These properties are forwarded to the `LuaResult` structure, which means that the first result is checked.
-        //
 
         /// <inheritdoc cref="LuaResult.IsNil"/>
         public bool IsNil => ((LuaResult)this).IsNil;
@@ -257,9 +257,6 @@ namespace Triton
 
         #region ToXxx() methods
 
-        // These methods are forwarded to the `LuaResult` structure, which means that the first result is converted.
-        //
-
         /// <inheritdoc cref="LuaResult.ToBoolean"/>
         public bool ToBoolean() => ((LuaResult)this).ToBoolean();
 
@@ -289,20 +286,20 @@ namespace Triton
 
         #endregion
 
+        // Because this method is not on a hot path, it is optimized for readability instead.
+        //
         [ExcludeFromCodeCoverage]
         internal string ToDebugString()
         {
             var state = _state;  // local optimization
 
-            // Gracefully handle a default value. This is required for debugger support!
-            //
-            if (state is null)
-                return "<uninitialized>";
-
-            var top = Math.Min(lua_gettop(state), 9);  // show at most eight values (including an ellipsis)
-            return top == 1 ?
-                ToDebugString(1) :
-                $"({string.Join(", ", Enumerable.Range(1, top).Select(ToDebugString))})";
+            return state is null ?
+                "<uninitialized>" :
+                Math.Min(lua_gettop(state), 9) switch  // show at most eight values
+                {
+                    1       => ToDebugString(1),
+                    var top => $"({string.Join(", ", Enumerable.Range(1, top).Select(ToDebugString))})"
+                };
 
             [ExcludeFromCodeCoverage]
             string ToDebugString(int index) =>
@@ -316,9 +313,6 @@ namespace Triton
         public static implicit operator LuaResult(LuaResults results) => *(LuaResult*)&results;  // reinterpret
 
         #region explicit operators
-
-        // These operators are forwarded to the `LuaResult` structure, which means that the first result is converted.
-        //
 
         /// <inheritdoc cref="LuaResult.explicit operator bool"/>
         public static explicit operator bool(LuaResults results) => (bool)(LuaResult)results;
