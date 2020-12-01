@@ -52,13 +52,5 @@ namespace Triton.Benchmarks.Micro
 
         [Benchmark]
         public LuaResult GetValue_LuaArgument() => s_table.GetValue(true);
-
-        /*[Benchmark]
-        public void GetEnumerator()
-        {
-            foreach (var (key, value) in s_table)
-            {
-            }
-        }*/
     }
 }

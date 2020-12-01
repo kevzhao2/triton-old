@@ -31,14 +31,10 @@ namespace Triton.Benchmarks.Micro
         [GlobalSetup]
         public void Setup()
         {
-            _environment.Eval(@"
-                boolean = true
-                integer = 1234
-                number_ = 1.234
-                string_ = 'test'
-                table__ = {}
-                func___ = function() end
-                thread_ = coroutine.create(function() end)");
+            _environment.SetGlobal("boolean", true);
+            _environment.SetGlobal("integer", 1234);
+            _environment.SetGlobal("number ", 1.234);
+            _environment.SetGlobal("string ", "test");
         }
 
         [Benchmark]
@@ -48,33 +44,21 @@ namespace Triton.Benchmarks.Micro
         public long GetGlobal_Integer() => (long)_environment.GetGlobal("integer");
 
         [Benchmark]
-        public double GetGlobal_Number() => (double)_environment.GetGlobal("number_");
+        public double GetGlobal_Number() => (double)_environment.GetGlobal("number ");
 
         [Benchmark]
-        public string GetGlobal_String() => (string)_environment.GetGlobal("string_");
+        public string GetGlobal_String() => (string)_environment.GetGlobal("string ");
 
         [Benchmark]
-        public LuaTable GetGlobal_Table()
-        {
-            var table = (LuaTable)_environment.GetGlobal("table__");
-            table.Dispose();
-            return table;
-        }
+        public void SetGlobal_Boolean() => _environment.SetGlobal("boolean", true);
 
         [Benchmark]
-        public LuaFunction GetGlobal_Function()
-        {
-            var function = (LuaFunction)_environment.GetGlobal("func___");
-            function.Dispose();
-            return function;
-        }
+        public void SetGlobal_Integer() => _environment.SetGlobal("integer", 1234);
 
         [Benchmark]
-        public LuaThread GetGlobal_Thread()
-        {
-            var thread = (LuaThread)_environment.GetGlobal("thread_");
-            thread.Dispose();
-            return thread;
-        }
+        public void SetGlobal_Number() => _environment.SetGlobal("number ", 1.234);
+
+        [Benchmark]
+        public void SetGlobal_String() => _environment.SetGlobal("string ", "test");
     }
 }

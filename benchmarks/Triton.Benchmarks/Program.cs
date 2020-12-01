@@ -28,7 +28,7 @@ namespace Triton.Benchmarks
     {
         static void Main(string[] args)
         {
-            BenchmarkRunner.Run<LuaTableBenchmarks>();
+            BenchmarkRunner.Run<LuaEnvironmentBenchmarks>();
             Console.ReadKey(true);
         }
     }

@@ -289,12 +289,8 @@ namespace Triton
 
         // Because this method is not on a hot path, it is optimized for readability instead.
         //
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
         [ExcludeFromCodeCoverage]
-        public string ToDebugString()
+        internal string ToDebugString()
         {
             var state = _state;  // local optimization
 
@@ -302,7 +298,6 @@ namespace Triton
                 "<uninitialized>" :
                 Math.Min(lua_gettop(state), 9) switch  // show at most eight values
                 {
-                    var top when top < 0     => top.ToString(),
                     0       => "()",
                     1       => ToDebugString(1),
                     var top => $"({string.Join(", ", Enumerable.Range(1, top).Select(ToDebugString))})"
