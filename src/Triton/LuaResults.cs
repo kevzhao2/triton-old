@@ -61,7 +61,7 @@ namespace Triton
         public bool IsInteger => ((LuaResult)this).IsInteger;
 
         /// <inheritdoc cref="LuaResult.IsNumber"/>
-        public bool IsFloat => ((LuaResult)this).IsNumber;
+        public bool IsNumber => ((LuaResult)this).IsNumber;
 
         /// <inheritdoc cref="LuaResult.IsString"/>
         public bool IsString => ((LuaResult)this).IsString;

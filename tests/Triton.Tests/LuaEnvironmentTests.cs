@@ -134,7 +134,7 @@ namespace Triton
             Assert.True(result.IsNil);
             Assert.False(result.IsBoolean);
             Assert.False(result.IsInteger);
-            Assert.False(result.IsFloat);
+            Assert.False(result.IsNumber);
             Assert.False(result.IsString);
             Assert.False(result.IsTable);
             Assert.False(result.IsFunction);
@@ -153,7 +153,7 @@ namespace Triton
             Assert.True(result.IsNil);
             Assert.False(result.IsBoolean);
             Assert.False(result.IsInteger);
-            Assert.False(result.IsFloat);
+            Assert.False(result.IsNumber);
             Assert.False(result.IsString);
             Assert.False(result.IsTable);
             Assert.False(result.IsFunction);
@@ -172,7 +172,7 @@ namespace Triton
             Assert.False(result.IsNil);
             Assert.True(result.IsBoolean);
             Assert.False(result.IsInteger);
-            Assert.False(result.IsFloat);
+            Assert.False(result.IsNumber);
             Assert.False(result.IsString);
             Assert.False(result.IsTable);
             Assert.False(result.IsFunction);
@@ -193,7 +193,7 @@ namespace Triton
             Assert.False(result.IsNil);
             Assert.False(result.IsBoolean);
             Assert.True(result.IsInteger);
-            Assert.False(result.IsFloat);
+            Assert.False(result.IsNumber);
             Assert.False(result.IsString);
             Assert.False(result.IsTable);
             Assert.False(result.IsFunction);
@@ -214,7 +214,7 @@ namespace Triton
             Assert.False(result.IsNil);
             Assert.False(result.IsBoolean);
             Assert.False(result.IsInteger);
-            Assert.True(result.IsFloat);
+            Assert.True(result.IsNumber);
             Assert.False(result.IsString);
             Assert.False(result.IsTable);
             Assert.False(result.IsFunction);
@@ -235,7 +235,7 @@ namespace Triton
             Assert.False(result.IsNil);
             Assert.False(result.IsBoolean);
             Assert.False(result.IsInteger);
-            Assert.False(result.IsFloat);
+            Assert.False(result.IsNumber);
             Assert.True(result.IsString);
             Assert.False(result.IsTable);
             Assert.False(result.IsFunction);
@@ -256,7 +256,7 @@ namespace Triton
             Assert.False(result.IsNil);
             Assert.False(result.IsBoolean);
             Assert.False(result.IsInteger);
-            Assert.False(result.IsFloat);
+            Assert.False(result.IsNumber);
             Assert.False(result.IsString);
             Assert.True(result.IsTable);
             Assert.False(result.IsFunction);
@@ -277,7 +277,7 @@ namespace Triton
             Assert.False(result.IsNil);
             Assert.False(result.IsBoolean);
             Assert.False(result.IsInteger);
-            Assert.False(result.IsFloat);
+            Assert.False(result.IsNumber);
             Assert.False(result.IsString);
             Assert.False(result.IsTable);
             Assert.True(result.IsFunction);
@@ -298,7 +298,7 @@ namespace Triton
             Assert.False(result.IsNil);
             Assert.False(result.IsBoolean);
             Assert.False(result.IsInteger);
-            Assert.False(result.IsFloat);
+            Assert.False(result.IsNumber);
             Assert.False(result.IsString);
             Assert.False(result.IsTable);
             Assert.False(result.IsFunction);
