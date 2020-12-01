@@ -30,7 +30,8 @@ namespace Triton
     /// Represents multiple Lua results.
     /// </summary>
     /// <remarks>
-    /// This structure is ephemeral and is invalidated immediately after calling another Lua API.
+    /// This structure is ephemeral and is invalidated immediately after calling another Lua API. It is marked as a
+    /// <see langword="ref struct"/> to reduce the potential for errors.
     /// </remarks>
     [DebuggerDisplay("{ToDebugString(),nq}")]
     [DebuggerStepThrough]
@@ -288,8 +289,12 @@ namespace Triton
 
         // Because this method is not on a hot path, it is optimized for readability instead.
         //
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
         [ExcludeFromCodeCoverage]
-        internal string ToDebugString()
+        public string ToDebugString()
         {
             var state = _state;  // local optimization
 
@@ -297,6 +302,8 @@ namespace Triton
                 "<uninitialized>" :
                 Math.Min(lua_gettop(state), 9) switch  // show at most eight values
                 {
+                    var top when top < 0     => top.ToString(),
+                    0       => "()",
                     1       => ToDebugString(1),
                     var top => $"({string.Join(", ", Enumerable.Range(1, top).Select(ToDebugString))})"
                 };

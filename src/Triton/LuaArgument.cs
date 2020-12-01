@@ -148,6 +148,8 @@ namespace Triton
                 byte        integer  => FromInteger(integer),
                 short       integer  => FromInteger(integer),
                 ushort      integer  => FromInteger(integer),
+                int         integer  => FromInteger(integer),
+                uint        integer  => FromInteger(integer),
                 long        integer  => FromInteger(integer),
                 ulong       integer  => FromInteger((long)integer),
                 float       number   => FromNumber(number),
@@ -186,28 +188,56 @@ namespace Triton
         /// </summary>
         /// <param name="str">The string to convert.</param>
         /// <returns>The resulting argument.</returns>
-        public static LuaArgument FromString(string? str) => new(ObjectTag.String, str);
+        /// <exception cref="ArgumentNullException"><paramref name="str"/> is <see langword="null"/>.</exception>
+        public static LuaArgument FromString(string? str)
+        {
+            if (str is null)
+                ThrowHelper.ThrowArgumentNullException(nameof(str));
+
+            return FromStringRelaxed(str);
+        }
 
         /// <summary>
         /// Converts a table into an argument.
         /// </summary>
         /// <param name="table">The table to convert.</param>
         /// <returns>The resulting argument.</returns>
-        public static LuaArgument FromTable(LuaTable? table) => new(ObjectTag.Table, table);
+        /// <exception cref="ArgumentNullException"><paramref name="table"/> is <see langword="null"/>.</exception>
+        public static LuaArgument FromTable(LuaTable? table)
+        {
+            if (table is null)
+                ThrowHelper.ThrowArgumentNullException(nameof(table));
+
+            return FromTableRelaxed(table);
+        }
 
         /// <summary>
         /// Converts a function into an argument.
         /// </summary>
         /// <param name="function">The function to convert.</param>
         /// <returns>The resulting argument.</returns>
-        public static LuaArgument FromFunction(LuaFunction? function) => new(ObjectTag.Function, function);
+        /// <exception cref="ArgumentNullException"><paramref name="function"/> is <see langword="null"/>.</exception>
+        public static LuaArgument FromFunction(LuaFunction? function)
+        {
+            if (function is null)
+                ThrowHelper.ThrowArgumentNullException(nameof(function));
+
+            return FromFunctionRelaxed(function);
+        }
 
         /// <summary>
         /// Converts a thread into an argument.
         /// </summary>
         /// <param name="thread">The thread to convert.</param>
         /// <returns>The resulting argument.</returns>
-        public static LuaArgument FromThread(LuaThread? thread) => new(ObjectTag.Thread, thread);
+        /// <exception cref="ArgumentNullException"><paramref name="thread"/> is <see langword="null"/>.</exception>
+        public static LuaArgument FromThread(LuaThread? thread)
+        {
+            if (thread is null)
+                ThrowHelper.ThrowArgumentNullException(nameof(thread));
+
+            return FromThreadRelaxed(thread);
+        }
 
         /// <summary>
         /// Converts a CLR object into an argument.
@@ -255,6 +285,14 @@ namespace Triton
 
             return new(ObjectTag.ClrTypes, types);
         }
+
+        private static LuaArgument FromStringRelaxed(string? str) => new(ObjectTag.String, str);
+
+        private static LuaArgument FromTableRelaxed(LuaTable? table) => new(ObjectTag.Table, table);
+
+        private static LuaArgument FromFunctionRelaxed(LuaFunction? function) => new(ObjectTag.Function, function);
+
+        private static LuaArgument FromThreadRelaxed(LuaThread? thread) => new(ObjectTag.Thread, thread);
 
         #endregion
 
@@ -371,25 +409,25 @@ namespace Triton
         /// Converts a string into an argument.
         /// </summary>
         /// <param name="str">The string to convert.</param>
-        public static implicit operator LuaArgument(string? str) => FromString(str);
+        public static implicit operator LuaArgument(string? str) => FromStringRelaxed(str);
 
         /// <summary>
         /// Converts a table into an argument.
         /// </summary>
         /// <param name="table">The table to convert.</param>
-        public static implicit operator LuaArgument(LuaTable? table) => FromTable(table);
+        public static implicit operator LuaArgument(LuaTable? table) => FromTableRelaxed(table);
 
         /// <summary>
         /// Converts a function into an argument.
         /// </summary>
         /// <param name="function">The function to convert.</param>
-        public static implicit operator LuaArgument(LuaFunction? function) => FromFunction(function);
+        public static implicit operator LuaArgument(LuaFunction? function) => FromFunctionRelaxed(function);
 
         /// <summary>
         /// Converts a thread into an argument.
         /// </summary>
         /// <param name="thread">The thread to convert.</param>
-        public static implicit operator LuaArgument(LuaThread? thread) => FromThread(thread);
+        public static implicit operator LuaArgument(LuaThread? thread) => FromThreadRelaxed(thread);
 
         #endregion
     }

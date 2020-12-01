@@ -190,7 +190,8 @@ namespace Triton
 
             {
                 using var environment = new LuaEnvironment();
-                environment.SetGlobal("test", LuaArgument.FromClrObject(new()));
+                var obj = new object();
+                environment.SetGlobal("test", LuaArgument.FromClrObject(obj));
                 LuaResult result = environment.Eval("return test");
 
                 Assert.False(result.IsNil);
@@ -697,8 +698,8 @@ namespace Triton
             }
 
             {
-                var obj = new object();
                 using var environment = new LuaEnvironment();
+                var obj = new object();
                 environment.SetGlobal("test", LuaArgument.FromClrObject(obj));
                 LuaResult result = environment.Eval("return test");
 
@@ -1165,8 +1166,8 @@ namespace Triton
             }
 
             {
-                var obj = new object();
                 using var environment = new LuaEnvironment();
+                var obj = new object();
                 environment.SetGlobal("test", LuaArgument.FromClrObject(obj));
                 LuaResult result = environment.Eval("return test");
 

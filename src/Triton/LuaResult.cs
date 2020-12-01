@@ -32,7 +32,8 @@ namespace Triton
     /// Represents a Lua result.
     /// </summary>
     /// <remarks>
-    /// This structure is ephemeral and is invalidated immediately after calling another Lua API.
+    /// This structure is ephemeral and is invalidated immediately after calling another Lua API. It is marked as a
+    /// <see langword="ref struct"/> to reduce the potential for errors.
     /// </remarks>
     [DebuggerDisplay("{ToDebugString(),nq}")]
     [DebuggerStepThrough]
